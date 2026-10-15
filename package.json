@@ -1,0 +1,50 @@
+{
+  "name": "solid-mini-growth",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Solid Mini Growth Engine (SMGE) — platform pemasaran TikTok, CRM, dan AI Sales",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "build:packages": "pnpm --filter @smge/types --filter @smge/shared --filter @smge/database run build",
+    "build": "pnpm build:packages && pnpm --filter @smge/api --filter @smge/dashboard run build",
+    "dev:api": "pnpm --filter @smge/api run dev",
+    "dev:dashboard": "pnpm --filter @smge/dashboard run dev",
+    "db:generate": "pnpm --filter @smge/database run generate",
+    "db:migrate": "pnpm --filter @smge/database run migrate:dev",
+    "db:deploy": "pnpm --filter @smge/database run migrate:deploy",
+    "db:seed": "pnpm --filter @smge/database run seed",
+    "lint": "eslint .",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "test:e2e": "pnpm --filter @smge/api run test:e2e",
+    "format": "prettier --write ."
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "sharp",
+      "unrs-resolver",
+      "@tailwindcss/oxide"
+    ]
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@next/eslint-plugin-next": "^15.5.28",
+    "@types/node": "^22.20.5",
+    "dotenv-cli": "^11.0.0",
+    "eslint": "^10.12.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "tsx": "^4.23.15",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.71.2"
+  }
+}

@@ -1,0 +1,923 @@
+// =====================================================================
+// Solid Mini Growth Engine — skema database
+// Konvensi: model PascalCase, tabel & kolom snake_case, PK UUID,
+// created_at/updated_at di setiap tabel yang dapat berubah.
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------
+// ENUM
+// ---------------------------------------------------------------------
+
+enum RoleCode {
+  SUPER_ADMIN
+  ADMIN
+  MARKETING_OPERATOR
+  VIEWER
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum MarketingLane {
+  OFFICIAL // Jalur A
+  OUTBOUND // Jalur B
+}
+
+enum TikTokAccountType {
+  PERSONAL
+  CREATOR
+  BUSINESS
+}
+
+enum TikTokAccountStatus {
+  ACTIVE
+  PAUSED
+  RESTRICTED
+  ARCHIVED
+}
+
+enum IntegrationProvider {
+  TIKTOK_LOGIN_KIT
+  TIKTOK_BUSINESS_API
+  MOCK
+}
+
+enum IntegrationStatus {
+  NOT_CONNECTED
+  CONNECTED
+  TOKEN_EXPIRED
+  ERROR
+  REVOKED
+}
+
+/// Asal data: dipisahkan agar dashboard tidak mencampur data aktual, input manual, dan simulasi.
+enum DataSource {
+  ACTUAL
+  MANUAL
+  SIMULATED
+}
+
+enum CampaignType {
+  BRAND_AWARENESS
+  LEAD_ACQUISITION
+  APP_INSTALL
+  REGISTRATION
+  USER_ACTIVATION
+  ENGAGEMENT
+  CONSENTED_FOLLOW_UP
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  RESPONDED
+  INTERESTED
+  QUALIFIED
+  REGISTERED
+  ACTIVE
+  NOT_INTERESTED
+  DO_NOT_CONTACT
+}
+
+enum InterestLevel {
+  UNKNOWN
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum LeadSource {
+  TIKTOK_LEAD_GEN
+  TIKTOK_MESSAGING_ADS
+  INBOUND_DM
+  LIVE
+  LANDING_PAGE
+  REFERRAL
+  MANUAL
+  IMPORT
+}
+
+enum ContactChannel {
+  TIKTOK_DM
+  WHATSAPP
+  EMAIL
+  PHONE
+  SMS
+}
+
+enum ConsentStatus {
+  GRANTED
+  WITHDRAWN
+}
+
+enum ConsentSource {
+  LEAD_FORM
+  CONVERSATION
+  LANDING_PAGE
+  MANUAL_ENTRY
+  IMPORT
+}
+
+enum LeadActivityType {
+  CREATED
+  NOTE
+  STATUS_CHANGE
+  ASSIGNMENT
+  MESSAGE_SENT
+  MESSAGE_RECEIVED
+  CONSENT_CHANGE
+  FOLLOW_UP_SCHEDULED
+  CONVERSION
+  AI_ANALYSIS
+  IMPORT
+  MERGE
+}
+
+enum ConversationChannel {
+  TIKTOK_DM
+  TIKTOK_MESSAGING_ADS
+  WHATSAPP
+  MANUAL_LOG
+}
+
+enum ConversationStatus {
+  OPEN
+  WAITING_CUSTOMER
+  WAITING_AGENT
+  AI_HANDLING
+  RESOLVED
+  CLOSED
+}
+
+enum MessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MessageSenderType {
+  LEAD
+  OPERATOR
+  AI
+  SYSTEM
+}
+
+enum MessageDeliveryStatus {
+  DRAFT
+  PENDING
+  SENT
+  DELIVERED
+  FAILED
+  MANUALLY_LOGGED
+}
+
+enum OutreachTaskStatus {
+  DRAFT
+  WAITING_REVIEW
+  APPROVED
+  MANUALLY_SENT
+  REPLIED
+  FOLLOW_UP
+  COMPLETED
+  CANCELLED
+}
+
+enum TemplatePurpose {
+  INTRODUCTION
+  FOLLOW_UP
+  REPLY
+  REGISTRATION_GUIDE
+  REACTIVATION
+}
+
+enum AiInteractionType {
+  MESSAGE_GENERATION
+  LEAD_SCORING
+  REPLY_SUGGESTION
+  CONVERSATION_SUMMARY
+  AUTO_REPLY
+  KNOWLEDGE_QA
+}
+
+enum AiInteractionStatus {
+  SUCCESS
+  FAILED
+  BLOCKED
+}
+
+enum KnowledgeCategory {
+  PRODUCT_PROFILE
+  FEATURES
+  REGISTRATION
+  INSTALLATION
+  FAQ
+  PRICING
+  TERMS
+  SERVICE_GUIDE
+  PRIVACY_POLICY
+}
+
+enum KnowledgeStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ConversionEventType {
+  LANDING_VISIT
+  CTA_CLICK
+  STORE_CLICK
+  INSTALL_VERIFIED
+  REGISTRATION
+  ACTIVATION
+  TRANSACTION
+  SUBSCRIPTION
+}
+
+enum AttributionModel {
+  FIRST_TOUCH
+  LAST_TOUCH
+}
+
+enum IntegrationLogDirection {
+  OUTBOUND_REQUEST
+  INBOUND_WEBHOOK
+  INTERNAL
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+// ---------------------------------------------------------------------
+// 1-2. PENGGUNA & ROLE
+// ---------------------------------------------------------------------
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        RoleCode @unique
+  name        String
+  description String?
+  /// Daftar kode permission (lihat packages/shared/src/permissions.ts)
+  permissions String[]
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  users User[]
+
+  @@map("roles")
+}
+
+model User {
+  id                 String     @id @default(uuid()) @db.Uuid
+  email              String     @unique
+  name               String
+  passwordHash       String     @map("password_hash")
+  roleId             String     @map("role_id") @db.Uuid
+  status             UserStatus @default(ACTIVE)
+  /// Secret TOTP terenkripsi (AES-256-GCM)
+  twoFactorSecret    String?    @map("two_factor_secret")
+  twoFactorEnabled   Boolean    @default(false) @map("two_factor_enabled")
+  failedLoginCount   Int        @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?  @map("locked_until")
+  lastLoginAt        DateTime?  @map("last_login_at")
+  passwordChangedAt  DateTime?  @map("password_changed_at")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+
+  role                 Role                 @relation(fields: [roleId], references: [id])
+  sessions             UserSession[]
+  passwordResetTokens  PasswordResetToken[]
+  ownedCampaigns       Campaign[]           @relation("CampaignOperator")
+  assignedLeads        Lead[]               @relation("LeadOperator")
+  leadActivities       LeadActivity[]
+  consentsRecorded     LeadConsent[]
+  assignedConversations Conversation[]      @relation("ConversationAssignee")
+  messagesSent         Message[]
+  templatesCreated     MessageTemplate[]
+  outreachTasks        OutreachTask[]       @relation("OutreachOperator")
+  outreachReviews      OutreachTask[]       @relation("OutreachReviewer")
+  aiInteractions       AiInteraction[]
+  knowledgeDocuments   KnowledgeDocument[]
+  auditLogs            AuditLog[]
+  settingsUpdated      SystemSetting[]
+  dncEntries           DoNotContactEntry[]
+
+  @@index([roleId])
+  @@index([status])
+  @@map("users")
+}
+
+model UserSession {
+  id               String    @id @default(uuid()) @db.Uuid
+  userId           String    @map("user_id") @db.Uuid
+  /// SHA-256 dari refresh token aktif (token mentah tidak pernah disimpan)
+  refreshTokenHash String    @unique @map("refresh_token_hash")
+  /// Hash token sebelumnya, untuk mendeteksi pemakaian ulang token yang sudah dirotasi
+  previousTokenHash String?  @unique @map("previous_token_hash")
+  userAgent        String?   @map("user_agent")
+  ipAddress        String?   @map("ip_address")
+  expiresAt        DateTime  @map("expires_at")
+  lastUsedAt       DateTime  @default(now()) @map("last_used_at")
+  revokedAt        DateTime? @map("revoked_at")
+  revokedReason    String?   @map("revoked_reason")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+  @@index([expiresAt])
+  @@map("user_sessions")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+// ---------------------------------------------------------------------
+// 3-4. AKUN TIKTOK & INTEGRASI
+// ---------------------------------------------------------------------
+
+model TikTokAccount {
+  id                 String              @id @default(uuid()) @db.Uuid
+  /// Disimpan tanpa "@" dan huruf kecil
+  username           String              @unique
+  displayName        String              @map("display_name")
+  profileUrl         String?             @map("profile_url")
+  avatarUrl          String?             @map("avatar_url")
+  accountType        TikTokAccountType   @default(PERSONAL) @map("account_type")
+  isVerified         Boolean             @default(false) @map("is_verified")
+  followersCount     Int                 @default(0) @map("followers_count")
+  /// Asal angka followers: MANUAL (input operator) atau ACTUAL (sinkron API resmi)
+  followersSource    DataSource          @default(MANUAL) @map("followers_source")
+  lane               MarketingLane
+  status             TikTokAccountStatus @default(ACTIVE)
+  notes              String?
+  lastSyncedAt       DateTime?           @map("last_synced_at")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+
+  integrations     AccountIntegration[]
+  campaignLinks    CampaignAccount[]
+  sourcedLeads     Lead[]
+  conversations    Conversation[]
+  outreachTasks    OutreachTask[]
+  trackingLinks    TrackingLink[]
+  conversionEvents ConversionEvent[]
+
+  @@index([lane, status])
+  @@map("tiktok_accounts")
+}
+
+model AccountIntegration {
+  id                    String              @id @default(uuid()) @db.Uuid
+  tiktokAccountId       String              @map("tiktok_account_id") @db.Uuid
+  provider              IntegrationProvider
+  status                IntegrationStatus   @default(NOT_CONNECTED)
+  /// ID eksternal (mis. open_id Login Kit atau advertiser_id Business API)
+  externalId            String?             @map("external_id")
+  /// Token terenkripsi AES-256-GCM. Tidak pernah dikirim ke frontend.
+  accessTokenEncrypted  String?             @map("access_token_encrypted")
+  refreshTokenEncrypted String?             @map("refresh_token_encrypted")
+  tokenExpiresAt        DateTime?           @map("token_expires_at")
+  refreshExpiresAt      DateTime?           @map("refresh_expires_at")
+  scopes                String[]
+  /// true untuk Mock Adapter — seluruh data turunannya wajib berlabel SIMULASI
+  isSimulation          Boolean             @default(false) @map("is_simulation")
+  lastSyncAt            DateTime?           @map("last_sync_at")
+  lastError             String?             @map("last_error")
+  createdAt             DateTime            @default(now()) @map("created_at")
+  updatedAt             DateTime            @updatedAt @map("updated_at")
+
+  tiktokAccount TikTokAccount    @relation(fields: [tiktokAccountId], references: [id], onDelete: Cascade)
+  logs          IntegrationLog[]
+
+  @@unique([tiktokAccountId, provider])
+  @@index([status])
+  @@map("account_integrations")
+}
+
+// ---------------------------------------------------------------------
+// 5. CAMPAIGN
+// ---------------------------------------------------------------------
+
+model Campaign {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  lane          MarketingLane
+  type          CampaignType
+  status        CampaignStatus @default(DRAFT)
+  target        String?
+  description   String?
+  startDate     DateTime?      @map("start_date")
+  endDate       DateTime?      @map("end_date")
+  /// Anggaran dalam Rupiah
+  budget        Decimal?       @db.Decimal(14, 2)
+  /// Biaya aktual yang sudah dikeluarkan (input manual / sinkron Ads Reporting)
+  spend         Decimal        @default(0) @db.Decimal(14, 2)
+  spendSource   DataSource     @default(MANUAL) @map("spend_source")
+  operatorId    String?        @map("operator_id") @db.Uuid
+  /// Kode unik untuk link tracking (utm_campaign / ref)
+  trackingCode  String         @unique @map("tracking_code")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  operator         User?                 @relation("CampaignOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  accounts         CampaignAccount[]
+  leads            Lead[]
+  conversations    Conversation[]
+  outreachTasks    OutreachTask[]
+  trackingLinks    TrackingLink[]
+  conversionEvents ConversionEvent[]
+  attributions     CampaignAttribution[]
+
+  @@index([lane, status])
+  @@index([type])
+  @@index([startDate])
+  @@map("campaigns")
+}
+
+/// Relasi many-to-many campaign ↔ akun TikTok
+model CampaignAccount {
+  campaignId      String   @map("campaign_id") @db.Uuid
+  tiktokAccountId String   @map("tiktok_account_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at")
+
+  campaign      Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tiktokAccount TikTokAccount @relation(fields: [tiktokAccountId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, tiktokAccountId])
+  @@index([tiktokAccountId])
+  @@map("campaign_accounts")
+}
+
+// ---------------------------------------------------------------------
+// 6-8. CRM PROSPEK
+// ---------------------------------------------------------------------
+
+model Lead {
+  id                       String        @id @default(uuid()) @db.Uuid
+  name                     String?
+  /// Username TikTok hanya bila diperoleh secara sah (form, percakapan, dll.)
+  tiktokUsername           String?       @map("tiktok_username")
+  email                    String?
+  phone                    String?
+  /// Kolom ternormalisasi untuk deteksi duplikasi
+  tiktokUsernameNormalized String?       @unique @map("tiktok_username_normalized")
+  emailNormalized          String?       @unique @map("email_normalized")
+  phoneNormalized          String?       @unique @map("phone_normalized")
+  source                   LeadSource
+  sourceAccountId          String?       @map("source_account_id") @db.Uuid
+  sourceCampaignId         String?       @map("source_campaign_id") @db.Uuid
+  status                   LeadStatus    @default(NEW)
+  interestLevel            InterestLevel @default(UNKNOWN) @map("interest_level")
+  /// 0–100
+  score                    Int           @default(0)
+  operatorId               String?       @map("operator_id") @db.Uuid
+  notes                    String?
+  tags                     String[]
+  lastContactedAt          DateTime?     @map("last_contacted_at")
+  nextFollowUpAt           DateTime?     @map("next_follow_up_at")
+  /// ID pengguna di backend Solid Mini (setelah registrasi terverifikasi)
+  solidMiniUserId          String?       @unique @map("solid_mini_user_id")
+  registeredAt             DateTime?     @map("registered_at")
+  activatedAt              DateTime?     @map("activated_at")
+  doNotContact             Boolean       @default(false) @map("do_not_contact")
+  dataSource               DataSource    @default(ACTUAL) @map("data_source")
+  /// Retensi: data pribadi dihapus/dianonimkan setelah tanggal ini
+  retentionUntil           DateTime?     @map("retention_until")
+  anonymizedAt             DateTime?     @map("anonymized_at")
+  deletedAt                DateTime?     @map("deleted_at")
+  createdAt                DateTime      @default(now()) @map("created_at")
+  updatedAt                DateTime      @updatedAt @map("updated_at")
+
+  sourceAccount    TikTokAccount?    @relation(fields: [sourceAccountId], references: [id], onDelete: SetNull)
+  sourceCampaign   Campaign?         @relation(fields: [sourceCampaignId], references: [id], onDelete: SetNull)
+  operator         User?             @relation("LeadOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  consents         LeadConsent[]
+  activities       LeadActivity[]
+  conversations    Conversation[]
+  outreachTasks    OutreachTask[]
+  aiInteractions   AiInteraction[]
+  conversionEvents ConversionEvent[]
+
+  @@index([status])
+  @@index([sourceAccountId])
+  @@index([sourceCampaignId])
+  @@index([operatorId])
+  @@index([nextFollowUpAt])
+  @@index([score])
+  @@index([deletedAt])
+  @@index([createdAt])
+  @@map("leads")
+}
+
+/// Persetujuan komunikasi per kanal. Mengikuti akun TikTok BUKAN persetujuan.
+model LeadConsent {
+  id            String         @id @default(uuid()) @db.Uuid
+  leadId        String         @map("lead_id") @db.Uuid
+  channel       ContactChannel
+  status        ConsentStatus
+  source        ConsentSource
+  /// Bukti persetujuan (teks form, ID pesan, dsb.)
+  evidence      String?
+  grantedAt     DateTime?      @map("granted_at")
+  withdrawnAt   DateTime?      @map("withdrawn_at")
+  recordedById  String?        @map("recorded_by_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+
+  lead       Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  recordedBy User? @relation(fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([leadId, channel])
+  @@index([status])
+  @@map("lead_consents")
+}
+
+model LeadActivity {
+  id        String           @id @default(uuid()) @db.Uuid
+  leadId    String           @map("lead_id") @db.Uuid
+  type      LeadActivityType
+  summary   String
+  metadata  Json?
+  actorId   String?          @map("actor_id") @db.Uuid
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  lead  Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, createdAt])
+  @@map("lead_activities")
+}
+
+/// Daftar larangan kontak — tetap tersimpan walaupun data prospek dihapus.
+model DoNotContactEntry {
+  id              String         @id @default(uuid()) @db.Uuid
+  channel         ContactChannel
+  /// Nilai ternormalisasi (username/email/telepon)
+  valueNormalized String         @map("value_normalized")
+  reason          String?
+  addedById       String?        @map("added_by_id") @db.Uuid
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  addedBy User? @relation(fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@unique([channel, valueNormalized])
+  @@map("do_not_contact_entries")
+}
+
+// ---------------------------------------------------------------------
+// 9-11. PERCAKAPAN & TEMPLATE
+// ---------------------------------------------------------------------
+
+model Conversation {
+  id                     String              @id @default(uuid()) @db.Uuid
+  leadId                 String              @map("lead_id") @db.Uuid
+  tiktokAccountId        String?             @map("tiktok_account_id") @db.Uuid
+  campaignId             String?             @map("campaign_id") @db.Uuid
+  channel                ConversationChannel
+  /// ID percakapan di platform asal (bila kanal resmi terintegrasi)
+  externalConversationId String?             @map("external_conversation_id")
+  status                 ConversationStatus  @default(OPEN)
+  assigneeId             String?             @map("assignee_id") @db.Uuid
+  aiAutoReplyEnabled     Boolean             @default(false) @map("ai_auto_reply_enabled")
+  summary                String?
+  tags                   String[]
+  internalNotes          String?             @map("internal_notes")
+  lastMessageAt          DateTime?           @map("last_message_at")
+  dataSource             DataSource          @default(ACTUAL) @map("data_source")
+  createdAt              DateTime            @default(now()) @map("created_at")
+  updatedAt              DateTime            @updatedAt @map("updated_at")
+
+  lead           Lead            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tiktokAccount  TikTokAccount?  @relation(fields: [tiktokAccountId], references: [id], onDelete: SetNull)
+  campaign       Campaign?       @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  assignee       User?           @relation("ConversationAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  messages       Message[]
+  aiInteractions AiInteraction[]
+
+  @@unique([channel, externalConversationId])
+  @@index([status, lastMessageAt])
+  @@index([assigneeId])
+  @@index([leadId])
+  @@map("conversations")
+}
+
+model Message {
+  id                String                @id @default(uuid()) @db.Uuid
+  conversationId    String                @map("conversation_id") @db.Uuid
+  direction         MessageDirection
+  senderType        MessageSenderType     @map("sender_type")
+  senderUserId      String?               @map("sender_user_id") @db.Uuid
+  content           String
+  deliveryStatus    MessageDeliveryStatus @default(PENDING) @map("delivery_status")
+  externalMessageId String?               @map("external_message_id")
+  /// Kunci idempotensi untuk pengiriman via API resmi / webhook
+  idempotencyKey    String?               @unique @map("idempotency_key")
+  sentAt            DateTime?             @map("sent_at")
+  deliveredAt       DateTime?             @map("delivered_at")
+  failureReason     String?               @map("failure_reason")
+  createdAt         DateTime              @default(now()) @map("created_at")
+  updatedAt         DateTime              @updatedAt @map("updated_at")
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderUser   User?        @relation(fields: [senderUserId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@map("messages")
+}
+
+model MessageTemplate {
+  id          String          @id @default(uuid()) @db.Uuid
+  name        String
+  lane        MarketingLane?
+  purpose     TemplatePurpose
+  /// Mendukung placeholder {{nama}}, {{akun}}, {{link}}
+  content     String
+  isActive    Boolean         @default(true) @map("is_active")
+  createdById String?         @map("created_by_id") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+
+  createdBy     User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  outreachTasks OutreachTask[]
+
+  @@index([purpose, isActive])
+  @@map("message_templates")
+}
+
+// ---------------------------------------------------------------------
+// 12. OUTBOUND WORKSTATION
+// ---------------------------------------------------------------------
+
+model OutreachTask {
+  id              String             @id @default(uuid()) @db.Uuid
+  leadId          String             @map("lead_id") @db.Uuid
+  tiktokAccountId String             @map("tiktok_account_id") @db.Uuid
+  campaignId      String?            @map("campaign_id") @db.Uuid
+  templateId      String?            @map("template_id") @db.Uuid
+  operatorId      String?            @map("operator_id") @db.Uuid
+  reviewerId      String?            @map("reviewer_id") @db.Uuid
+  status          OutreachTaskStatus @default(DRAFT)
+  channel         ContactChannel     @default(TIKTOK_DM)
+  draftMessage    String?            @map("draft_message")
+  finalMessage    String?            @map("final_message")
+  aiGenerated     Boolean            @default(false) @map("ai_generated")
+  priority        Int                @default(0)
+  /// Diisi hanya ketika operator mengonfirmasi pesan benar-benar terkirim
+  sentConfirmedAt DateTime?          @map("sent_confirmed_at")
+  repliedAt       DateTime?          @map("replied_at")
+  responseSummary String?            @map("response_summary")
+  followUpAt      DateTime?          @map("follow_up_at")
+  completedAt     DateTime?          @map("completed_at")
+  cancelReason    String?            @map("cancel_reason")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  lead          Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tiktokAccount TikTokAccount    @relation(fields: [tiktokAccountId], references: [id], onDelete: Cascade)
+  campaign      Campaign?        @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  template      MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  operator      User?            @relation("OutreachOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+  reviewer      User?            @relation("OutreachReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+
+  @@index([tiktokAccountId, status])
+  @@index([operatorId, status])
+  @@index([followUpAt])
+  @@index([leadId])
+  @@map("outreach_tasks")
+}
+
+// ---------------------------------------------------------------------
+// 13-14. AI
+// ---------------------------------------------------------------------
+
+model AiInteraction {
+  id               String              @id @default(uuid()) @db.Uuid
+  type             AiInteractionType
+  status           AiInteractionStatus @default(SUCCESS)
+  model            String
+  userId           String?             @map("user_id") @db.Uuid
+  leadId           String?             @map("lead_id") @db.Uuid
+  conversationId   String?             @map("conversation_id") @db.Uuid
+  input            Json?
+  output           Json?
+  promptTokens     Int                 @default(0) @map("prompt_tokens")
+  completionTokens Int                 @default(0) @map("completion_tokens")
+  totalTokens      Int                 @default(0) @map("total_tokens")
+  costUsd          Decimal             @default(0) @map("cost_usd") @db.Decimal(12, 6)
+  latencyMs        Int?                @map("latency_ms")
+  errorMessage     String?             @map("error_message")
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  lead         Lead?         @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  conversation Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  @@index([type, createdAt])
+  @@index([createdAt])
+  @@map("ai_interactions")
+}
+
+model KnowledgeDocument {
+  id          String            @id @default(uuid()) @db.Uuid
+  title       String
+  category    KnowledgeCategory
+  content     String
+  status      KnowledgeStatus   @default(DRAFT)
+  version     Int               @default(1)
+  publishedAt DateTime?         @map("published_at")
+  updatedById String?           @map("updated_by_id") @db.Uuid
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@index([category, status])
+  @@map("knowledge_documents")
+}
+
+// ---------------------------------------------------------------------
+// 15-16. TRACKING KONVERSI
+// ---------------------------------------------------------------------
+
+model TrackingLink {
+  id              String    @id @default(uuid()) @db.Uuid
+  code            String    @unique
+  campaignId      String    @map("campaign_id") @db.Uuid
+  tiktokAccountId String?   @map("tiktok_account_id") @db.Uuid
+  destinationUrl  String    @map("destination_url")
+  utmSource       String?   @map("utm_source")
+  utmMedium       String?   @map("utm_medium")
+  utmCampaign     String?   @map("utm_campaign")
+  utmContent      String?   @map("utm_content")
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+
+  campaign         Campaign          @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  tiktokAccount    TikTokAccount?    @relation(fields: [tiktokAccountId], references: [id], onDelete: SetNull)
+  conversionEvents ConversionEvent[]
+
+  @@index([campaignId])
+  @@map("tracking_links")
+}
+
+model ConversionEvent {
+  id              String              @id @default(uuid()) @db.Uuid
+  type            ConversionEventType
+  occurredAt      DateTime            @map("occurred_at")
+  leadId          String?             @map("lead_id") @db.Uuid
+  campaignId      String?             @map("campaign_id") @db.Uuid
+  tiktokAccountId String?             @map("tiktok_account_id") @db.Uuid
+  trackingLinkId  String?             @map("tracking_link_id") @db.Uuid
+  /// ID anonim pengunjung (cookie first-party) untuk menyambung touchpoint
+  visitorId       String?             @map("visitor_id")
+  /// ID pengguna Solid Mini (registrasi/aktivasi dari backend Solid Mini)
+  externalUserId  String?             @map("external_user_id")
+  referralCode    String?             @map("referral_code")
+  utmSource       String?             @map("utm_source")
+  utmMedium       String?             @map("utm_medium")
+  utmCampaign     String?             @map("utm_campaign")
+  utmContent      String?             @map("utm_content")
+  /// Nilai transaksi (Rupiah) bila ada
+  value           Decimal?            @db.Decimal(14, 2)
+  /// true hanya jika diverifikasi oleh sumber tepercaya (mis. backend Solid Mini)
+  isVerified      Boolean             @default(false) @map("is_verified")
+  dataSource      DataSource          @default(ACTUAL) @map("data_source")
+  idempotencyKey  String?             @unique @map("idempotency_key")
+  ipHash          String?             @map("ip_hash")
+  userAgent       String?             @map("user_agent")
+  metadata        Json?
+  createdAt       DateTime            @default(now()) @map("created_at")
+
+  lead          Lead?                 @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  campaign      Campaign?             @relation(fields: [campaignId], references: [id], onDelete: SetNull)
+  tiktokAccount TikTokAccount?        @relation(fields: [tiktokAccountId], references: [id], onDelete: SetNull)
+  trackingLink  TrackingLink?         @relation(fields: [trackingLinkId], references: [id], onDelete: SetNull)
+  attributions  CampaignAttribution[]
+
+  @@index([type, occurredAt])
+  @@index([campaignId, type])
+  @@index([visitorId])
+  @@index([externalUserId])
+  @@map("conversion_events")
+}
+
+model CampaignAttribution {
+  id                String           @id @default(uuid()) @db.Uuid
+  conversionEventId String           @map("conversion_event_id") @db.Uuid
+  campaignId        String           @map("campaign_id") @db.Uuid
+  model             AttributionModel
+  /// Bobot atribusi (1.0 untuk single-touch)
+  weight            Decimal          @default(1) @db.Decimal(5, 4)
+  touchpointAt      DateTime         @map("touchpoint_at")
+  createdAt         DateTime         @default(now()) @map("created_at")
+
+  conversionEvent ConversionEvent @relation(fields: [conversionEventId], references: [id], onDelete: Cascade)
+  campaign        Campaign        @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+
+  @@unique([conversionEventId, model])
+  @@index([campaignId, model])
+  @@map("campaign_attributions")
+}
+
+// ---------------------------------------------------------------------
+// 17-19. LOG & PENGATURAN
+// ---------------------------------------------------------------------
+
+model IntegrationLog {
+  id             String                  @id @default(uuid()) @db.Uuid
+  integrationId  String?                 @map("integration_id") @db.Uuid
+  provider       IntegrationProvider
+  direction      IntegrationLogDirection
+  level          LogLevel                @default(INFO)
+  operation      String
+  statusCode     Int?                    @map("status_code")
+  success        Boolean
+  message        String?
+  /// Payload yang sudah disensor (tanpa token/secret)
+  payload        Json?
+  /// Untuk deduplikasi webhook
+  idempotencyKey String?                 @unique @map("idempotency_key")
+  durationMs     Int?                    @map("duration_ms")
+  isSimulation   Boolean                 @default(false) @map("is_simulation")
+  createdAt      DateTime                @default(now()) @map("created_at")
+
+  integration AccountIntegration? @relation(fields: [integrationId], references: [id], onDelete: SetNull)
+
+  @@index([provider, createdAt])
+  @@index([integrationId, createdAt])
+  @@map("integration_logs")
+}
+
+/// Log audit bersifat append-only (tidak ada updated_at).
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  /// Email aktor disalin agar jejak tetap terbaca walau user dihapus
+  actorEmail String?  @map("actor_email")
+  action     String
+  entityType String?  @map("entity_type")
+  entityId   String?  @map("entity_id")
+  metadata   Json?
+  ipAddress  String?  @map("ip_address")
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SystemSetting {
+  id          String   @id @default(uuid()) @db.Uuid
+  key         String   @unique
+  value       Json
+  description String?
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("system_settings")
+}
