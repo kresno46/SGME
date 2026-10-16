@@ -8,7 +8,7 @@ Platform ini memakai dua jalur:
 - **Jalur B — Outbound**: akun tambahan dengan penjangkauan personal yang ditinjau operator.
   Sistem **tidak** mengirim DM massal, tidak melakukan scraping, dan tidak memakai rotasi akun.
 
-> **Status: Fase 1 (Fondasi) dan Fase 2 (CRM & Campaign) selesai.** Lihat [docs/ROADMAP.md](docs/ROADMAP.md) untuk status tiap fase
+> **Status: Fase 1–3 selesai (Fondasi, CRM & Campaign, AI Sales).** AI aktif setelah `OPENAI_API_KEY` diisi. Lihat [docs/ROADMAP.md](docs/ROADMAP.md) untuk status tiap fase
 > dan keterbatasan yang diketahui.
 
 ## Teknologi
@@ -80,6 +80,10 @@ pnpm --filter @smge/api worker:dev   # opsional: worker BullMQ (retensi data har
 
 Isi `SOLID_MINI_REGISTRATION_URL` di `.env` agar placeholder `{{link}}` pada template pesan berisi link
 registrasi Solid Mini (UTM ditambahkan otomatis). Bila kosong, placeholder tersebut dikosongkan.
+
+**AI Sales Agent**: isi `OPENAI_API_KEY` (dan `OPENAI_MODEL`) di `.env` lalu restart API. Tanpa key, AI tampil
+"belum dikonfigurasi" dan fitur lain tetap berjalan. Untuk mencoba UI tanpa key, jalankan API dengan
+`AI_PROVIDER=simulated` — semua keluaran berlabel SIMULASI. Langkah aktivasi lengkap: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Login memakai `SEED_SUPERADMIN_EMAIL` / `SEED_SUPERADMIN_PASSWORD`, lalu **segera ganti password**
 dan aktifkan 2FA di **Pengaturan → Profil & keamanan**.

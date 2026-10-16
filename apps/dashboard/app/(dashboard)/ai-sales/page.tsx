@@ -1,23 +1,16 @@
-import { ComingSoon } from '@/components/guards';
+'use client';
 
-export const metadata = { title: 'AI Sales Agent' };
+import { PERMISSIONS } from '@smge/shared';
+import { Suspense } from 'react';
+import { RequirePermission } from '@/components/guards';
+import { AiSalesPage } from '@/features/ai/ai-sales-page';
 
 export default function Page() {
   return (
-    <ComingSoon
-      title="AI Sales Agent"
-      description="Asisten AI untuk menjelaskan Solid Mini dan membantu operator."
-      phase={3}
-      icon="Bot"
-      features={[
-        'Knowledge Base yang dapat diperbarui admin',
-        'Mode Copilot (saran, butuh persetujuan)',
-        'Mode Auto-Reply hanya pada kanal resmi yang mengizinkan',
-        'Lead scoring & ringkasan percakapan',
-        'Monitoring token dan biaya API',
-        'Human handoff',
-      ]}
-      notes="AI hanya menjawab berdasarkan Knowledge Base dan tidak boleh membuat klaim palsu atau menjanjikan keuntungan."
-    />
+    <RequirePermission permission={PERMISSIONS.AI_USE}>
+      <Suspense>
+        <AiSalesPage />
+      </Suspense>
+    </RequirePermission>
   );
 }

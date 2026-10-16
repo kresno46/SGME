@@ -108,6 +108,8 @@ export const api = {
     }),
   patch: <T>(path: string, body: unknown) =>
     apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
+  put: <T>(path: string, body: unknown) =>
+    apiFetch<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: <T>(path: string) => apiFetch<T>(path, { method: 'DELETE' }),
   /** Upload multipart (mis. file CSV). Content-Type diatur otomatis oleh browser. */
   upload: <T>(path: string, form: FormData) => apiFetch<T>(path, { method: 'POST', body: form }),

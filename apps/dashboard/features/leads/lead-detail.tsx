@@ -70,6 +70,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import { formatDateTime, formatRelative } from '@/lib/utils';
 import { useInvalidateLeads, useLead, useLeadMutation } from './api';
+import { LeadAiCard } from '../ai/lead-ai-card';
 import { LeadFormDialog } from './lead-form-dialog';
 
 export function LeadDetail({ id }: { id: string }) {
@@ -336,7 +337,10 @@ export function LeadDetail({ id }: { id: string }) {
           </Card>
         </div>
 
-        <Timeline lead={l} canNote={can(PERMISSIONS.LEADS_MANAGE)} />
+        <div className="grid content-start gap-4">
+          <LeadAiCard leadId={l.id} />
+          <Timeline lead={l} canNote={can(PERMISSIONS.LEADS_MANAGE)} />
+        </div>
       </div>
 
       <LeadFormDialog open={editOpen} onOpenChange={setEditOpen} lead={l} />

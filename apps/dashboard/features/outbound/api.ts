@@ -97,8 +97,11 @@ export function useTaskAction(id: string) {
 export function useUpdateDraft(id: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (draftMessage: string) =>
-      api.patch<OutreachTaskDto>(`/outbound/tasks/${id}/draft`, { draftMessage }),
+    mutationFn: (v: string | { draftMessage: string; aiGenerated?: boolean }) =>
+      api.patch<OutreachTaskDto>(
+        `/outbound/tasks/${id}/draft`,
+        typeof v === 'string' ? { draftMessage: v } : v,
+      ),
     onSuccess: (task) => qc.setQueryData(['outbound', 'task', id], task),
   });
 }

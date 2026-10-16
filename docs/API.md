@@ -160,3 +160,39 @@ Kolom CSV yang dikenali (header, tidak peka huruf besar): `nama/name`, `tiktok_u
 |---|---|---|---|
 | GET | `/users/assignable` | `leads:read` | Pengguna aktif yang dapat ditugaskan (id, nama) |
 | POST | `/maintenance/retention` | `settings:manage` | `{ dryRun?: boolean }` (default `true`) — jalankan kebijakan retensi |
+
+---
+
+# Fase 3 — AI Sales Agent
+
+Semua endpoint AI mengembalikan metadata hasil: `interactionId` (null bila model tidak dipanggil), `model`,
+`simulated`, `usage { promptTokens, completionTokens, costUsd }` (costUsd `null` bila harga model belum diatur),
+dan `sources` (dokumen KB yang dipakai).
+
+Kode error khusus: `503` AI belum dikonfigurasi · `403` batas biaya bulanan tercapai · `422` jawaban diblokir
+guardrail (`details.claims`) · `502` provider gagal / format jawaban tidak valid · `429` batas
+`THROTTLE_AI_LIMIT_PER_MINUTE`.
+
+## AI
+
+| Method | Path | Permission | Keterangan |
+|---|---|---|---|
+| GET | `/ai/status` | `ai:use` | Provider, model, mode, simulasi, jumlah dokumen KB terbit, biaya bulan ini vs batas |
+| POST | `/ai/ask` | `ai:use` | `{ question, leadId? }` → `answer`, `handoff`, `handoffReason`. KB kosong → handoff tanpa memanggil model |
+| POST | `/ai/reply-suggestion` | `ai:use` | `{ incomingMessage, leadId?, taskId? }` → `reply`, `detectedIntent`, `handoff` |
+| POST | `/ai/outreach-draft` | `ai:use` + `outreach:work` | `{ taskId, instructions? }` → `message`, `rationale` (hanya tugas `DRAFT`/`FOLLOW_UP`; tidak mengubah tugas — terapkan via `PATCH /outbound/tasks/:id/draft` dengan `aiGenerated: true`) |
+| POST | `/ai/leads/:id/score` | `ai:use` + `leads:manage` | → `score`, `interestLevel` (saran), `reasons`, `recommendedAction`. Menyimpan `leads.score` + aktivitas `AI_ANALYSIS` |
+| POST | `/ai/leads/:id/summary` | `ai:use` + `leads:read` | → `summary`, `keyPoints`, `nextStep`. Dicatat sebagai aktivitas `AI_ANALYSIS` |
+| GET | `/ai/usage?days=30` | `analytics:read` | Total, per fitur, per model, per hari (WIB). Interaksi simulasi dihitung terpisah |
+| GET | `/ai/interactions` | `analytics:read` | Log interaksi (filter `type`, `status`) |
+| GET/PUT | `/ai/settings` | `settings:manage` | `{ model, mode, monthlyBudgetUsd, pricing: { [model]: { inputPer1M, outputPer1M } } }`. `mode: AUTO_REPLY` ditolak sampai ada kanal resmi |
+
+## Knowledge Base
+
+| Method | Path | Permission | Keterangan |
+|---|---|---|---|
+| GET | `/knowledge-documents` | `ai:use` | Filter `category`, `status` (default: selain arsip), `search` |
+| GET | `/knowledge-documents/:id` | `ai:use` | |
+| POST | `/knowledge-documents` | `knowledge:manage` | `{ title, category, content, status }` |
+| PATCH | `/knowledge-documents/:id` | `knowledge:manage` | Perubahan judul/isi menaikkan `version` |
+| DELETE | `/knowledge-documents/:id` | `knowledge:manage` | |

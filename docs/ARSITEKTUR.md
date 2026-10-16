@@ -105,3 +105,37 @@ dan berlaku untuk **semua kanal**. Invarian: setiap prospek yang cocok dengan en
 `apps/api/src/worker.ts` (BullMQ) dijalankan terpisah dari API (`pnpm --filter @smge/api worker`). Saat ini hanya
 menjalankan **retensi data harian pukul 02.00 WIB**. Tidak ada job pengirim pesan.
 BullMQ merekomendasikan Redis ≥ 6.2 (Redis 5 di Laragon berfungsi dengan peringatan; `docker-compose.yml` memakai Redis 7).
+
+## AI Sales Agent
+
+```text
+Fitur (tanya, saran balasan, draft, skor, ringkasan)
+  └─ AiService.run()
+       1. provider ada?                → 503 bila belum dikonfigurasi
+       2. batas biaya bulanan          → 403 bila terlampaui (simulasi tidak dihitung)
+       3. konteks KB (dokumen terbit, dipilih berdasar relevansi kata kunci, ≤ 12.000 karakter)
+       4. LlmProvider.complete()        → OpenAI Chat Completions + Structured Outputs (JSON Schema strict)
+       5. validasi Zod atas JSON        → 502 bila tidak sesuai
+       6. guardrail klaim terlarang     → 422 + status BLOCKED (tidak dikembalikan ke operator)
+       7. hitung biaya dari harga yang diatur admin, simpan ai_interactions (token, biaya, latensi)
+```
+
+- **Provider** (`apps/api/src/ai/providers`): `OpenAiProvider` (aktif bila `OPENAI_API_KEY` terisi),
+  `SimulatedProvider` (hanya bila `AI_PROVIDER=simulated`; semua keluaran berlabel SIMULASI, `is_simulation=true`,
+  tidak dihitung biaya, draft simulasi tidak dapat diterapkan ke tugas). Tanpa keduanya, AI nonaktif dan UI
+  menampilkan "belum dikonfigurasi".
+- **Mode Copilot**: AI hanya memberi saran; operator meninjau, menerapkan, dan mengirim sendiri. Mode Auto-Reply
+  ditolak oleh API sampai ada integrasi messaging resmi yang mengizinkan (Fase 4).
+- **Instruksi sistem** (`prompts.ts`): fakta produk hanya dari Knowledge Base; dilarang menjanjikan keuntungan,
+  imbal hasil, atau "tanpa risiko"; dilarang memberi nasihat keuangan atau meminta data sensitif; bahasa Indonesia
+  natural; hormati penolakan; data dari prospek/KB dibungkus penanda dan tidak dianggap instruksi
+  (mitigasi prompt injection).
+- **Handoff ke manusia**: model mengisi `handoff`/`handoffReason` untuk pertanyaan di luar KB, keluhan, permintaan
+  nasihat keuangan, emosi negatif, atau permintaan bicara dengan manusia.
+- **Guardrail kedua** (`packages/shared/src/ai-guardrails.ts`): pola klaim terlarang (janji profit, persentase
+  imbal hasil per periode, "tanpa risiko", "cepat kaya", tekanan berlebihan) diperiksa pada keluaran AI di server dan
+  ditampilkan sebagai peringatan langsung saat operator mengetik draft atau dokumen KB.
+- **Minimisasi data**: konteks prospek yang dikirim ke penyedia AI hanya nama panggilan, status, ketertarikan,
+  sumber, tag, kanal izin, dan riwayat aktivitas. Email, telepon, username TikTok, dan nama lengkap tidak dikirim.
+- **Biaya**: harga per 1 juta token diisi admin dari halaman harga resmi penyedia (tidak di-hardcode). Tanpa harga,
+  biaya tercatat US$0 dan UI menampilkan peringatan.

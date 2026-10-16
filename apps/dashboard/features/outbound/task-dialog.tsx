@@ -51,6 +51,8 @@ import {
   Textarea,
 } from '@/components/ui/primitives';
 import { formatDateTime, fromDateTimeLocal } from '@/lib/utils';
+import { ClaimWarning } from '../ai/ai-common';
+import { AiDraftHelper, AiReplyHelper } from '../ai/task-ai';
 import { useTask, useTaskAction, useUpdateDraft } from './api';
 
 type Panel =
@@ -158,8 +160,12 @@ function TaskBody({ taskId }: { taskId: string }) {
               value={currentDraft}
               onChange={(e) => setDraft(e.target.value)}
             />
+            <ClaimWarning text={currentDraft} />
             <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>{currentDraft.length}/2000 karakter</span>
+              <span>
+                {currentDraft.length}/2000 karakter
+                {t.aiGenerated && ' · disusun dengan bantuan AI'}
+              </span>
               {dirty && (
                 <Button
                   size="sm"
@@ -179,6 +185,15 @@ function TaskBody({ taskId }: { taskId: string }) {
                 </Button>
               )}
             </div>
+            <AiDraftHelper
+              taskId={t.id}
+              onApply={(message) =>
+                saveDraft.mutate(
+                  { draftMessage: message, aiGenerated: true },
+                  { onSuccess: () => setDraft(null), onError: (e) => setError(e.message) },
+                )
+              }
+            />
           </>
         ) : (
           <p className="rounded-md border bg-muted/40 p-3 text-sm whitespace-pre-wrap">
@@ -300,11 +315,14 @@ function TaskBody({ taskId }: { taskId: string }) {
         />
       )}
       {panel === 'log_reply' && (
-        <ReplyPanel
-          busy={busy}
-          onCancel={() => setPanel(null)}
-          onSubmit={(b) => run(b, 'Balasan dicatat')}
-        />
+        <>
+          <ReplyPanel
+            busy={busy}
+            onCancel={() => setPanel(null)}
+            onSubmit={(b) => run(b, 'Balasan dicatat')}
+          />
+          <AiReplyHelper taskId={t.id} />
+        </>
       )}
       {panel === 'schedule_follow_up' && (
         <FollowUpPanel

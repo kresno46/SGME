@@ -62,7 +62,7 @@ export const NAV_ITEMS: NavItem[] = [
     title: 'AI Sales Agent',
     href: '/ai-sales',
     icon: Bot,
-    permission: PERMISSIONS.DASHBOARD_VIEW,
+    permission: PERMISSIONS.AI_USE,
     phase: 3,
   },
   {
@@ -95,4 +95,4 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export const CURRENT_PHASE = 2;
+export const CURRENT_PHASE = 3;

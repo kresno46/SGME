@@ -75,10 +75,45 @@
 - **Notifikasi follow-up** hanya berupa daftar "jatuh tempo" di dashboard; belum ada notifikasi email/push.
 - Halaman AI Sales, Percakapan, Analitik, dan Integrasi masih berupa placeholder yang menampilkan rencana fiturnya.
 
-## Fase 3 — AI Sales
+## Fase 3 — AI Sales ✅ (16 Oktober 2026) — menunggu API key untuk aktif
 
-OpenAI API (model dapat dikonfigurasi), Knowledge Base, generator pesan, lead scoring, saran balasan,
-ringkasan percakapan, human handoff, pencatatan token & biaya (`ai_interactions`). Mode default: Copilot.
+| Item | Status |
+|---|---|
+| Integrasi OpenAI (Chat Completions + Structured Outputs), model dapat dikonfigurasi | ✅ kode siap; **belum diuji ke OpenAI sungguhan** (API key belum diberikan) |
+| Knowledge Base: CRUD, kategori, status terbit, versi, pemilihan konteks berdasarkan relevansi | ✅ (isi masih kosong — menunggu materi resmi Solid Mini) |
+| Tanya jawab KB + human handoff | ✅ |
+| AI Message Generator (draft outbound personal, diterapkan manual oleh operator) | ✅ |
+| AI Reply Suggestion (Copilot) | ✅ |
+| AI Lead Scoring & ringkasan riwayat (tercatat di timeline) | ✅ |
+| Guardrail klaim terlarang (server memblokir; UI memberi peringatan saat mengetik) | ✅ |
+| Tracking token, biaya (harga diatur admin), batas biaya bulanan, rate limit AI | ✅ |
+| Mode Copilot; Auto-Reply dikunci sampai ada kanal resmi | ✅ |
+| Mode simulasi berlabel untuk development | ✅ |
+
+### Hasil verifikasi Fase 3
+
+| Pemeriksaan | Hasil |
+|---|---|
+| `pnpm lint` / `pnpm typecheck` | bersih / lulus |
+| Unit test `@smge/shared` | 43/43 lulus (termasuk guardrail: pola terlarang & kalimat wajar yang tidak boleh ikut terblokir) |
+| Unit test API | 19/19 lulus |
+| Integration test API | 66/66 lulus — pipeline AI diuji dengan provider palsu: konteks KB, biaya, guardrail, kegagalan provider, batas biaya, minimisasi data kontak, izin role, mode tanpa provider |
+| `next build` dashboard | lulus (18 route) |
+| Uji browser (mode simulasi) | asisten tanya jawab & saran balasan, editor KB (peringatan klaim), penggunaan & biaya, pengaturan, analisis AI di detail prospek, draft AI di tugas outbound (draft simulasi tidak bisa diterapkan) |
+
+### Untuk mengaktifkan AI
+
+1. Isi `OPENAI_API_KEY` (dan `OPENAI_MODEL` sesuai model yang tersedia di akun) di `.env` server, lalu restart API.
+2. Super Admin: **AI Sales Agent → Pengaturan AI** — isi harga model dari halaman harga resmi OpenAI dan batas biaya bulanan.
+3. Admin: isi **Knowledge Base** dengan materi resmi Solid Mini lalu publikasikan.
+4. Coba di tab **Asisten** sebelum dipakai operator.
+
+### Keterbatasan Fase 3
+
+- Belum pernah diuji terhadap API OpenAI sungguhan; hanya provider palsu (test) dan simulasi.
+- Pemilihan dokumen KB memakai pencocokan kata kunci sederhana; untuk KB besar perlu retrieval berbasis embedding.
+- Ringkasan memakai riwayat aktivitas prospek; ringkasan percakapan per thread menyusul bersama inbox (Fase 4).
+- Auto-Reply belum dapat diaktifkan (menunggu integrasi messaging resmi).
 
 ## Fase 4 — Integrasi TikTok
 
