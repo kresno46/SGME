@@ -1,4 +1,8 @@
 import type {
+  AiInteractionType,
+  AiMode,
+  KnowledgeCategory,
+  KnowledgeStatus,
   CampaignStatus,
   ConsentSource,
   ConsentStatus,
@@ -189,4 +193,36 @@ export const TEMPLATE_PURPOSE_LABELS: Record<TemplatePurpose, string> = {
   REPLY: 'Balasan',
   REGISTRATION_GUIDE: 'Panduan registrasi',
   REACTIVATION: 'Reaktivasi',
+};
+
+export const KNOWLEDGE_CATEGORY_LABELS: Record<KnowledgeCategory, string> = {
+  PRODUCT_PROFILE: 'Profil produk',
+  FEATURES: 'Fitur aplikasi',
+  REGISTRATION: 'Cara registrasi',
+  INSTALLATION: 'Cara instalasi',
+  FAQ: 'FAQ',
+  PRICING: 'Harga / biaya',
+  TERMS: 'Syarat & ketentuan',
+  SERVICE_GUIDE: 'Panduan layanan',
+  PRIVACY_POLICY: 'Kebijakan privasi',
+};
+
+export const KNOWLEDGE_STATUS_LABELS: Record<KnowledgeStatus, string> = {
+  DRAFT: 'Draft',
+  PUBLISHED: 'Dipublikasikan',
+  ARCHIVED: 'Diarsipkan',
+};
+
+export const AI_INTERACTION_TYPE_LABELS: Record<AiInteractionType, string> = {
+  MESSAGE_GENERATION: 'Pembuat pesan',
+  LEAD_SCORING: 'Skor prospek',
+  REPLY_SUGGESTION: 'Saran balasan',
+  CONVERSATION_SUMMARY: 'Ringkasan',
+  AUTO_REPLY: 'Auto-reply',
+  KNOWLEDGE_QA: 'Tanya jawab',
+};
+
+export const AI_MODE_LABELS: Record<AiMode, string> = {
+  COPILOT: 'Copilot (saran, perlu persetujuan operator)',
+  AUTO_REPLY: 'Auto-reply resmi',
 };

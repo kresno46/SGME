@@ -145,3 +145,33 @@ export const TEMPLATE_PURPOSES = values(
   'REACTIVATION',
 );
 export type TemplatePurpose = (typeof TEMPLATE_PURPOSES)[number];
+
+export const KNOWLEDGE_CATEGORIES = values(
+  'PRODUCT_PROFILE',
+  'FEATURES',
+  'REGISTRATION',
+  'INSTALLATION',
+  'FAQ',
+  'PRICING',
+  'TERMS',
+  'SERVICE_GUIDE',
+  'PRIVACY_POLICY',
+);
+export type KnowledgeCategory = (typeof KNOWLEDGE_CATEGORIES)[number];
+
+export const KNOWLEDGE_STATUSES = values('DRAFT', 'PUBLISHED', 'ARCHIVED');
+export type KnowledgeStatus = (typeof KNOWLEDGE_STATUSES)[number];
+
+export const AI_INTERACTION_TYPES = values(
+  'MESSAGE_GENERATION',
+  'LEAD_SCORING',
+  'REPLY_SUGGESTION',
+  'CONVERSATION_SUMMARY',
+  'AUTO_REPLY',
+  'KNOWLEDGE_QA',
+);
+export type AiInteractionType = (typeof AI_INTERACTION_TYPES)[number];
+
+/** COPILOT = AI hanya memberi saran. AUTO_REPLY hanya boleh bila kanal resmi mengizinkan. */
+export const AI_MODES = values('COPILOT', 'AUTO_REPLY');
+export type AiMode = (typeof AI_MODES)[number];

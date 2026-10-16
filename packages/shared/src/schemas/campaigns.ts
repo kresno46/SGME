@@ -31,7 +31,7 @@ const campaignFields = z.object({
   startDate: optionalDate,
   endDate: optionalDate,
   budget: z
-    .union([money, z.literal(''), z.null()])
+    .union([z.literal(''), z.null(), money])
     .optional()
     .transform((v) => (v === '' || v === undefined ? null : v)),
   spend: money.optional(),

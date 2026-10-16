@@ -34,6 +34,21 @@ const envSchema = z.object({
   ENCRYPTION_KEY: z
     .string()
     .refine((v) => Buffer.from(v, 'base64').length === 32, 'ENCRYPTION_KEY harus 32 byte (base64)'),
+  /** openai = model sungguhan; simulated = keluaran simulasi berlabel (development). Kosong = otomatis. */
+  AI_PROVIDER: z
+    .enum(['openai', 'simulated'])
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  OPENAI_API_KEY: z.string().optional(),
+  OPENAI_MODEL: z.string().optional(),
+  /** Opsional: endpoint kompatibel OpenAI (mis. proxy/gateway internal) */
+  OPENAI_BASE_URL: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  AI_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30_000),
+  THROTTLE_AI_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(30),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().default(587),
   SMTP_USER: z.string().optional(),

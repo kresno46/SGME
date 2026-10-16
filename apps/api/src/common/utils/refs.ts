@@ -38,3 +38,12 @@ export function startOfToday(now = new Date(), timeZone = BUSINESS_TIMEZONE) {
   const offsetMs = asUtc(timeZone) - asUtc('UTC');
   return new Date(new Date(`${day}T00:00:00Z`).getTime() - offsetMs);
 }
+
+/** Tanggal 1 bulan berjalan pukul 00:00 menurut zona waktu bisnis. */
+export function startOfMonth(now = new Date(), timeZone = BUSINESS_TIMEZONE) {
+  const today = startOfToday(now, timeZone);
+  const dayOfMonth = Number(
+    new Intl.DateTimeFormat('en-CA', { timeZone, day: 'numeric' }).format(now),
+  );
+  return new Date(today.getTime() - (dayOfMonth - 1) * 86_400_000);
+}

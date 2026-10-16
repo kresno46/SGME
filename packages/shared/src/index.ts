@@ -13,3 +13,5 @@ export * from './outbound';
 export * from './schemas/campaigns';
 export * from './schemas/leads';
 export * from './schemas/outbound';
+export * from './ai-guardrails';
+export * from './schemas/ai';

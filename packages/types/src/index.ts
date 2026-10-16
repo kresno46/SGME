@@ -433,3 +433,109 @@ export interface OutboundSummaryDto {
   /** null bila belum ada pesan terkirim */
   replyRate: number | null;
 }
+
+// =====================================================================
+// Fase 3 — AI Sales Agent
+// =====================================================================
+
+export interface KnowledgeDocumentDto {
+  id: string;
+  title: string;
+  category: string;
+  content: string;
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  version: number;
+  publishedAt: string | null;
+  updatedBy: RefDto | null;
+  updatedAt: string;
+}
+
+export interface AiStatusDto {
+  /** Provider siap dipakai (API key tersedia, atau mode simulasi) */
+  configured: boolean;
+  provider: 'openai' | 'simulated' | null;
+  /** true = keluaran AI adalah simulasi (bukan model sungguhan) */
+  simulated: boolean;
+  model: string | null;
+  mode: 'COPILOT' | 'AUTO_REPLY';
+  /** Alasan bila belum dapat dipakai */
+  notReadyReason: string | null;
+  publishedDocuments: number;
+  monthlyBudgetUsd: number | null;
+  spentThisMonthUsd: number;
+  priceConfigured: boolean;
+}
+
+/** Bagian umum dari setiap hasil AI. */
+export interface AiResultMeta {
+  /** null bila AI tidak dipanggil (mis. Knowledge Base kosong) */
+  interactionId: string | null;
+  model: string;
+  simulated: boolean;
+  usage: { promptTokens: number; completionTokens: number; costUsd: number | null };
+  /** Dokumen Knowledge Base yang dipakai sebagai konteks */
+  sources: Array<{ id: string; title: string }>;
+}
+
+export interface AiAnswerDto extends AiResultMeta {
+  answer: string;
+  /** AI menyarankan ditangani manusia (pertanyaan di luar KB, keluhan, nasihat keuangan, dll.) */
+  handoff: boolean;
+  handoffReason: string | null;
+}
+
+export interface AiDraftDto extends AiResultMeta {
+  message: string;
+  rationale: string;
+}
+
+export interface AiReplySuggestionDto extends AiResultMeta {
+  reply: string;
+  handoff: boolean;
+  handoffReason: string | null;
+  detectedIntent: string;
+}
+
+export interface AiLeadScoreDto extends AiResultMeta {
+  score: number;
+  interestLevel: 'UNKNOWN' | 'LOW' | 'MEDIUM' | 'HIGH';
+  reasons: string[];
+  recommendedAction: string;
+}
+
+export interface AiSummaryDto extends AiResultMeta {
+  summary: string;
+  keyPoints: string[];
+  nextStep: string;
+}
+
+export interface AiUsageDto {
+  days: number;
+  totals: {
+    interactions: number;
+    promptTokens: number;
+    completionTokens: number;
+    costUsd: number;
+    failed: number;
+    blocked: number;
+    simulated: number;
+  };
+  byType: Array<{ type: string; interactions: number; costUsd: number }>;
+  byDay: Array<{ date: string; interactions: number; costUsd: number; tokens: number }>;
+  byModel: Array<{ model: string; interactions: number; tokens: number; costUsd: number }>;
+}
+
+export interface AiInteractionDto {
+  id: string;
+  type: string;
+  status: 'SUCCESS' | 'FAILED' | 'BLOCKED';
+  model: string;
+  user: RefDto | null;
+  leadId: string | null;
+  promptTokens: number;
+  completionTokens: number;
+  costUsd: number;
+  latencyMs: number | null;
+  errorMessage: string | null;
+  createdAt: string;
+}

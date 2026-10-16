@@ -76,9 +76,10 @@ export class OutboundController {
   updateDraft(
     @CurrentUser() user: RequestUser,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body(new ZodValidationPipe(updateTaskDraftSchema)) body: { draftMessage: string },
+    @Body(new ZodValidationPipe(updateTaskDraftSchema))
+    body: { draftMessage: string; aiGenerated?: boolean },
   ) {
-    return this.outbound.updateDraft(user, id, body.draftMessage);
+    return this.outbound.updateDraft(user, id, body.draftMessage, body.aiGenerated);
   }
 
   /** Permission spesifik per aksi (mis. approve butuh outreach:review) dicek di service. */

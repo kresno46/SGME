@@ -751,6 +751,8 @@ model AiInteraction {
   costUsd          Decimal             @default(0) @map("cost_usd") @db.Decimal(12, 6)
   latencyMs        Int?                @map("latency_ms")
   errorMessage     String?             @map("error_message")
+  /// true bila dihasilkan provider simulasi — tidak dihitung sebagai pemakaian/biaya asli
+  isSimulation     Boolean             @default(false) @map("is_simulation")
   createdAt        DateTime            @default(now()) @map("created_at")
 
   user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
@@ -759,6 +761,7 @@ model AiInteraction {
 
   @@index([type, createdAt])
   @@index([createdAt])
+  @@index([userId, createdAt])
   @@map("ai_interactions")
 }
 

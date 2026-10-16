@@ -174,6 +174,12 @@ describe('skema Fase 2', () => {
     expect(r.success).toBe(false);
   });
 
+  it('campaign: anggaran kosong = tidak ada anggaran (bukan Rp0)', () => {
+    const base = { name: 'Campaign Uji', lane: 'OFFICIAL', type: 'REGISTRATION' } as const;
+    expect(createCampaignSchema.parse({ ...base, budget: '' }).budget).toBeNull();
+    expect(createCampaignSchema.parse({ ...base, budget: '1500000' }).budget).toBe(1500000);
+  });
+
   it('filter status prospek menerima beberapa nilai dipisah koma', () => {
     expect(listLeadsQuerySchema.parse({ status: 'NEW,INTERESTED' }).status).toEqual([
       'NEW',

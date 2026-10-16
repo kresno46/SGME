@@ -67,7 +67,11 @@ export const createTaskSchema = z.object({
 });
 export type CreateTaskInput = z.input<typeof createTaskSchema>;
 
-export const updateTaskDraftSchema = z.object({ draftMessage: message });
+export const updateTaskDraftSchema = z.object({
+  draftMessage: message,
+  /** true bila draft berasal dari saran AI (untuk pelaporan) */
+  aiGenerated: z.boolean().optional(),
+});
 
 export const listTasksQuerySchema = paginationQuerySchema.extend({
   accountId: z.string().uuid().optional(),

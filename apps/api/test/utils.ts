@@ -3,6 +3,7 @@ import { Test } from '@nestjs/testing';
 import { hash } from '@node-rs/argon2';
 import { DEFAULT_ROLE_PERMISSIONS, ROLE_CODES, ROLE_LABELS, RoleCode } from '@smge/shared';
 import request from 'supertest';
+import { LLM_PROVIDER, type LlmProvider } from '../src/ai/providers/llm-provider';
 import { AppModule } from '../src/app.module';
 import { configureApp } from '../src/bootstrap';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -16,9 +17,13 @@ export const TEST_USERS: Record<RoleCode, string> = {
   VIEWER: 'viewer@test.local',
 };
 
-export async function createTestApp() {
+/** `llm` mengganti provider AI (default: tanpa provider = AI nonaktif). */
+export async function createTestApp(opts: { llm?: LlmProvider | null } = {}) {
   Logger.overrideLogger(['error']);
-  const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
+  const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
+    .overrideProvider(LLM_PROVIDER)
+    .useValue(opts.llm ?? null)
+    .compile();
   const app = moduleRef.createNestApplication();
   configureApp(app);
   await app.init();

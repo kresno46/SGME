@@ -325,12 +325,12 @@ export class OutboundService {
     return OutreachMapper.toDto(task, user);
   }
 
-  async updateDraft(user: RequestUser, id: string, draftMessage: string) {
+  async updateDraft(user: RequestUser, id: string, draftMessage: string, aiGenerated?: boolean) {
     const task = await this.findTask(id);
     this.assertAction(task.status, 'edit_draft', user);
     const updated = await this.prisma.outreachTask.update({
       where: { id },
-      data: { draftMessage },
+      data: { draftMessage, ...(aiGenerated !== undefined ? { aiGenerated } : {}) },
       include: OutreachMapper.include,
     });
     return OutreachMapper.toDto(updated, user);
