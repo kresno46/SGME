@@ -9,3 +9,7 @@ export * from './schemas/common';
 export * from './schemas/auth';
 export * from './schemas/users';
 export * from './schemas/tiktok-accounts';
+export * from './outbound';
+export * from './schemas/campaigns';
+export * from './schemas/leads';
+export * from './schemas/outbound';

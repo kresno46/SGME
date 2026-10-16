@@ -23,6 +23,12 @@ export const PERMISSIONS = {
   LEADS_MANAGE: 'leads:manage',
   LEADS_EXPORT: 'leads:export',
   LEADS_IMPORT: 'leads:import',
+  /** Menghapus (menganonimkan) data pribadi prospek */
+  LEADS_DELETE: 'leads:delete',
+  /** Menghapus entri dari daftar larangan kontak (menambah cukup leads:manage) */
+  DNC_MANAGE: 'dnc:manage',
+
+  TEMPLATES_MANAGE: 'templates:manage',
 
   OUTREACH_WORK: 'outreach:work',
   OUTREACH_REVIEW: 'outreach:review',

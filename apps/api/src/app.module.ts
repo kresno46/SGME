@@ -5,6 +5,8 @@ import { AccountsModule } from './accounts/accounts.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AuditModule } from './audit/audit.module';
 import { AuthModule } from './auth/auth.module';
+import { CampaignsModule } from './campaigns/campaigns.module';
+import { SettingsModule } from './common/settings.service';
 import { CryptoModule } from './common/crypto/crypto.service';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter';
 import { CsrfGuard } from './common/guards/csrf.guard';
@@ -12,7 +14,11 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { env } from './config/env';
 import { HealthModule } from './health/health.module';
+import { LeadsModule } from './leads/leads.module';
+import { OutboundModule } from './outbound/outbound.module';
 import { PrismaModule } from './prisma/prisma.service';
+import { RetentionModule } from './retention/retention.module';
+import { TemplatesModule } from './templates/templates.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -22,10 +28,16 @@ import { UsersModule } from './users/users.module';
     ]),
     PrismaModule,
     CryptoModule,
+    SettingsModule,
     AuditModule,
     AuthModule,
     UsersModule,
     AccountsModule,
+    CampaignsModule,
+    LeadsModule,
+    TemplatesModule,
+    OutboundModule,
+    RetentionModule,
     AnalyticsModule,
     HealthModule,
   ],

@@ -34,6 +34,11 @@ const DEFAULT_SETTINGS: Array<{ key: string; value: unknown; description: string
     description: 'Log integrasi disimpan selama N hari.',
   },
   {
+    key: 'outbound.daily_task_limit_per_account',
+    value: 30,
+    description: 'Batas tugas outbound baru per akun TikTok per hari agar penjangkauan tetap personal.',
+  },
+  {
     key: 'ai.mode',
     value: 'COPILOT',
     description:
@@ -85,6 +90,30 @@ async function main() {
     });
   }
   console.log('✔ Pengaturan sistem default');
+
+  if ((await prisma.messageTemplate.count()) === 0) {
+    await prisma.messageTemplate.createMany({
+      data: [
+        {
+          name: 'Perkenalan singkat',
+          lane: 'OUTBOUND',
+          purpose: 'INTRODUCTION',
+          content:
+            'Halo {{nama}}! Aku dari @{{akun}}. Makasih udah mampir ke konten kami 🙌 ' +
+            'Kalau penasaran sama Solid Mini, boleh aku kirim info singkatnya? Kalau tidak berkenan, cukup balas "stop" ya.',
+        },
+        {
+          name: 'Follow-up setelah dibalas',
+          lane: null,
+          purpose: 'FOLLOW_UP',
+          content:
+            'Hai {{nama}}, ini lanjutan obrolan kita kemarin. Info pendaftaran Solid Mini bisa dilihat di sini: {{link}} ' +
+            'Ada yang mau ditanyakan dulu?',
+        },
+      ],
+    });
+    console.log('✔ Template pesan awal (silakan sesuaikan isinya)');
+  }
 
   if (process.env.SEED_DEMO_DATA === 'true') {
     const demo = [

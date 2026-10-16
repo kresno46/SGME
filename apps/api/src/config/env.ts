@@ -17,6 +17,12 @@ const envSchema = z.object({
   REDIS_URL: z.string().optional(),
   CORS_ORIGINS: z.string().default('http://localhost:3000'),
   APP_PUBLIC_URL: z.string().url().default('http://localhost:3000'),
+  /** URL halaman registrasi/landing Solid Mini (dipakai placeholder {{link}}) */
+  SOLID_MINI_REGISTRATION_URL: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
   JWT_ACCESS_SECRET: z.string().min(32, 'JWT_ACCESS_SECRET minimal 32 karakter'),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().min(60).default(900),
   REFRESH_TOKEN_TTL_DAYS: z.coerce.number().int().min(1).default(14),

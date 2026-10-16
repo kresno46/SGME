@@ -27,6 +27,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
           statusCode: status,
           message: translateDefault(status, message as string | undefined),
           ...(b.errors ? { errors: b.errors } : {}),
+          ...(b.details ? { details: b.details } : {}),
         });
       }
       return res

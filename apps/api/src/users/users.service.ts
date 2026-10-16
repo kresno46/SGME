@@ -56,6 +56,15 @@ export class UsersService {
     return paginate(rows.map(toUserDto), total, q.page, q.pageSize);
   }
 
+  /** Pengguna aktif yang dapat ditugaskan menangani prospek/campaign (data minimal). */
+  async assignable() {
+    return this.prisma.user.findMany({
+      where: { status: 'ACTIVE', role: { code: { in: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_OPERATOR'] } } },
+      select: { id: true, name: true },
+      orderBy: { name: 'asc' },
+    });
+  }
+
   async listRoles(): Promise<RoleDto[]> {
     const roles = await this.prisma.role.findMany({
       include: { _count: { select: { users: true } } },

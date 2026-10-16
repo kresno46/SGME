@@ -8,7 +8,9 @@
     "start": "node dist/main.js",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "jest --config jest.config.js",
-    "test:e2e": "jest --config test/jest-e2e.config.js --runInBand"
+    "test:e2e": "jest --config test/jest-e2e.config.js --runInBand",
+    "worker": "node dist/worker.js",
+    "worker:dev": "nest start --watch --entryFile worker"
   },
   "dependencies": {
     "@nestjs/common": "^11.2.7",
@@ -20,8 +22,12 @@
     "@smge/database": "workspace:*",
     "@smge/shared": "workspace:*",
     "@smge/types": "workspace:*",
+    "bullmq": "^6.3.15",
     "cookie-parser": "^1.4.7",
+    "csv-parse": "^7.0.3",
+    "csv-stringify": "^6.9.0",
     "dotenv": "^16.6.1",
+    "exceljs": "^4.4.0",
     "helmet": "^8.3.0",
     "ioredis": "^6.0.0",
     "nodemailer": "^10.1.1",
@@ -38,6 +44,7 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/jest": "^29.5.14",
+    "@types/multer": "^2.3.0",
     "@types/node": "^22.20.5",
     "@types/nodemailer": "^8.0.2",
     "@types/qrcode": "^1.5.6",

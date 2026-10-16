@@ -37,6 +37,12 @@ export class UsersController {
     return this.users.list(q);
   }
 
+  @Get('users/assignable')
+  @RequirePermissions(PERMISSIONS.LEADS_READ)
+  assignable() {
+    return this.users.assignable();
+  }
+
   @Get('roles')
   @RequirePermissions(PERMISSIONS.ROLES_READ)
   roles() {

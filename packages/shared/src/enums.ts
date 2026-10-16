@@ -90,3 +90,58 @@ export const CONVERSATION_STATUSES = values(
   'CLOSED',
 );
 export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
+
+export const INTEREST_LEVELS = values('UNKNOWN', 'LOW', 'MEDIUM', 'HIGH');
+export type InterestLevel = (typeof INTEREST_LEVELS)[number];
+
+export const LEAD_SOURCES = values(
+  'TIKTOK_LEAD_GEN',
+  'TIKTOK_MESSAGING_ADS',
+  'INBOUND_DM',
+  'LIVE',
+  'LANDING_PAGE',
+  'REFERRAL',
+  'MANUAL',
+  'IMPORT',
+);
+export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+export const CONTACT_CHANNELS = values('TIKTOK_DM', 'WHATSAPP', 'EMAIL', 'PHONE', 'SMS');
+export type ContactChannel = (typeof CONTACT_CHANNELS)[number];
+
+export const CONSENT_STATUSES = values('GRANTED', 'WITHDRAWN');
+export type ConsentStatus = (typeof CONSENT_STATUSES)[number];
+
+export const CONSENT_SOURCES = values(
+  'LEAD_FORM',
+  'CONVERSATION',
+  'LANDING_PAGE',
+  'MANUAL_ENTRY',
+  'IMPORT',
+);
+export type ConsentSource = (typeof CONSENT_SOURCES)[number];
+
+export const LEAD_ACTIVITY_TYPES = values(
+  'CREATED',
+  'NOTE',
+  'STATUS_CHANGE',
+  'ASSIGNMENT',
+  'MESSAGE_SENT',
+  'MESSAGE_RECEIVED',
+  'CONSENT_CHANGE',
+  'FOLLOW_UP_SCHEDULED',
+  'CONVERSION',
+  'AI_ANALYSIS',
+  'IMPORT',
+  'MERGE',
+);
+export type LeadActivityType = (typeof LEAD_ACTIVITY_TYPES)[number];
+
+export const TEMPLATE_PURPOSES = values(
+  'INTRODUCTION',
+  'FOLLOW_UP',
+  'REPLY',
+  'REGISTRATION_GUIDE',
+  'REACTIVATION',
+);
+export type TemplatePurpose = (typeof TEMPLATE_PURPOSES)[number];

@@ -102,7 +102,19 @@ export const api = {
   patch: <T>(path: string, body: unknown) =>
     apiFetch<T>(path, { method: 'PATCH', body: JSON.stringify(body) }),
   delete: <T>(path: string) => apiFetch<T>(path, { method: 'DELETE' }),
+  /** Upload multipart (mis. file CSV). Content-Type diatur otomatis oleh browser. */
+  upload: <T>(path: string, form: FormData) => apiFetch<T>(path, { method: 'POST', body: form }),
 };
+
+/** URL unduhan (GET dengan cookie sesi), dipakai sebagai href tautan unduh. */
+export function downloadUrl(path: string, params: Record<string, string | number | boolean | undefined | null>) {
+  const qs = new URLSearchParams(
+    Object.entries(params)
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => [k, String(v)]),
+  ).toString();
+  return `/api${path}${qs ? `?${qs}` : ''}`;
+}
 
 /** Memetakan error validasi API ke field react-hook-form. */
 export function applyServerErrors(

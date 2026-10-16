@@ -698,12 +698,20 @@ model OutreachTask {
   finalMessage    String?            @map("final_message")
   aiGenerated     Boolean            @default(false) @map("ai_generated")
   priority        Int                @default(0)
+  /// Catatan reviewer saat pesan dikembalikan ke draft
+  reviewNote      String?            @map("review_note")
+  submittedAt     DateTime?          @map("submitted_at")
+  approvedAt      DateTime?          @map("approved_at")
   /// Diisi hanya ketika operator mengonfirmasi pesan benar-benar terkirim
   sentConfirmedAt DateTime?          @map("sent_confirmed_at")
+  lastSentAt      DateTime?          @map("last_sent_at")
+  /// Jumlah pesan yang dikonfirmasi terkirim (pesan awal + follow-up)
+  sentCount       Int                @default(0) @map("sent_count")
   repliedAt       DateTime?          @map("replied_at")
   responseSummary String?            @map("response_summary")
   followUpAt      DateTime?          @map("follow_up_at")
   completedAt     DateTime?          @map("completed_at")
+  outcome         String?
   cancelReason    String?            @map("cancel_reason")
   createdAt       DateTime           @default(now()) @map("created_at")
   updatedAt       DateTime           @updatedAt @map("updated_at")
@@ -716,8 +724,9 @@ model OutreachTask {
   reviewer      User?            @relation("OutreachReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
 
   @@index([tiktokAccountId, status])
+  @@index([tiktokAccountId, createdAt])
   @@index([operatorId, status])
-  @@index([followUpAt])
+  @@index([status, followUpAt])
   @@index([leadId])
   @@map("outreach_tasks")
 }

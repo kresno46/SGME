@@ -1,5 +1,12 @@
 import type {
   CampaignStatus,
+  ConsentSource,
+  ConsentStatus,
+  ContactChannel,
+  InterestLevel,
+  LeadActivityType,
+  LeadSource,
+  TemplatePurpose,
   CampaignType,
   ConversationStatus,
   DataSource,
@@ -120,4 +127,66 @@ export const CONVERSATION_STATUS_LABELS: Record<ConversationStatus, string> = {
   AI_HANDLING: 'Ditangani AI',
   RESOLVED: 'Selesai',
   CLOSED: 'Ditutup',
+};
+
+export const INTEREST_LEVEL_LABELS: Record<InterestLevel, string> = {
+  UNKNOWN: 'Belum diketahui',
+  LOW: 'Rendah',
+  MEDIUM: 'Sedang',
+  HIGH: 'Tinggi',
+};
+
+export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
+  TIKTOK_LEAD_GEN: 'TikTok Lead Generation',
+  TIKTOK_MESSAGING_ADS: 'TikTok Messaging Ads',
+  INBOUND_DM: 'DM masuk',
+  LIVE: 'TikTok LIVE',
+  LANDING_PAGE: 'Landing page',
+  REFERRAL: 'Referral',
+  MANUAL: 'Input manual',
+  IMPORT: 'Import file',
+};
+
+export const CONTACT_CHANNEL_LABELS: Record<ContactChannel, string> = {
+  TIKTOK_DM: 'DM TikTok',
+  WHATSAPP: 'WhatsApp',
+  EMAIL: 'Email',
+  PHONE: 'Telepon',
+  SMS: 'SMS',
+};
+
+export const CONSENT_STATUS_LABELS: Record<ConsentStatus, string> = {
+  GRANTED: 'Diizinkan',
+  WITHDRAWN: 'Dicabut',
+};
+
+export const CONSENT_SOURCE_LABELS: Record<ConsentSource, string> = {
+  LEAD_FORM: 'Formulir lead',
+  CONVERSATION: 'Percakapan',
+  LANDING_PAGE: 'Landing page',
+  MANUAL_ENTRY: 'Dicatat operator',
+  IMPORT: 'Import file',
+};
+
+export const LEAD_ACTIVITY_TYPE_LABELS: Record<LeadActivityType, string> = {
+  CREATED: 'Prospek dibuat',
+  NOTE: 'Catatan',
+  STATUS_CHANGE: 'Perubahan status',
+  ASSIGNMENT: 'Penugasan operator',
+  MESSAGE_SENT: 'Pesan terkirim',
+  MESSAGE_RECEIVED: 'Balasan diterima',
+  CONSENT_CHANGE: 'Perubahan izin',
+  FOLLOW_UP_SCHEDULED: 'Follow-up dijadwalkan',
+  CONVERSION: 'Konversi',
+  AI_ANALYSIS: 'Analisis AI',
+  IMPORT: 'Import',
+  MERGE: 'Penggabungan data',
+};
+
+export const TEMPLATE_PURPOSE_LABELS: Record<TemplatePurpose, string> = {
+  INTRODUCTION: 'Perkenalan',
+  FOLLOW_UP: 'Follow-up',
+  REPLY: 'Balasan',
+  REGISTRATION_GUIDE: 'Panduan registrasi',
+  REACTIVATION: 'Reaktivasi',
 };

@@ -140,3 +140,18 @@ export function TableHead({ className, ...props }: React.ComponentProps<'th'>) {
 export function TableCell({ className, ...props }: React.ComponentProps<'td'>) {
   return <td className={cn('px-3 py-2.5 align-middle', className)} {...props} />;
 }
+
+// ---------------------------------------------------------------- Checkbox
+
+export function Checkbox({ className, ...props }: Omit<React.ComponentProps<'input'>, 'type'>) {
+  return (
+    <input
+      type="checkbox"
+      className={cn(
+        'size-4 shrink-0 cursor-pointer rounded border-input accent-[var(--primary)] disabled:cursor-not-allowed disabled:opacity-50',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
