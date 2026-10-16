@@ -17,7 +17,7 @@ export default function Page() {
         'Eskalasi ke manusia',
         'Status OPEN s.d. CLOSED',
       ]}
-      notes="Inbox hanya menampilkan kanal yang terhubung melalui API resmi."
+      notes="Inbox hanya untuk kanal pesan yang terhubung melalui API resmi. Menunggu akses TikTok Business Messaging API yang dokumentasi resminya dapat diverifikasi. Sementara itu, balasan prospek dicatat lewat Outbound Workstation dan saran balasan tersedia di AI Sales Agent."
     />
   );
 }

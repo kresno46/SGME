@@ -556,8 +556,15 @@ export interface IntegrationCapabilityDto {
 }
 
 export interface ConnectedAccountDto {
-  account: AccountRefDto & { status: string; followersCount: number; followersSource: DataSource; lastSyncedAt: string | null };
-  integrations: Array<AccountIntegrationDto & { externalId: string | null; refreshExpiresAt: string | null }>;
+  account: AccountRefDto & {
+    status: string;
+    followersCount: number;
+    followersSource: DataSource;
+    lastSyncedAt: string | null;
+  };
+  integrations: Array<
+    AccountIntegrationDto & { externalId: string | null; refreshExpiresAt: string | null }
+  >;
 }
 
 export interface IntegrationsOverviewDto {

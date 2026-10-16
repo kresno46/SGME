@@ -8,7 +8,8 @@ Platform ini memakai dua jalur:
 - **Jalur B — Outbound**: akun tambahan dengan penjangkauan personal yang ditinjau operator.
   Sistem **tidak** mengirim DM massal, tidak melakukan scraping, dan tidak memakai rotasi akun.
 
-> **Status: Fase 1–3 selesai (Fondasi, CRM & Campaign, AI Sales).** AI aktif setelah `OPENAI_API_KEY` diisi. Lihat [docs/ROADMAP.md](docs/ROADMAP.md) untuk status tiap fase
+> **Status: Fase 1–3 selesai; Fase 4 (integrasi TikTok Login Kit) siap menunggu kredensial.** AI aktif setelah
+> `OPENAI_API_KEY` diisi; koneksi TikTok resmi aktif setelah `TIKTOK_CLIENT_KEY/SECRET/REDIRECT_URI` diisi. Lihat [docs/ROADMAP.md](docs/ROADMAP.md) untuk status tiap fase
 > dan keterbatasan yang diketahui.
 
 ## Teknologi
@@ -84,6 +85,10 @@ registrasi Solid Mini (UTM ditambahkan otomatis). Bila kosong, placeholder terse
 **AI Sales Agent**: isi `OPENAI_API_KEY` (dan `OPENAI_MODEL`) di `.env` lalu restart API. Tanpa key, AI tampil
 "belum dikonfigurasi" dan fitur lain tetap berjalan. Untuk mencoba UI tanpa key, jalankan API dengan
 `AI_PROVIDER=simulated` — semua keluaran berlabel SIMULASI. Langkah aktivasi lengkap: [docs/ROADMAP.md](docs/ROADMAP.md).
+
+**Integrasi TikTok**: isi `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, dan `TIKTOK_REDIRECT_URI` (https, terdaftar di
+developers.tiktok.com). Untuk mencoba alur tanpa kredensial, set `TIKTOK_USE_MOCK=true` (development saja; data
+berlabel SIMULASI). Langkah lengkap: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 Login memakai `SEED_SUPERADMIN_EMAIL` / `SEED_SUPERADMIN_PASSWORD`, lalu **segera ganti password**
 dan aktifkan 2FA di **Pengaturan → Profil & keamanan**.

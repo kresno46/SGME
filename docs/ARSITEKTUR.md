@@ -139,3 +139,31 @@ Fitur (tanya, saran balasan, draft, skor, ringkasan)
   sumber, tag, kanal izin, dan riwayat aktivitas. Email, telepon, username TikTok, dan nama lengkap tidak dikirim.
 - **Biaya**: harga per 1 juta token diisi admin dari halaman harga resmi penyedia (tidak di-hardcode). Tanpa harga,
   biaya tercatat US$0 dan UI menampilkan peringatan.
+
+## Integrasi TikTok
+
+```text
+Dashboard ──POST connect──▶ API ──authorizeUrl (state JWT 10 menit, sekali pakai)──▶ Browser ──▶ TikTok (login & izinkan)
+                                                                                                     │
+Browser ◀──302 /integrations?connected|error── API /integrations/tiktok/callback ◀──code + state─────┘
+                                                  ├─ tukar code → token (dienkripsi AES-256-GCM)
+                                                  ├─ wajib scope user.info.profile
+                                                  ├─ username yang diotorisasi HARUS = akun di SMGE
+                                                  ├─ open_id tidak boleh tertaut ke akun SMGE lain
+                                                  └─ profil → akun (followers sumber ACTUAL)
+```
+
+- **Adapter** (`apps/api/src/integrations/tiktok`): `LoginKitAdapter` (resmi; aktif bila `TIKTOK_CLIENT_KEY`,
+  `TIKTOK_CLIENT_SECRET`, `TIKTOK_REDIRECT_URI` terisi) dan `MockLoginKitAdapter` (bila `TIKTOK_USE_MOCK=true`;
+  halaman persetujuan disimulasikan dashboard di `/integrations/mock-authorize`, followers ditandai `SIMULATED`,
+  log `is_simulation=true`). Mock dan AI simulasi **ditolak saat start** bila `NODE_ENV=production`.
+- **HTTP**: timeout 15 detik, retry maksimal 3× untuk jaringan/429/5xx dengan exponential backoff; 401 tidak diulang
+  dan menandai integrasi `TOKEN_EXPIRED`. Semua panggilan tercatat di `integration_logs` tanpa token/secret.
+- **Token**: di-refresh otomatis bila sisa < 10 menit; refresh token kedaluwarsa → `TOKEN_EXPIRED` (hubungkan ulang).
+- **Worker**: sinkron semua integrasi aktif setiap 6 jam (BullMQ, retry eksponensial).
+- **Webhook** `/api/webhooks/tiktok`: verifikasi `TikTok-Signature` (`t=…,s=…`, HMAC-SHA256 atas `t.body` dengan
+  client secret, toleransi 5 menit) memakai body mentah; `client_key` dicocokkan; idempotensi dari hash body
+  (`integration_logs.idempotency_key` unik). `authorization.removed` → integrasi `REVOKED` dan token dihapus.
+- **Belum diimplementasikan** (dokumentasi resmi belum dapat diverifikasi): TikTok API for Business (Ads
+  Reporting), Lead Generation, Business Messaging. Statusnya ditampilkan "Menunggu verifikasi" di halaman Integrasi.
+  Sementara itu prospek dari Lead Generation dapat masuk lewat export CSV Ads Manager → Import CSV.

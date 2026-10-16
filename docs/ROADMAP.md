@@ -115,11 +115,48 @@
 - Ringkasan memakai riwayat aktivitas prospek; ringkasan percakapan per thread menyusul bersama inbox (Fase 4).
 - Auto-Reply belum dapat diaktifkan (menunggu integrasi messaging resmi).
 
-## Fase 4 — Integrasi TikTok
+## Fase 4 — Integrasi TikTok ✅ sebagian (16 Oktober 2026) — menunggu kredensial & akses TikTok
 
-Verifikasi dokumentasi resmi TikTok (Login Kit, Business API, Lead Generation, Messaging) **sebelum**
-implementasi; token terenkripsi, refresh otomatis, retry + idempotency, validasi signature webhook, log
-integrasi. Mock Adapter berlabel SIMULASI untuk akses yang belum disetujui.
+| Item | Status |
+|---|---|
+| Verifikasi dokumentasi resmi | ✅ Login Kit, token, user info, webhook. ⚠️ Business API, Lead Gen, Messaging: dokumentasi resmi tidak dapat dibaca/diverifikasi |
+| OAuth Login Kit resmi (authorize v2, tukar code, refresh, revoke) | ✅ kode siap; **belum diuji ke TikTok sungguhan** (belum ada client key) |
+| Sinkron profil: followers (ACTUAL), status verifikasi, avatar, nama | ✅ |
+| Token terenkripsi, refresh otomatis, status kedaluwarsa/dicabut | ✅ |
+| Retry + backoff, idempotensi (state OAuth sekali pakai, webhook duplikat) | ✅ |
+| Webhook dengan verifikasi signature; `authorization.removed` | ✅ |
+| Halaman Integrasi: status kemampuan, URL konfigurasi, koneksi akun, log | ✅ |
+| Mock Adapter berlabel SIMULASI (ditolak di produksi) | ✅ |
+| Worker: sinkron akun tiap 6 jam | ✅ |
+| Business API (Ads Reporting) | ❌ belum — menunggu dokumentasi resmi & akses |
+| Lead Generation | ❌ belum — sementara: export CSV Ads Manager → Import CSV |
+| Messaging / Inbox Percakapan / Auto-reply | ❌ belum — menunggu akses & dokumentasi resmi |
+
+### Hasil verifikasi Fase 4
+
+| Pemeriksaan | Hasil |
+|---|---|
+| `pnpm lint` / `pnpm typecheck` | bersih / lulus |
+| Unit test API | 28/28 — termasuk adapter resmi diuji dengan `fetch` palsu: URL, metode, header, parameter persis sesuai dokumentasi; retry; signature webhook |
+| Integration test API | 73/73 — OAuth resmi (server TikTok palsu) & Mock, penolakan akun berbeda/scope kurang, state sekali pakai, refresh token, TOKEN_EXPIRED, putus koneksi, webhook (signature salah/kedaluwarsa, duplikat, pencabutan), token tidak bocor, RBAC |
+| `next build` dashboard | lulus (19 route) |
+| Uji browser (Mock) | hubungkan simulasi → persetujuan → kembali terhubung → sinkron; akun berbeda ditolak dengan pesan jelas |
+
+### Untuk mengaktifkan integrasi resmi
+
+1. Buat aplikasi di **developers.tiktok.com**, tambahkan produk **Login Kit**, ajukan scope
+   `user.info.basic`, `user.info.profile`, `user.info.stats`, dan tunggu persetujuan TikTok.
+2. Daftarkan **Redirect URI** `https://<domain>/api/integrations/tiktok/callback` (wajib https — untuk uji lokal
+   gunakan tunnel https, mis. ngrok yang tersedia di Laragon).
+3. Atur **Webhook Callback URL** `https://<domain>/api/webhooks/tiktok`.
+4. Isi `TIKTOK_CLIENT_KEY`, `TIKTOK_CLIENT_SECRET`, `TIKTOK_REDIRECT_URI` di `.env`, restart API & worker.
+5. Admin membuka **Integrasi → Hubungkan**; pemilik tiap akun login di TikTok dan menyetujui.
+
+### Keterbatasan Fase 4
+
+- Belum pernah diuji terhadap TikTok sungguhan.
+- `follower_count` hanya terisi bila scope `user.info.stats` disetujui; bila tidak, angka followers tetap input manual.
+- Business API, Lead Generation, dan Messaging belum ada (lihat tabel di atas); halaman Percakapan masih placeholder.
 
 ## Fase 5 — Analitik
 

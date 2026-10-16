@@ -1,23 +1,16 @@
-import { ComingSoon } from '@/components/guards';
+'use client';
 
-export const metadata = { title: 'Integrasi' };
+import { PERMISSIONS } from '@smge/shared';
+import { Suspense } from 'react';
+import { RequirePermission } from '@/components/guards';
+import { IntegrationsPage } from '@/features/integrations/integrations-page';
 
 export default function Page() {
   return (
-    <ComingSoon
-      title="Integrasi"
-      description="Koneksi resmi ke TikTok dan backend Solid Mini."
-      phase={4}
-      icon="Cable"
-      features={[
-        'TikTok OAuth (Login Kit)',
-        'TikTok Business API, Lead Generation, Messaging (sesuai izin)',
-        'Webhook tervalidasi & idempotent',
-        'Token tersimpan terenkripsi',
-        'Status koneksi & log integrasi',
-        'Mock Adapter berlabel SIMULASI untuk pengujian',
-      ]}
-      notes="Endpoint hanya diimplementasikan setelah diverifikasi dari dokumentasi resmi TikTok dan izin akses diperoleh."
-    />
+    <RequirePermission permission={PERMISSIONS.INTEGRATIONS_READ}>
+      <Suspense>
+        <IntegrationsPage />
+      </Suspense>
+    </RequirePermission>
   );
 }

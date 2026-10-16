@@ -196,3 +196,27 @@ guardrail (`details.claims`) · `502` provider gagal / format jawaban tidak vali
 | POST | `/knowledge-documents` | `knowledge:manage` | `{ title, category, content, status }` |
 | PATCH | `/knowledge-documents/:id` | `knowledge:manage` | Perubahan judul/isi menaikkan `version` |
 | DELETE | `/knowledge-documents/:id` | `knowledge:manage` | |
+
+---
+
+# Fase 4 — Integrasi TikTok
+
+| Method | Path | Akses | Keterangan |
+|---|---|---|---|
+| GET | `/integrations/overview` | `integrations:read` | Status kemampuan (Login Kit, Webhook, Mock, Business API, Lead Gen, Messaging), Redirect URI, URL webhook, scope, akun & koneksinya (tanpa token) |
+| GET | `/integrations/logs` | `integrations:read` | Log integrasi (filter `integrationId`, `onlyErrors`). Payload tersensor |
+| POST | `/integrations/tiktok/accounts/:accountId/connect` | `integrations:manage` | `{ provider: "TIKTOK_LOGIN_KIT" \| "MOCK" }` → `{ authorizeUrl }`; browser diarahkan ke URL ini |
+| GET | `/integrations/tiktok/callback` | publik (redirect browser dari TikTok) | `code`, `state`, `scopes`, `error`, `error_description` → redirect 302 ke `/integrations?connected=<id>` atau `/integrations?error=<pesan>` |
+| GET | `/integrations/tiktok/mock/state` | `integrations:manage` | Info state untuk halaman persetujuan simulasi (Mock saja) |
+| POST | `/integrations/:id/sync` | `integrations:manage` | Refresh token bila perlu, ambil profil, perbarui akun → `{ status, followersCount, message }` |
+| POST | `/integrations/:id/disconnect` | `integrations:manage` | Revoke di TikTok (best effort), hapus token, status `REVOKED` |
+| POST | `/webhooks/tiktok` | publik, diverifikasi `TikTok-Signature` | Event `authorization.removed` mencabut integrasi; event duplikat diabaikan |
+
+Endpoint TikTok yang dipanggil (diverifikasi dari developers.tiktok.com pada 16 Okt 2026):
+
+| Endpoint | Dipakai untuk |
+|---|---|
+| `https://www.tiktok.com/v2/auth/authorize/` | Halaman otorisasi (client_key, response_type=code, scope, redirect_uri, state) |
+| `POST https://open.tiktokapis.com/v2/oauth/token/` | Tukar code (`grant_type=authorization_code`) & refresh (`grant_type=refresh_token`), form-urlencoded |
+| `POST https://open.tiktokapis.com/v2/oauth/revoke/` | Cabut token |
+| `GET https://open.tiktokapis.com/v2/user/info/?fields=…` | Profil; field diminta sesuai scope yang diberikan |
