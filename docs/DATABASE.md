@@ -66,7 +66,15 @@ Nilai default ada di `system_settings` (di-seed):
 | `retention.audit_log_days` | 1095 | Hapus audit log lebih tua |
 | `retention.integration_log_days` | 180 | Hapus log integrasi lebih tua |
 
-Kolom `leads.retention_until`, `anonymized_at`, `deleted_at` (soft delete) disiapkan untuk ini.
+Kolom `leads.anonymized_at` dan `deleted_at` diisi saat anonimisasi. Implementasi: `apps/api/src/retention`
+(dijalankan worker BullMQ setiap hari pukul 02.00 WIB, atau manual via `POST /api/maintenance/retention`).
+
+## Riwayat migrasi
+
+| Migrasi | Isi |
+|---|---|
+| `20261015080705_init` | Seluruh tabel awal (Fase 1) |
+| `20261015085102_outbound_review_fields` | `outreach_tasks`: `review_note`, `submitted_at`, `approved_at`, `last_sent_at`, `sent_count`, `outcome` + index antrean |
 
 ## Migrasi & seed
 
@@ -76,5 +84,7 @@ pnpm db:deploy           # produksi (hanya menerapkan migrasi)
 pnpm db:seed             # idempoten
 ```
 
-Seed membuat 4 role dengan permission default, Super Admin dari `.env`, dan pengaturan default.
+Seed membuat 4 role dengan permission default, Super Admin dari `.env`, pengaturan default (retensi, batas
+harian outbound, mode AI), dan 2 template pesan awal bila belum ada template. **Jalankan ulang seed setelah upgrade**
+agar permission baru (mis. `dnc:manage`, `templates:manage`, `leads:delete`) masuk ke tabel `roles`.
 `SEED_DEMO_DATA=true` menambah 3 akun TikTok demo berlabel `SIMULATED`.

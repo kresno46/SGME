@@ -12,6 +12,8 @@ export class ApiError extends Error {
     public readonly status: number,
     message: string,
     public readonly errors?: Record<string, string[]>,
+    /** Informasi tambahan dari server, mis. daftar prospek duplikat (409) */
+    public readonly details?: unknown,
   ) {
     super(message);
   }
@@ -78,7 +80,12 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const body = (await res.json().catch(() => null)) as unknown;
   if (!res.ok) {
     const err = (body ?? {}) as Partial<ApiErrorBody>;
-    throw new ApiError(res.status, err.message ?? `Terjadi kesalahan (${res.status})`, err.errors);
+    throw new ApiError(
+      res.status,
+      err.message ?? `Terjadi kesalahan (${res.status})`,
+      err.errors,
+      err.details,
+    );
   }
   return body as T;
 }
@@ -107,7 +114,10 @@ export const api = {
 };
 
 /** URL unduhan (GET dengan cookie sesi), dipakai sebagai href tautan unduh. */
-export function downloadUrl(path: string, params: Record<string, string | number | boolean | undefined | null>) {
+export function downloadUrl(
+  path: string,
+  params: Record<string, string | number | boolean | undefined | null>,
+) {
   const qs = new URLSearchParams(
     Object.entries(params)
       .filter(([, v]) => v !== undefined && v !== null && v !== '')

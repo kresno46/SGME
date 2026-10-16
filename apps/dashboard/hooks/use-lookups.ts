@@ -22,7 +22,13 @@ export function useAccountOptions(lane?: 'OFFICIAL' | 'OUTBOUND') {
 export function useCampaignOptions(lane?: 'OFFICIAL' | 'OUTBOUND') {
   return useQuery({
     queryKey: ['lookup', 'campaigns', lane ?? 'all'],
-    queryFn: () => api.get<Paginated<CampaignDto>>('/campaigns', { pageSize: 100, lane, sortBy: 'name', sortDir: 'asc' }),
+    queryFn: () =>
+      api.get<Paginated<CampaignDto>>('/campaigns', {
+        pageSize: 100,
+        lane,
+        sortBy: 'name',
+        sortDir: 'asc',
+      }),
     select: (d) => d.items,
     staleTime: 300_000,
   });

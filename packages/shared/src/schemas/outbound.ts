@@ -17,7 +17,11 @@ const optionalUuid = z
   .or(z.literal(''))
   .transform((v) => v || null);
 
-const message = z.string().trim().min(5, 'Pesan minimal 5 karakter').max(2000, 'Pesan maksimal 2000 karakter');
+const message = z
+  .string()
+  .trim()
+  .min(5, 'Pesan minimal 5 karakter')
+  .max(2000, 'Pesan maksimal 2000 karakter');
 
 // ---------------------------------------------------------------- template
 
@@ -30,7 +34,8 @@ export const templateSchema = z.object({
     .transform((v) => v || null),
   purpose: z.enum(TEMPLATE_PURPOSES),
   content: message.refine((c) => findUnknownPlaceholders(c).length === 0, {
-    message: 'Ada placeholder yang tidak dikenal. Gunakan {{nama}}, {{username}}, {{akun}}, {{campaign}}, atau {{link}}.',
+    message:
+      'Ada placeholder yang tidak dikenal. Gunakan {{nama}}, {{username}}, {{akun}}, {{campaign}}, atau {{link}}.',
   }),
   isActive: z.boolean().default(true),
 });
@@ -84,7 +89,10 @@ export type ListTasksQuery = z.infer<typeof listTasksQuerySchema>;
 export const taskActionSchema = z.discriminatedUnion('action', [
   z.object({ action: z.literal('submit') }),
   z.object({ action: z.literal('approve'), finalMessage: message.optional() }),
-  z.object({ action: z.literal('reject'), reviewNote: z.string().trim().min(3, 'Isi catatan untuk operator').max(500) }),
+  z.object({
+    action: z.literal('reject'),
+    reviewNote: z.string().trim().min(3, 'Isi catatan untuk operator').max(500),
+  }),
   z.object({ action: z.literal('reopen') }),
   z.object({
     action: z.literal('mark_sent'),
@@ -111,12 +119,18 @@ export const taskActionSchema = z.discriminatedUnion('action', [
     outcome: z.enum(['REGISTERED', 'INTERESTED', 'NOT_INTERESTED', 'NO_RESPONSE']),
     note: optionalText(500),
   }),
-  z.object({ action: z.literal('cancel'), reason: z.string().trim().min(3, 'Isi alasan pembatalan').max(500) }),
+  z.object({
+    action: z.literal('cancel'),
+    reason: z.string().trim().min(3, 'Isi alasan pembatalan').max(500),
+  }),
 ]);
 export type TaskActionInput = z.input<typeof taskActionSchema>;
 export type TaskAction = z.output<typeof taskActionSchema>;
 
-export const OUTCOME_LABELS: Record<Extract<TaskAction, { action: 'complete' }>['outcome'], string> = {
+export const OUTCOME_LABELS: Record<
+  Extract<TaskAction, { action: 'complete' }>['outcome'],
+  string
+> = {
   REGISTERED: 'Prospek mendaftar',
   INTERESTED: 'Tertarik, lanjut di kanal lain',
   NOT_INTERESTED: 'Tidak tertarik',

@@ -1,23 +1,16 @@
-import { ComingSoon } from '@/components/guards';
+'use client';
 
-export const metadata = { title: 'Outbound Workstation' };
+import { PERMISSIONS } from '@smge/shared';
+import { Suspense } from 'react';
+import { RequirePermission } from '@/components/guards';
+import { OutboundPage } from '@/features/outbound/outbound-page';
 
 export default function Page() {
   return (
-    <ComingSoon
-      title="Outbound Workstation"
-      description="Ruang kerja operator Jalur B untuk penjangkauan personal yang sah."
-      phase={2}
-      icon="Send"
-      features={[
-        'Antrean prospek yang memenuhi syarat per akun',
-        'Draft pesan personal oleh AI (Fase 3)',
-        'Review & persetujuan pesan',
-        'Konfirmasi pengiriman manual oleh operator',
-        'Pengingat follow-up',
-        'Tracking respons & konversi',
-      ]}
-      notes="Sistem tidak mengirim DM massal otomatis. Status terkirim hanya diisi setelah operator mengonfirmasi pengiriman."
-    />
+    <RequirePermission permission={PERMISSIONS.OUTREACH_WORK}>
+      <Suspense>
+        <OutboundPage />
+      </Suspense>
+    </RequirePermission>
   );
 }

@@ -8,7 +8,7 @@ Platform ini memakai dua jalur:
 - **Jalur B — Outbound**: akun tambahan dengan penjangkauan personal yang ditinjau operator.
   Sistem **tidak** mengirim DM massal, tidak melakukan scraping, dan tidak memakai rotasi akun.
 
-> **Status: Fase 1 (Fondasi) selesai.** Lihat [docs/ROADMAP.md](docs/ROADMAP.md) untuk status tiap fase
+> **Status: Fase 1 (Fondasi) dan Fase 2 (CRM & Campaign) selesai.** Lihat [docs/ROADMAP.md](docs/ROADMAP.md) untuk status tiap fase
 > dan keterbatasan yang diketahui.
 
 ## Teknologi
@@ -17,14 +17,15 @@ Platform ini memakai dua jalur:
 | --------- | ------------------------------------------------------------------------- |
 | Dashboard | Next.js 15 (App Router), TypeScript, Tailwind CSS 4, komponen gaya shadcn/ui, TanStack Query, React Hook Form, Zod, Recharts |
 | API       | NestJS 11, REST, Prisma 6, Argon2id, JWT + refresh token berotasi, RBAC  |
-| Data      | PostgreSQL (14+), Redis (BullMQ mulai Fase 2/3)                           |
+| Data      | PostgreSQL (14+), Redis + BullMQ (worker retensi data)                    |
 | Monorepo  | pnpm workspaces                                                           |
 
 ## Struktur
 
 ```text
 apps/
-  api/          NestJS — src/{auth,users,audit,accounts,analytics,health,common,config,prisma}
+  api/          NestJS — src/{auth,users,audit,accounts,campaigns,leads,outbound,templates,
+                retention,analytics,health,common,config,prisma} + src/worker.ts (BullMQ)
   dashboard/    Next.js — app/, components/, features/, hooks/, lib/
 packages/
   database/     Skema Prisma, migrasi, seed
@@ -36,7 +37,7 @@ docs/           Dokumentasi arsitektur, database, API, roadmap
 
 ## Menjalankan secara lokal
 
-Prasyarat: **Node.js ≥ 20.11**, **pnpm 10**, **PostgreSQL ≥ 14**, **Redis** (opsional di Fase 1).
+Prasyarat: **Node.js ≥ 20.11**, **pnpm 10**, **PostgreSQL ≥ 14**, **Redis ≥ 6.2** (dibutuhkan worker; API tetap berjalan tanpa Redis).
 
 ### 1. Siapkan PostgreSQL & Redis
 
@@ -63,7 +64,8 @@ Sesuaikan `DATABASE_URL`, `DATABASE_URL_TEST`, dan `SEED_SUPERADMIN_PASSWORD`.
 pnpm install
 pnpm build:packages          # build @smge/types, @smge/shared, @smge/database (+ prisma generate)
 pnpm db:migrate              # menerapkan migrasi ke smge_dev
-pnpm db:seed                 # role, Super Admin awal, pengaturan default
+pnpm db:seed                 # role, Super Admin awal, pengaturan default, template awal
+                             # (jalankan ulang setelah upgrade agar permission role baru masuk)
 # Opsional — tambahkan 3 akun TikTok demo berlabel SIMULASI:
 #   SEED_DEMO_DATA=true pnpm db:seed
 ```
@@ -73,7 +75,11 @@ pnpm db:seed                 # role, Super Admin awal, pengaturan default
 ```bash
 pnpm dev:api          # http://localhost:4000/api   (health: /api/health)
 pnpm dev:dashboard    # http://localhost:3000
+pnpm --filter @smge/api worker:dev   # opsional: worker BullMQ (retensi data harian 02.00 WIB)
 ```
+
+Isi `SOLID_MINI_REGISTRATION_URL` di `.env` agar placeholder `{{link}}` pada template pesan berisi link
+registrasi Solid Mini (UTM ditambahkan otomatis). Bila kosong, placeholder tersebut dikosongkan.
 
 Login memakai `SEED_SUPERADMIN_EMAIL` / `SEED_SUPERADMIN_PASSWORD`, lalu **segera ganti password**
 dan aktifkan 2FA di **Pengaturan → Profil & keamanan**.

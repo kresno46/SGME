@@ -15,7 +15,6 @@ import { AuditService } from '../audit/audit.service';
 import type { RequestUser } from '../common/decorators/auth.decorators';
 import { RequestMeta } from '../common/utils/request';
 import { PrismaService } from '../prisma/prisma.service';
-import { DncService } from './dnc.service';
 import { LeadActivityService } from './lead-activity.service';
 
 export const IMPORT_MAX_BYTES = 5 * 1024 * 1024;

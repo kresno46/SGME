@@ -20,9 +20,21 @@ export const toAccountRef = (
 
 export const iso = (d: Date | null | undefined) => d?.toISOString() ?? null;
 
-/** Mulai hari ini (00:00) menurut zona waktu server. */
-export function startOfToday(now = new Date()) {
-  const d = new Date(now);
-  d.setHours(0, 0, 0, 0);
-  return d;
+/** Zona waktu operasional bisnis (batas harian, laporan harian). */
+export const BUSINESS_TIMEZONE = 'Asia/Jakarta';
+
+/**
+ * Mulai hari ini (00:00) menurut zona waktu bisnis, tidak bergantung pada zona waktu server
+ * (container Docker umumnya berjalan dalam UTC).
+ */
+export function startOfToday(now = new Date(), timeZone = BUSINESS_TIMEZONE) {
+  const day = new Intl.DateTimeFormat('en-CA', {
+    timeZone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now); // "2026-10-16"
+  const asUtc = (tz: string) => new Date(now.toLocaleString('en-US', { timeZone: tz })).getTime();
+  const offsetMs = asUtc(timeZone) - asUtc('UTC');
+  return new Date(new Date(`${day}T00:00:00Z`).getTime() - offsetMs);
 }

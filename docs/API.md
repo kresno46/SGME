@@ -77,3 +77,86 @@ Username dinormalisasi (`@Solid.Mini` → `solid.mini`) dan unik.
 | Method | Path | Permission | Keterangan |
 |---|---|---|---|
 | GET | `/analytics/overview` | `dashboard:view` | Ringkasan akun, followers per sumber data, per jalur, top 10 akun, metrik CRM. Data `SIMULATED` tidak dijumlahkan; metrik yang belum tersedia bernilai `null` |
+
+---
+
+# Fase 2 — Campaign, CRM, Outbound
+
+## Campaign
+
+| Method | Path | Permission | Keterangan |
+|---|---|---|---|
+| GET | `/campaigns` | `campaigns:read` | Filter `lane`, `status` (default: semua kecuali `ARCHIVED`), `type`, `accountId`, `search`; `sortBy` `createdAt`/`startDate`/`name` |
+| GET | `/campaigns/:id` | `campaigns:read` | Termasuk `stats` (prospek, tertarik, terdaftar, tugas outbound, biaya per lead) |
+| POST | `/campaigns` | `campaigns:manage` | `{ name, lane, type, status?, target?, description?, startDate?, endDate?, budget?, spend?, operatorId?, accountIds[] }` — akun harus sejalur; status `SCHEDULED`/`ACTIVE` wajib `startDate`; `trackingCode` dibuat otomatis |
+| PATCH | `/campaigns/:id` | `campaigns:manage` | Field parsial; `accountIds` mengganti seluruh penugasan; `spend` → sumber `MANUAL` |
+| DELETE | `/campaigns/:id` | `campaigns:manage` | `409` bila sudah ada prospek/tugas/event — arsipkan saja |
+
+## Prospek
+
+| Method | Path | Permission | Keterangan |
+|---|---|---|---|
+| GET | `/leads` | `leads:read` | Segmentasi: `status` (boleh dipisah koma), `interestLevel`, `source`, `sourceAccountId`, `sourceCampaignId`, `operatorId` (`me`/`none`/UUID), `consentChannel`, `tag`, `followUp` (`due`/`scheduled`), `includeDoNotContact`, `search`, `sortBy`, `sortDir` |
+| GET | `/leads/:id` | `leads:read` | Detail + izin, 100 aktivitas terakhir, 20 tugas terakhir, `onBlocklist` |
+| GET | `/leads/duplicates` | `leads:read` | `?tiktokUsername=&email=&phone=&excludeId=` → kandidat duplikat |
+| POST | `/leads` | `leads:manage` | Minimal satu kontak. `consents[]` = `{ channel, source, evidence }`. `409` + `details.duplicates` bila duplikat. Kontak yang ada di daftar larangan → prospek langsung `DO_NOT_CONTACT` |
+| PATCH | `/leads/:id` | `leads:manage` | Field parsial + `status` (kecuali `DO_NOT_CONTACT`); perubahan tercatat di riwayat |
+| DELETE | `/leads/:id` | `leads:delete` | **Anonimisasi**: data pribadi, izin, dan riwayat dihapus; baris dipertahankan untuk statistik |
+| POST | `/leads/:id/notes` | `leads:manage` | `{ note }` |
+| POST | `/leads/:id/consents` | `leads:manage` | `{ channel, source, evidence }` (bukti wajib) |
+| POST | `/leads/:id/consents/withdraw` | `leads:manage` | `{ channel, reason? }` — tugas kanal tsb yang belum terkirim dibatalkan |
+| POST | `/leads/:id/do-not-contact` | `leads:manage` | `{ reason }` — izin dicabut, tugas terbuka dibatalkan, kontak masuk daftar larangan |
+| DELETE | `/leads/:id/do-not-contact` | `dnc:manage` | Cabut larangan (izin tidak dipulihkan otomatis) |
+| GET | `/leads/export` | `leads:export` | Filter sama dengan daftar + `format=csv\|xlsx`; maks. 50.000 baris; tercatat di audit |
+| POST | `/leads/import/preview` | `leads:import` | multipart `file` (CSV ≤ 5 MB, ≤ 5.000 baris) → jumlah baru/duplikat/diblokir/tidak valid + contoh |
+| POST | `/leads/import` | `leads:import` | multipart `file` + `sourceDescription` (wajib), `lawfulBasisConfirmed=true` (wajib), `tags`, `sourceCampaignId`, `sourceAccountId`, `duplicateStrategy` (`skip`/`update_empty`) |
+
+Kolom CSV yang dikenali (header, tidak peka huruf besar): `nama/name`, `tiktok_username/tiktok/username`,
+`email`, `phone/telepon/no_hp/whatsapp/wa`, `tags`, `catatan/notes`, `izin_whatsapp/consent_whatsapp`,
+`izin_email/consent_email` (nilai `ya/yes/1/true`). Pemisah koma, titik koma, atau tab.
+
+## Daftar larangan kontak
+
+| Method | Path | Permission | Keterangan |
+|---|---|---|---|
+| GET | `/do-not-contact` | `leads:read` | Filter `channel`, `search` |
+| POST | `/do-not-contact` | `leads:manage` | `{ channel, value, reason? }` — semua prospek yang cocok ikut ditandai |
+| DELETE | `/do-not-contact/:id` | `dnc:manage` | Status prospek tidak berubah otomatis |
+
+## Template pesan
+
+| Method | Path | Permission | Keterangan |
+|---|---|---|---|
+| GET | `/message-templates` | `outreach:work` | Filter `lane`, `purpose`, `activeOnly` |
+| POST/PATCH/DELETE | `/message-templates[/:id]` | `templates:manage` | Placeholder: `{{nama}}`, `{{username}}`, `{{akun}}`, `{{campaign}}`, `{{link}}` (placeholder lain ditolak). `{{link}}` memakai `SOLID_MINI_REGISTRATION_URL` + UTM; kosong bila belum diatur |
+
+## Outbound Workstation (hanya akun Jalur B)
+
+| Method | Path | Permission | Keterangan |
+|---|---|---|---|
+| GET | `/outbound/summary/:accountId` | `outreach:work` | Jumlah per status, tugas hari ini vs batas harian, follow-up jatuh tempo, tingkat balasan 7 hari |
+| GET | `/outbound/queue` | `outreach:work` | `accountId` (wajib), `channel`, `campaignId`, `search` — prospek yang memenuhi syarat, diurutkan skor prioritas + alasannya (maks. 500 kandidat terbaru per permintaan) |
+| GET | `/outbound/tasks` | `outreach:work` | Filter `accountId`, `status` (dipisah koma), `operatorId=me`, `followUpDue=true`, `leadId` |
+| GET | `/outbound/tasks/:id` | `outreach:work` | Termasuk `allowedActions` untuk pengguna saat ini |
+| POST | `/outbound/tasks` | `outreach:work` | `{ leadId, tiktokAccountId, channel?, templateId?, campaignId?, draftMessage? }` — kelayakan & batas harian dicek ulang |
+| PATCH | `/outbound/tasks/:id/draft` | `outreach:work` | `{ draftMessage }` (status `DRAFT` atau `FOLLOW_UP`) |
+| POST | `/outbound/tasks/:id/actions` | per aksi | Lihat tabel aksi di bawah |
+
+| Aksi (`action`) | Dari status | Ke status | Permission | Body tambahan |
+|---|---|---|---|---|
+| `submit` | DRAFT | WAITING_REVIEW | `outreach:work` | — |
+| `approve` | WAITING_REVIEW | APPROVED | `outreach:review` | `finalMessage?` |
+| `reject` | WAITING_REVIEW | DRAFT | `outreach:review` | `reviewNote` |
+| `reopen` | APPROVED | DRAFT | `outreach:work` | — |
+| `mark_sent` | APPROVED, FOLLOW_UP | MANUALLY_SENT | `outreach:work` | **`confirmed: true` wajib**, `message?` |
+| `log_reply` | MANUALLY_SENT, FOLLOW_UP | REPLIED | `outreach:work` | `responseSummary`, `interestLevel`, `optOut?` |
+| `schedule_follow_up` | MANUALLY_SENT, REPLIED | FOLLOW_UP | `outreach:work` | `followUpAt` (masa depan), `draftMessage?` |
+| `complete` | MANUALLY_SENT, REPLIED, FOLLOW_UP | COMPLETED | `outreach:work` | `outcome` (`REGISTERED`/`INTERESTED`/`NOT_INTERESTED`/`NO_RESPONSE`), `note?` |
+| `cancel` | DRAFT, WAITING_REVIEW, APPROVED, FOLLOW_UP | CANCELLED | `outreach:work` | `reason` |
+
+## Lain-lain
+
+| Method | Path | Permission | Keterangan |
+|---|---|---|---|
+| GET | `/users/assignable` | `leads:read` | Pengguna aktif yang dapat ditugaskan (id, nama) |
+| POST | `/maintenance/retention` | `settings:manage` | `{ dryRun?: boolean }` (default `true`) — jalankan kebijakan retensi |

@@ -62,8 +62,11 @@ const leadFields = z.object({
   nextFollowUpAt: optionalDate,
 });
 
-const hasIdentifier = (d: { tiktokUsername?: string | null; email?: string | null; phone?: string | null }) =>
-  Boolean(d.tiktokUsername || d.email || d.phone);
+const hasIdentifier = (d: {
+  tiktokUsername?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}) => Boolean(d.tiktokUsername || d.email || d.phone);
 
 export const createLeadSchema = leadFields
   .extend({ consents: z.array(consentInputSchema).max(5).default([]) })
@@ -98,7 +101,9 @@ export const listLeadsQuerySchema = paginationQuerySchema.extend({
     .enum(['true', 'false'])
     .optional()
     .transform((v) => v === 'true'),
-  sortBy: z.enum(['createdAt', 'score', 'lastContactedAt', 'nextFollowUpAt', 'name']).default('createdAt'),
+  sortBy: z
+    .enum(['createdAt', 'score', 'lastContactedAt', 'nextFollowUpAt', 'name'])
+    .default('createdAt'),
   sortDir: z.enum(['asc', 'desc']).default('desc'),
 });
 export type ListLeadsQuery = z.infer<typeof listLeadsQuerySchema>;

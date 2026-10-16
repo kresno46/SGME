@@ -345,7 +345,14 @@ export interface LeadImportPreviewDto {
   blocked: number;
   invalid: ImportRowIssue[];
   detectedColumns: Record<string, string>;
-  sample: Array<{ row: number; name: string | null; tiktokUsername: string | null; email: string | null; phone: string | null; status: 'new' | 'duplicate' | 'blocked' }>;
+  sample: Array<{
+    row: number;
+    name: string | null;
+    tiktokUsername: string | null;
+    email: string | null;
+    phone: string | null;
+    status: 'new' | 'duplicate' | 'blocked';
+  }>;
 }
 
 export interface LeadImportResultDto {
@@ -372,7 +379,17 @@ export interface OutreachTaskDto {
   id: string;
   status: OutreachTaskStatus;
   channel: ContactChannel;
-  lead: Pick<LeadDto, 'id' | 'name' | 'tiktokUsername' | 'email' | 'phone' | 'status' | 'interestLevel' | 'consentChannels'>;
+  lead: Pick<
+    LeadDto,
+    | 'id'
+    | 'name'
+    | 'tiktokUsername'
+    | 'email'
+    | 'phone'
+    | 'status'
+    | 'interestLevel'
+    | 'consentChannels'
+  >;
   account: AccountRefDto;
   campaign: RefDto | null;
   template: RefDto | null;

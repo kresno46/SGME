@@ -77,7 +77,8 @@ export function checkOutreachEligibility(i: EligibilityInput): EligibilityResult
   if (NON_CONTACTABLE_LEAD_STATUSES.includes(i.status)) {
     return { eligible: false, reason: 'Status prospek tidak memerlukan penjangkauan' };
   }
-  if (i.hasOpenTask) return { eligible: false, reason: 'Prospek sudah memiliki tugas yang berjalan' };
+  if (i.hasOpenTask)
+    return { eligible: false, reason: 'Prospek sudah memiliki tugas yang berjalan' };
   if (!i.hasContactForChannel) {
     return { eligible: false, reason: 'Prospek tidak memiliki kontak untuk kanal ini' };
   }
@@ -100,7 +101,8 @@ export function checkFollowUpAllowed(i: {
   if (!i.hasConsentForChannel) {
     return {
       eligible: false,
-      reason: 'Follow-up tanpa balasan hanya boleh untuk prospek yang sudah memberi izin komunikasi',
+      reason:
+        'Follow-up tanpa balasan hanya boleh untuk prospek yang sudah memberi izin komunikasi',
     };
   }
   if (i.sentCount >= MAX_UNANSWERED_MESSAGES) {
@@ -154,7 +156,9 @@ export function computeLeadPriority(
   const interest = INTEREST_POINTS[i.interestLevel];
   if (interest) {
     score += interest;
-    reasons.push(`Ketertarikan ${i.interestLevel === 'HIGH' ? 'tinggi' : i.interestLevel === 'MEDIUM' ? 'sedang' : 'rendah'}`);
+    reasons.push(
+      `Ketertarikan ${i.interestLevel === 'HIGH' ? 'tinggi' : i.interestLevel === 'MEDIUM' ? 'sedang' : 'rendah'}`,
+    );
   }
   const status = STATUS_POINTS[i.status] ?? 0;
   if (status >= 15) reasons.push('Sudah berinteraksi sebelumnya');

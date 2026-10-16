@@ -19,7 +19,8 @@ describe('CRM prospek (integration)', () => {
   });
   afterAll(() => app.close());
 
-  const create = (s: Session, body: object) => s.agent.post('/api/leads').set('x-csrf-token', s.csrf).send(body);
+  const create = (s: Session, body: object) =>
+    s.agent.post('/api/leads').set('x-csrf-token', s.csrf).send(body);
 
   it('membuat prospek, menormalkan kontak, dan mencatat izin + aktivitas', async () => {
     const res = await create(op, {
@@ -28,7 +29,13 @@ describe('CRM prospek (integration)', () => {
       phone: '0812-3456-7890',
       source: 'TIKTOK_LEAD_GEN',
       tags: ['Webinar', 'webinar'],
-      consents: [{ channel: 'WHATSAPP', source: 'LEAD_FORM', evidence: 'Centang izin WA di form lead TikTok' }],
+      consents: [
+        {
+          channel: 'WHATSAPP',
+          source: 'LEAD_FORM',
+          evidence: 'Centang izin WA di form lead TikTok',
+        },
+      ],
     }).expect(201);
     expect(res.body.tiktokUsername).toBe('budi.trader');
     expect(res.body.tags).toEqual(['webinar']);
@@ -41,9 +48,19 @@ describe('CRM prospek (integration)', () => {
   });
 
   it('mendeteksi duplikat lintas format dan mengembalikan detailnya', async () => {
-    const first = await create(op, { name: 'Ani', phone: '+62 812 1111 2222', source: 'MANUAL' }).expect(201);
-    const dup = await create(op, { name: 'Ani Lagi', phone: '0812-1111-2222', source: 'MANUAL' }).expect(409);
-    expect(dup.body.details.duplicates).toEqual([{ id: first.body.id, name: 'Ani', matchedOn: ['phone'] }]);
+    const first = await create(op, {
+      name: 'Ani',
+      phone: '+62 812 1111 2222',
+      source: 'MANUAL',
+    }).expect(201);
+    const dup = await create(op, {
+      name: 'Ani Lagi',
+      phone: '0812-1111-2222',
+      source: 'MANUAL',
+    }).expect(409);
+    expect(dup.body.details.duplicates).toEqual([
+      { id: first.body.id, name: 'Ani', matchedOn: ['phone'] },
+    ]);
 
     const check = await op.agent.get('/api/leads/duplicates?phone=081211112222').expect(200);
     expect(check.body).toHaveLength(1);
@@ -83,9 +100,14 @@ describe('CRM prospek (integration)', () => {
 
     // Disembunyikan dari daftar default
     expect((await op.agent.get('/api/leads').expect(200)).body.total).toBe(0);
-    expect((await op.agent.get('/api/leads?includeDoNotContact=true').expect(200)).body.total).toBe(1);
+    expect((await op.agent.get('/api/leads?includeDoNotContact=true').expect(200)).body.total).toBe(
+      1,
+    );
 
-    await op.agent.delete(`/api/leads/${lead.body.id}/do-not-contact`).set('x-csrf-token', op.csrf).expect(403);
+    await op.agent
+      .delete(`/api/leads/${lead.body.id}/do-not-contact`)
+      .set('x-csrf-token', op.csrf)
+      .expect(403);
     const restored = await admin.agent
       .delete(`/api/leads/${lead.body.id}/do-not-contact`)
       .set('x-csrf-token', admin.csrf)
@@ -121,34 +143,58 @@ describe('CRM prospek (integration)', () => {
     await prisma.lead.createMany({
       data: [
         { name: 'A', source: 'MANUAL', status: 'INTERESTED', tags: ['vip'], operatorId: me.id },
-        { name: 'B', source: 'MANUAL', status: 'NEW', nextFollowUpAt: new Date(Date.now() - 3600_000) },
+        {
+          name: 'B',
+          source: 'MANUAL',
+          status: 'NEW',
+          nextFollowUpAt: new Date(Date.now() - 3600_000),
+        },
         { name: 'C', source: 'MANUAL', status: 'QUALIFIED', tags: ['vip'] },
       ],
     });
     const byStatus = await op.agent.get('/api/leads?status=INTERESTED,QUALIFIED').expect(200);
     expect(byStatus.body.total).toBe(2);
-    expect((await op.agent.get('/api/leads?tag=vip&status=QUALIFIED').expect(200)).body.items[0].name).toBe('C');
-    expect((await op.agent.get('/api/leads?followUp=due').expect(200)).body.items[0].name).toBe('B');
-    expect((await op.agent.get('/api/leads?operatorId=me').expect(200)).body.items[0].name).toBe('A');
+    expect(
+      (await op.agent.get('/api/leads?tag=vip&status=QUALIFIED').expect(200)).body.items[0].name,
+    ).toBe('C');
+    expect((await op.agent.get('/api/leads?followUp=due').expect(200)).body.items[0].name).toBe(
+      'B',
+    );
+    expect((await op.agent.get('/api/leads?operatorId=me').expect(200)).body.items[0].name).toBe(
+      'A',
+    );
     expect((await op.agent.get('/api/leads?consentChannel=EMAIL').expect(200)).body.total).toBe(0);
   });
 
   it('perubahan status & catatan tercatat di riwayat aktivitas', async () => {
     const lead = await create(op, { tiktokUsername: 'riwayat', source: 'LIVE' }).expect(201);
-    await op.agent.patch(`/api/leads/${lead.body.id}`).set('x-csrf-token', op.csrf).send({ status: 'QUALIFIED', interestLevel: 'HIGH' }).expect(200);
+    await op.agent
+      .patch(`/api/leads/${lead.body.id}`)
+      .set('x-csrf-token', op.csrf)
+      .send({ status: 'QUALIFIED', interestLevel: 'HIGH' })
+      .expect(200);
     const noted = await op.agent
       .post(`/api/leads/${lead.body.id}/notes`)
       .set('x-csrf-token', op.csrf)
       .send({ note: 'Tanya soal cara daftar' })
       .expect(201);
     const types = noted.body.activities.map((a: { type: string; summary: string }) => a.summary);
-    expect(types).toEqual(expect.arrayContaining(['Tanya soal cara daftar', 'Status: Baru → Memenuhi syarat']));
+    expect(types).toEqual(
+      expect.arrayContaining(['Tanya soal cara daftar', 'Status: Baru → Memenuhi syarat']),
+    );
   });
 
   it('hapus prospek = anonimisasi data pribadi (hanya role berwenang)', async () => {
-    const lead = await create(op, { name: 'Rahasia', email: 'hapus@contoh.com', source: 'MANUAL' }).expect(201);
+    const lead = await create(op, {
+      name: 'Rahasia',
+      email: 'hapus@contoh.com',
+      source: 'MANUAL',
+    }).expect(201);
     await op.agent.delete(`/api/leads/${lead.body.id}`).set('x-csrf-token', op.csrf).expect(403);
-    await admin.agent.delete(`/api/leads/${lead.body.id}`).set('x-csrf-token', admin.csrf).expect(200);
+    await admin.agent
+      .delete(`/api/leads/${lead.body.id}`)
+      .set('x-csrf-token', admin.csrf)
+      .expect(200);
     const row = await prisma.lead.findUniqueOrThrow({ where: { id: lead.body.id } });
     expect(row).toMatchObject({ name: null, email: null, emailNormalized: null });
     expect(row.anonymizedAt).not.toBeNull();
@@ -195,8 +241,17 @@ describe('CRM prospek (integration)', () => {
     const file = () => Buffer.from(csv, 'utf8');
 
     beforeEach(async () => {
-      await prisma.lead.create({ data: { name: 'Lama', email: 'lama@contoh.com', emailNormalized: 'lama@contoh.com', source: 'MANUAL' } });
-      await prisma.doNotContactEntry.create({ data: { channel: 'PHONE', valueNormalized: '6289999990000' } });
+      await prisma.lead.create({
+        data: {
+          name: 'Lama',
+          email: 'lama@contoh.com',
+          emailNormalized: 'lama@contoh.com',
+          source: 'MANUAL',
+        },
+      });
+      await prisma.doNotContactEntry.create({
+        data: { channel: 'PHONE', valueNormalized: '6289999990000' },
+      });
     });
 
     it('pratinjau mengklasifikasi baris baru, duplikat, diblokir, dan tidak valid', async () => {
@@ -205,13 +260,23 @@ describe('CRM prospek (integration)', () => {
         .set('x-csrf-token', admin.csrf)
         .attach('file', file(), 'prospek.csv')
         .expect(200);
-      expect(res.body).toMatchObject({ totalRows: 6, validRows: 5, newLeads: 2, duplicates: 2, blocked: 1 });
+      expect(res.body).toMatchObject({
+        totalRows: 6,
+        validRows: 5,
+        newLeads: 2,
+        duplicates: 2,
+        blocked: 1,
+      });
       expect(res.body.invalid).toEqual([{ row: 5, message: 'username TikTok tidak valid' }]);
       expect(await prisma.lead.count()).toBe(1); // pratinjau tidak menyimpan apa pun
     });
 
     it('commit wajib menyatakan dasar hukum data dan hanya untuk role berwenang', async () => {
-      await op.agent.post('/api/leads/import').set('x-csrf-token', op.csrf).attach('file', file(), 'p.csv').expect(403);
+      await op.agent
+        .post('/api/leads/import')
+        .set('x-csrf-token', op.csrf)
+        .attach('file', file(), 'p.csv')
+        .expect(403);
       const noBasis = await admin.agent
         .post('/api/leads/import')
         .set('x-csrf-token', admin.csrf)
@@ -233,11 +298,18 @@ describe('CRM prospek (integration)', () => {
         .expect(200);
       expect(res.body).toEqual({ created: 2, updated: 1, skipped: 1, blocked: 1, invalid: 1 });
 
-      const citra = await prisma.lead.findFirstOrThrow({ where: { tiktokUsernameNormalized: 'citra_01' }, include: { consents: true } });
+      const citra = await prisma.lead.findFirstOrThrow({
+        where: { tiktokUsernameNormalized: 'citra_01' },
+        include: { consents: true },
+      });
       expect(citra.source).toBe('IMPORT');
       expect(citra.tags).toEqual(['import-okt', 'webinar']);
-      expect(citra.consents.map((c) => [c.channel, c.evidence])).toEqual([['WHATSAPP', 'Import: Form pendaftaran webinar 10 Oktober']]);
-      const lama = await prisma.lead.findFirstOrThrow({ where: { emailNormalized: 'lama@contoh.com' } });
+      expect(citra.consents.map((c) => [c.channel, c.evidence])).toEqual([
+        ['WHATSAPP', 'Import: Form pendaftaran webinar 10 Oktober'],
+      ]);
+      const lama = await prisma.lead.findFirstOrThrow({
+        where: { emailNormalized: 'lama@contoh.com' },
+      });
       expect(lama.tags).toEqual(['import-okt']); // dilengkapi, data lama tidak ditimpa
       expect(lama.name).toBe('Lama');
     });

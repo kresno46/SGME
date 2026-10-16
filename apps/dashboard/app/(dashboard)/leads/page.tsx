@@ -1,23 +1,16 @@
-import { ComingSoon } from '@/components/guards';
+'use client';
 
-export const metadata = { title: 'CRM / Prospek' };
+import { PERMISSIONS } from '@smge/shared';
+import { Suspense } from 'react';
+import { RequirePermission } from '@/components/guards';
+import { LeadsPage } from '@/features/leads/leads-page';
 
 export default function Page() {
   return (
-    <ComingSoon
-      title="CRM / Prospek"
-      description="Database terpusat seluruh calon pengguna Solid Mini."
-      phase={2}
-      icon="Users"
-      features={[
-        'Status prospek NEW s.d. DO_NOT_CONTACT',
-        'Deteksi duplikasi (username, email, telepon)',
-        'Pengelolaan izin komunikasi per kanal',
-        'Daftar larangan kontak',
-        'Import & export sesuai izin',
-        'Riwayat aktivitas & segmentasi',
-      ]}
-      notes="Mengikuti akun TikTok tidak dianggap sebagai persetujuan menerima promosi."
-    />
+    <RequirePermission permission={PERMISSIONS.LEADS_READ}>
+      <Suspense>
+        <LeadsPage />
+      </Suspense>
+    </RequirePermission>
   );
 }

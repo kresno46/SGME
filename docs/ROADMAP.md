@@ -32,21 +32,48 @@
 - **Email:** tanpa `SMTP_HOST`, link reset password hanya ditulis ke log server. Produksi wajib mengisi SMTP.
 - **Rate limit** disimpan di memori proses API. Untuk lebih dari satu instance API, pindahkan storage
   throttler ke Redis (direncanakan bersama BullMQ).
-- **Redis** baru dipakai untuk health check; antrean BullMQ mulai Fase 2/3.
 - **`next build` output standalone** (untuk image Docker) diaktifkan dengan `NEXT_OUTPUT=standalone`; di Windows
   membutuhkan hak membuat symlink, jadi di sana dimatikan secara default.
 - **Unit test komponen dashboard** belum ada; dashboard divalidasi lewat typecheck, lint, build, dan uji manual.
-- Halaman Campaign, CRM, Outbound, AI Sales, Percakapan, Analitik, dan Integrasi masih berupa placeholder
-  yang menampilkan rencana fiturnya.
+## Fase 2 — CRM & Campaign ✅ (16 Oktober 2026)
 
-## Fase 2 — CRM & Campaign (berikutnya)
+| Item | Status |
+|---|---|
+| Campaign: CRUD, 7 jenis & 6 status, akun sejalur, operator, kode tracking unik, anggaran & biaya manual, statistik + biaya per lead | ✅ |
+| CRM prospek: CRUD, deduplikasi (username/email/telepon ternormalisasi), segmentasi (status, ketertarikan, sumber, akun, campaign, operator, izin, tag, follow-up) | ✅ |
+| Izin komunikasi per kanal dengan bukti wajib; pencabutan membatalkan tugas terkait | ✅ |
+| Daftar larangan kontak (DNC) lintas kanal, termasuk saat prospek dibuat & import | ✅ |
+| Riwayat aktivitas (timeline) + catatan | ✅ |
+| Import CSV (pratinjau, duplikat dalam file & database, DNC, pernyataan dasar hukum wajib) | ✅ |
+| Export CSV/Excel sesuai permission, tercatat di audit | ✅ |
+| Hapus data pribadi (anonimisasi) | ✅ |
+| Template pesan dengan placeholder tervalidasi | ✅ |
+| Outbound Workstation: antrean berprioritas (skor + alasan), review wajib, kirim **manual** dengan konfirmasi, catat balasan, follow-up terbatas, opt-out → DNC, batas harian per akun | ✅ |
+| Worker BullMQ + kebijakan retensi data (dry-run & endpoint manual Super Admin) | ✅ |
 
-- Modul `campaigns` (CRUD, penugasan akun & operator, link tracking unik, filter/pagination).
-- Modul `leads`: CRUD, deduplikasi, consent per kanal, daftar larangan kontak, import CSV (dengan pratinjau
-  duplikat), export sesuai permission, segmentasi, riwayat aktivitas.
-- Outbound Workstation: antrean per akun dari prospek yang memenuhi syarat (consent & bukan DNC), template,
-  alur `DRAFT → WAITING_REVIEW → APPROVED → MANUALLY_SENT → …`, pengingat follow-up.
-- BullMQ worker: pengingat follow-up, job retensi data. **Tidak ada** worker pengirim DM.
+### Hasil verifikasi Fase 2
+
+| Pemeriksaan | Hasil |
+|---|---|
+| `pnpm lint` | 0 error, 0 warning |
+| `pnpm typecheck` | lulus (semua package) |
+| Unit test `@smge/shared` (Vitest) | 27/27 lulus |
+| Unit test API (Jest) | 19/19 lulus |
+| Integration test API (Jest + Supertest + PostgreSQL `smge_test`) | 54/54 lulus (7 suite) |
+| `next build` dashboard | lulus (18 route) |
+| Worker BullMQ terhadap Redis lokal | berjalan; jadwal retensi harian terdaftar |
+| Uji alur di browser (Edge) | campaign, prospek (deteksi duplikat), detail & timeline, pratinjau import, outbound lengkap sampai kirim manual (tombol simpan nonaktif sebelum konfirmasi dicentang), template, mode gelap, mobile |
+
+### Keterbatasan Fase 2
+
+- **Registrasi masih konfirmasi manual operator** (`registeredAt` dari hasil tugas/ubah status). Verifikasi dari
+  backend Solid Mini menyusul di Fase 5.
+- **Antrean outbound** mengurutkan maksimal 500 kandidat terbaru per permintaan; untuk volume besar gunakan pencarian
+  atau filter campaign. Skor prioritas masih berbasis aturan; skor AI menyusul di Fase 3.
+- **Batas harian** dihitung per hari kalender WIB (`Asia/Jakarta`), terlepas dari zona waktu server.
+- **Draft pesan belum dibuat AI** — memakai template (AI Message Generator di Fase 3).
+- **Notifikasi follow-up** hanya berupa daftar "jatuh tempo" di dashboard; belum ada notifikasi email/push.
+- Halaman AI Sales, Percakapan, Analitik, dan Integrasi masih berupa placeholder yang menampilkan rencana fiturnya.
 
 ## Fase 3 — AI Sales
 

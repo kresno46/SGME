@@ -15,14 +15,20 @@ describe('Retensi data (integration)', () => {
 
   it('dry-run hanya menghitung; run sebenarnya menganonimkan prospek lama tetapi mempertahankan DNC', async () => {
     const old = new Date(Date.now() - 800 * 86_400_000);
-    await prisma.systemSetting.create({ data: { key: 'retention.lead_inactive_days', value: 730 } });
+    await prisma.systemSetting.create({
+      data: { key: 'retention.lead_inactive_days', value: 730 },
+    });
     const stale = await prisma.lead.create({
       data: { name: 'Lama', email: 'lama@x.co', emailNormalized: 'lama@x.co', source: 'MANUAL' },
     });
     await prisma.$executeRaw`UPDATE leads SET updated_at = ${old} WHERE id = ${stale.id}::uuid`;
     await prisma.lead.create({ data: { name: 'Baru', source: 'MANUAL' } });
-    await prisma.doNotContactEntry.create({ data: { channel: 'EMAIL', valueNormalized: 'lama@x.co' } });
-    await prisma.auditLog.create({ data: { action: 'kuno', createdAt: new Date(Date.now() - 1200 * 86_400_000) } });
+    await prisma.doNotContactEntry.create({
+      data: { channel: 'EMAIL', valueNormalized: 'lama@x.co' },
+    });
+    await prisma.auditLog.create({
+      data: { action: 'kuno', createdAt: new Date(Date.now() - 1200 * 86_400_000) },
+    });
 
     const svc = app.get(RetentionService);
     const dry = await svc.run({ dryRun: true });
@@ -40,9 +46,17 @@ describe('Retensi data (integration)', () => {
 
   it('endpoint manual hanya untuk Super Admin dan default dry-run', async () => {
     const admin = await loginAs(app, 'ADMIN');
-    await admin.agent.post('/api/maintenance/retention').set('x-csrf-token', admin.csrf).send({}).expect(403);
+    await admin.agent
+      .post('/api/maintenance/retention')
+      .set('x-csrf-token', admin.csrf)
+      .send({})
+      .expect(403);
     const sa = await loginAs(app, 'SUPER_ADMIN');
-    const res = await sa.agent.post('/api/maintenance/retention').set('x-csrf-token', sa.csrf).send({}).expect(200);
+    const res = await sa.agent
+      .post('/api/maintenance/retention')
+      .set('x-csrf-token', sa.csrf)
+      .send({})
+      .expect(200);
     expect(res.body.dryRun).toBe(true);
   });
 });

@@ -149,7 +149,9 @@ export class LeadsService {
         include: LEAD_INCLUDE,
         orderBy: [
           {
-            [q.sortBy]: NULLABLE_SORT.has(q.sortBy) ? { sort: q.sortDir, nulls: 'last' } : q.sortDir,
+            [q.sortBy]: NULLABLE_SORT.has(q.sortBy)
+              ? { sort: q.sortDir, nulls: 'last' }
+              : q.sortDir,
           },
           { id: 'asc' },
         ],

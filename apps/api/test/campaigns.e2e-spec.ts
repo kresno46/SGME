@@ -15,12 +15,21 @@ describe('Campaign (integration)', () => {
   beforeEach(async () => {
     await resetDatabase(prisma);
     admin = await loginAs(app, 'ADMIN');
-    official = (await prisma.tikTokAccount.create({ data: { username: 'resmi', displayName: 'Resmi', lane: 'OFFICIAL' } })).id;
-    outbound = (await prisma.tikTokAccount.create({ data: { username: 'luar', displayName: 'Luar', lane: 'OUTBOUND' } })).id;
+    official = (
+      await prisma.tikTokAccount.create({
+        data: { username: 'resmi', displayName: 'Resmi', lane: 'OFFICIAL' },
+      })
+    ).id;
+    outbound = (
+      await prisma.tikTokAccount.create({
+        data: { username: 'luar', displayName: 'Luar', lane: 'OUTBOUND' },
+      })
+    ).id;
   });
   afterAll(() => app.close());
 
-  const post = (body: object) => admin.agent.post('/api/campaigns').set('x-csrf-token', admin.csrf).send(body);
+  const post = (body: object) =>
+    admin.agent.post('/api/campaigns').set('x-csrf-token', admin.csrf).send(body);
 
   it('membuat campaign dengan kode tracking unik dan akun sejalur', async () => {
     const res = await post({
@@ -37,14 +46,30 @@ describe('Campaign (integration)', () => {
   });
 
   it('menolak akun dari jalur berbeda dan status aktif tanpa tanggal mulai', async () => {
-    const lane = await post({ name: 'Salah Jalur', lane: 'OFFICIAL', type: 'ENGAGEMENT', accountIds: [outbound] }).expect(400);
+    const lane = await post({
+      name: 'Salah Jalur',
+      lane: 'OFFICIAL',
+      type: 'ENGAGEMENT',
+      accountIds: [outbound],
+    }).expect(400);
     expect(lane.body.errors.accountIds).toBeDefined();
-    const status = await post({ name: 'Aktif Tanpa Tanggal', lane: 'OUTBOUND', type: 'ENGAGEMENT', status: 'ACTIVE' }).expect(400);
+    const status = await post({
+      name: 'Aktif Tanpa Tanggal',
+      lane: 'OUTBOUND',
+      type: 'ENGAGEMENT',
+      status: 'ACTIVE',
+    }).expect(400);
     expect(status.body.errors.startDate).toBeDefined();
   });
 
   it('statistik campaign menghitung prospek dan biaya per lead (tanpa data simulasi)', async () => {
-    const c = await post({ name: 'Akuisisi', lane: 'OUTBOUND', type: 'LEAD_ACQUISITION', spend: 300000, accountIds: [outbound] }).expect(201);
+    const c = await post({
+      name: 'Akuisisi',
+      lane: 'OUTBOUND',
+      type: 'LEAD_ACQUISITION',
+      spend: 300000,
+      accountIds: [outbound],
+    }).expect(201);
     await prisma.lead.createMany({
       data: [
         { name: 'A', source: 'MANUAL', sourceCampaignId: c.body.id, status: 'INTERESTED' },
@@ -54,7 +79,13 @@ describe('Campaign (integration)', () => {
       ],
     });
     const res = await admin.agent.get(`/api/campaigns/${c.body.id}`).expect(200);
-    expect(res.body.stats).toEqual({ leads: 3, interestedLeads: 1, registeredLeads: 1, outreachTasks: 0, costPerLead: 100000 });
+    expect(res.body.stats).toEqual({
+      leads: 3,
+      interestedLeads: 1,
+      registeredLeads: 1,
+      outreachTasks: 0,
+      costPerLead: 100000,
+    });
   });
 
   it('update, filter, dan arsip; campaign berisi prospek tidak dapat dihapus', async () => {
@@ -68,9 +99,18 @@ describe('Campaign (integration)', () => {
     expect(active.body.total).toBe(1);
     expect(active.body.items[0].accounts).toHaveLength(1);
 
-    await prisma.lead.create({ data: { name: 'X', source: 'MANUAL', sourceCampaignId: c.body.id } });
-    await admin.agent.delete(`/api/campaigns/${c.body.id}`).set('x-csrf-token', admin.csrf).expect(409);
-    await admin.agent.patch(`/api/campaigns/${c.body.id}`).set('x-csrf-token', admin.csrf).send({ status: 'ARCHIVED' }).expect(200);
+    await prisma.lead.create({
+      data: { name: 'X', source: 'MANUAL', sourceCampaignId: c.body.id },
+    });
+    await admin.agent
+      .delete(`/api/campaigns/${c.body.id}`)
+      .set('x-csrf-token', admin.csrf)
+      .expect(409);
+    await admin.agent
+      .patch(`/api/campaigns/${c.body.id}`)
+      .set('x-csrf-token', admin.csrf)
+      .send({ status: 'ARCHIVED' })
+      .expect(200);
     const list = await admin.agent.get('/api/campaigns').expect(200);
     expect(list.body.total).toBe(0); // arsip disembunyikan secara default
   });

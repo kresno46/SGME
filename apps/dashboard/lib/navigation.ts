@@ -55,7 +55,7 @@ export const NAV_ITEMS: NavItem[] = [
     title: 'Outbound Workstation',
     href: '/outbound',
     icon: Send,
-    permission: PERMISSIONS.LEADS_READ,
+    permission: PERMISSIONS.OUTREACH_WORK,
     phase: 2,
   },
   {
@@ -95,4 +95,4 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export const CURRENT_PHASE = 1;
+export const CURRENT_PHASE = 2;

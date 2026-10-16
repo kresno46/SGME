@@ -76,3 +76,32 @@ Setiap angka yang bisa berasal dari sumber berbeda memiliki kolom `DataSource` (
 - Pengiriman otomatis hanya diaktifkan bila API resmi mengizinkan **dan** penerima memiliki persetujuan
   (`lead_consents`). Mengikuti akun ≠ persetujuan.
 - Status "terkirim" pada tugas outbound hanya diisi setelah operator mengonfirmasi (`sent_confirmed_at`).
+
+## Outbound Workstation (Jalur B) — aturan yang ditegakkan sistem
+
+Aturan berada di `packages/shared/src/outbound.ts` (diuji unit) dan ditegakkan ulang oleh API pada setiap aksi:
+
+1. **Kelayakan antrean**: bukan DNC, tidak ada di daftar larangan, status bukan `NOT_INTERESTED/REGISTERED/ACTIVE`,
+   tidak punya tugas berjalan, dan punya kontak untuk kanal tersebut. Kanal selain DM TikTok **wajib** punya izin komunikasi.
+2. **Review wajib**: `DRAFT → WAITING_REVIEW → APPROVED` sebelum bisa dikirim. Approve hanya oleh `outreach:review`
+   (Admin/Super Admin).
+3. **Pengiriman selalu manual**: sistem tidak mengirim DM. Status `MANUALLY_SENT` hanya diisi bila operator
+   mengirim `confirmed: true`. Larangan kontak dan izin dicek ulang tepat saat konfirmasi.
+4. **Follow-up dibatasi**: tanpa balasan hanya boleh bila prospek memberi izin untuk kanal tersebut, dan maksimal
+   2 pesan tanpa balasan per tugas.
+5. **Opt-out langsung berlaku**: balasan "stop" (`optOut`) menandai prospek DNC, mencabut izin, dan membatalkan tugas lain.
+6. **Batas harian per akun** (`outbound.daily_task_limit_per_account`, default 30) — menjaga penjangkauan tetap personal.
+   Ini batas yang dipilih sendiri, bukan cara menghindari pembatasan TikTok.
+7. Akun yang statusnya bukan `ACTIVE` (dijeda/dibatasi) tidak dapat dipakai membuat tugas baru.
+
+## Daftar larangan kontak
+
+Entri disimpan per jenis identitas (username TikTok, email, telepon — telepon berlaku juga untuk WhatsApp & SMS)
+dan berlaku untuk **semua kanal**. Invarian: setiap prospek yang cocok dengan entri memiliki `do_not_contact = true`
+(ditegakkan saat prospek dibuat, saat import, dan saat entri ditambahkan). Daftar ini tidak dihapus oleh job retensi.
+
+## Worker
+
+`apps/api/src/worker.ts` (BullMQ) dijalankan terpisah dari API (`pnpm --filter @smge/api worker`). Saat ini hanya
+menjalankan **retensi data harian pukul 02.00 WIB**. Tidak ada job pengirim pesan.
+BullMQ merekomendasikan Redis ≥ 6.2 (Redis 5 di Laragon berfungsi dengan peringatan; `docker-compose.yml` memakai Redis 7).

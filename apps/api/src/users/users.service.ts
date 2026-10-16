@@ -59,7 +59,10 @@ export class UsersService {
   /** Pengguna aktif yang dapat ditugaskan menangani prospek/campaign (data minimal). */
   async assignable() {
     return this.prisma.user.findMany({
-      where: { status: 'ACTIVE', role: { code: { in: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_OPERATOR'] } } },
+      where: {
+        status: 'ACTIVE',
+        role: { code: { in: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_OPERATOR'] } },
+      },
       select: { id: true, name: true },
       orderBy: { name: 'asc' },
     });
