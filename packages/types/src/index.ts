@@ -539,3 +539,56 @@ export interface AiInteractionDto {
   errorMessage: string | null;
   createdAt: string;
 }
+
+// =====================================================================
+// Fase 4 — Integrasi TikTok
+// =====================================================================
+
+export type CapabilityStatus = 'READY' | 'NOT_CONFIGURED' | 'SIMULATION' | 'NOT_VERIFIED';
+
+export interface IntegrationCapabilityDto {
+  key: 'LOGIN_KIT' | 'MOCK' | 'WEBHOOK' | 'BUSINESS_API' | 'LEAD_GENERATION' | 'MESSAGING';
+  name: string;
+  status: CapabilityStatus;
+  description: string;
+  /** Hal yang belum lengkap (env yang kosong, langkah verifikasi) */
+  missing: string[];
+}
+
+export interface ConnectedAccountDto {
+  account: AccountRefDto & { status: string; followersCount: number; followersSource: DataSource; lastSyncedAt: string | null };
+  integrations: Array<AccountIntegrationDto & { externalId: string | null; refreshExpiresAt: string | null }>;
+}
+
+export interface IntegrationsOverviewDto {
+  capabilities: IntegrationCapabilityDto[];
+  /** Provider yang boleh dipakai untuk menghubungkan akun saat ini */
+  connectProviders: Array<'TIKTOK_LOGIN_KIT' | 'MOCK'>;
+  callbackUrl: string | null;
+  webhookUrl: string;
+  scopes: string[];
+  accounts: ConnectedAccountDto[];
+  errorsLast24h: number;
+}
+
+export interface IntegrationLogDto {
+  id: string;
+  integrationId: string | null;
+  provider: 'TIKTOK_LOGIN_KIT' | 'TIKTOK_BUSINESS_API' | 'MOCK';
+  direction: 'OUTBOUND_REQUEST' | 'INBOUND_WEBHOOK' | 'INTERNAL';
+  level: 'INFO' | 'WARN' | 'ERROR';
+  operation: string;
+  statusCode: number | null;
+  success: boolean;
+  message: string | null;
+  durationMs: number | null;
+  isSimulation: boolean;
+  createdAt: string;
+}
+
+export interface SyncResultDto {
+  integrationId: string;
+  status: AccountIntegrationDto['status'];
+  followersCount: number | null;
+  message: string;
+}

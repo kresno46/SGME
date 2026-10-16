@@ -5,6 +5,7 @@ import { DEFAULT_ROLE_PERMISSIONS, ROLE_CODES, ROLE_LABELS, RoleCode } from '@sm
 import request from 'supertest';
 import { LLM_PROVIDER, type LlmProvider } from '../src/ai/providers/llm-provider';
 import { AppModule } from '../src/app.module';
+import { TIKTOK_ADAPTERS, type TikTokAdapters } from '../src/integrations/integrations.service';
 import { configureApp } from '../src/bootstrap';
 import { PrismaService } from '../src/prisma/prisma.service';
 
@@ -17,14 +18,18 @@ export const TEST_USERS: Record<RoleCode, string> = {
   VIEWER: 'viewer@test.local',
 };
 
-/** `llm` mengganti provider AI (default: tanpa provider = AI nonaktif). */
-export async function createTestApp(opts: { llm?: LlmProvider | null } = {}) {
+/** `llm` / `tiktok` mengganti provider AI & adapter TikTok (default: nonaktif). */
+export async function createTestApp(
+  opts: { llm?: LlmProvider | null; tiktok?: TikTokAdapters } = {},
+) {
   Logger.overrideLogger(['error']);
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
     .overrideProvider(LLM_PROVIDER)
     .useValue(opts.llm ?? null)
+    .overrideProvider(TIKTOK_ADAPTERS)
+    .useValue(opts.tiktok ?? { loginKit: null, mock: null })
     .compile();
-  const app = moduleRef.createNestApplication();
+  const app = moduleRef.createNestApplication({ rawBody: true });
   configureApp(app);
   await app.init();
   return { app, prisma: app.get(PrismaService) };

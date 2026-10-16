@@ -15,6 +15,7 @@ import { JwtAuthGuard } from './common/guards/jwt-auth.guard';
 import { PermissionsGuard } from './common/guards/permissions.guard';
 import { env } from './config/env';
 import { HealthModule } from './health/health.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 import { LeadsModule } from './leads/leads.module';
 import { OutboundModule } from './outbound/outbound.module';
 import { PrismaModule } from './prisma/prisma.service';
@@ -40,6 +41,7 @@ import { UsersModule } from './users/users.module';
     OutboundModule,
     RetentionModule,
     AiModule,
+    IntegrationsModule,
     AnalyticsModule,
     HealthModule,
   ],

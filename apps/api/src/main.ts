@@ -8,6 +8,8 @@ import { env } from './config/env';
 async function bootstrap() {
   const e = env(); // gagal cepat bila konfigurasi tidak valid
   const app = await NestFactory.create(AppModule, {
+    // body mentah dibutuhkan untuk verifikasi signature webhook
+    rawBody: true,
     logger: e.NODE_ENV === 'production' ? ['log', 'warn', 'error'] : undefined,
   });
   configureApp(app);

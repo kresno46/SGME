@@ -49,6 +49,18 @@ const envSchema = z.object({
     .or(z.literal('').transform(() => undefined)),
   AI_TIMEOUT_MS: z.coerce.number().int().min(1000).default(30_000),
   THROTTLE_AI_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(30),
+  /** Login Kit (developers.tiktok.com). Kosong = integrasi resmi nonaktif. */
+  TIKTOK_CLIENT_KEY: z.string().optional(),
+  TIKTOK_CLIENT_SECRET: z.string().optional(),
+  /** Harus https, statis, dan terdaftar di portal TikTok, mis. https://domain/api/integrations/tiktok/callback */
+  TIKTOK_REDIRECT_URI: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  TIKTOK_SCOPES: z.string().default('user.info.basic,user.info.profile,user.info.stats'),
+  /** Mock Adapter berlabel SIMULASI untuk development. Ditolak di produksi. */
+  TIKTOK_USE_MOCK: bool,
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().default(587),
   SMTP_USER: z.string().optional(),
@@ -71,6 +83,12 @@ export function env(): Env {
   }
   if (parsed.data.NODE_ENV === 'production' && !parsed.data.COOKIE_SECURE) {
     throw new Error('COOKIE_SECURE wajib true di produksi (HTTPS).');
+  }
+  if (parsed.data.NODE_ENV === 'production' && parsed.data.TIKTOK_USE_MOCK) {
+    throw new Error('TIKTOK_USE_MOCK tidak boleh aktif di produksi (data simulasi).');
+  }
+  if (parsed.data.NODE_ENV === 'production' && parsed.data.AI_PROVIDER === 'simulated') {
+    throw new Error('AI_PROVIDER=simulated tidak boleh dipakai di produksi.');
   }
   cached = parsed.data;
   return cached;
