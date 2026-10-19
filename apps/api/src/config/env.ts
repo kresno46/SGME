@@ -61,6 +61,17 @@ const envSchema = z.object({
   TIKTOK_SCOPES: z.string().default('user.info.basic,user.info.profile,user.info.stats'),
   /** Mock Adapter berlabel SIMULASI untuk development. Ditolak di produksi. */
   TIKTOK_USE_MOCK: bool,
+  /** Secret HMAC untuk Conversion API (backend Solid Mini → SMGE). Kosong = endpoint nonaktif. */
+  CONVERSION_API_SECRET: z
+    .string()
+    .min(32, 'CONVERSION_API_SECRET minimal 32 karakter')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  /** Origin landing page yang boleh mengirim event tracking dari browser (dipisah koma) */
+  TRACKING_ALLOWED_ORIGINS: z.string().default(''),
+  /** Jendela atribusi (hari) */
+  ATTRIBUTION_LOOKBACK_DAYS: z.coerce.number().int().min(1).max(180).default(30),
+  THROTTLE_TRACKING_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(120),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().default(587),
   SMTP_USER: z.string().optional(),

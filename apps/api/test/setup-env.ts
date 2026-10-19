@@ -16,3 +16,6 @@ process.env.TIKTOK_CLIENT_SECRET = 'test-client-secret';
 process.env.TIKTOK_REDIRECT_URI = 'https://smge.test/api/integrations/tiktok/callback';
 process.env.TIKTOK_USE_MOCK = 'false';
 process.env.APP_PUBLIC_URL = 'http://dashboard.test';
+// Conversion API (secret uji, min. 32 karakter)
+process.env.CONVERSION_API_SECRET = 'conversion-secret-untuk-test-0123456789';
+process.env.ATTRIBUTION_LOOKBACK_DAYS = '30';

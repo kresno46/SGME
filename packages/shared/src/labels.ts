@@ -1,4 +1,6 @@
 import type {
+  AttributionModel,
+  ConversionEventType,
   AiInteractionType,
   AiMode,
   KnowledgeCategory,
@@ -225,4 +227,20 @@ export const AI_INTERACTION_TYPE_LABELS: Record<AiInteractionType, string> = {
 export const AI_MODE_LABELS: Record<AiMode, string> = {
   COPILOT: 'Copilot (saran, perlu persetujuan operator)',
   AUTO_REPLY: 'Auto-reply resmi',
+};
+
+export const CONVERSION_EVENT_TYPE_LABELS: Record<ConversionEventType, string> = {
+  LANDING_VISIT: 'Kunjungan landing page',
+  CTA_CLICK: 'Klik CTA / link',
+  STORE_CLICK: 'Klik Play Store / App Store',
+  INSTALL_VERIFIED: 'Instalasi terverifikasi',
+  REGISTRATION: 'Registrasi',
+  ACTIVATION: 'Aktivasi',
+  TRANSACTION: 'Transaksi',
+  SUBSCRIPTION: 'Langganan',
+};
+
+export const ATTRIBUTION_MODEL_LABELS: Record<AttributionModel, string> = {
+  FIRST_TOUCH: 'First-touch (sentuhan pertama)',
+  LAST_TOUCH: 'Last-touch (sentuhan terakhir)',
 };

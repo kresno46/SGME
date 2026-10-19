@@ -514,6 +514,9 @@ model Lead {
   solidMiniUserId          String?       @unique @map("solid_mini_user_id")
   registeredAt             DateTime?     @map("registered_at")
   activatedAt              DateTime?     @map("activated_at")
+  /// Diisi hanya dari Conversion API backend Solid Mini (bukan konfirmasi operator)
+  registrationVerifiedAt   DateTime?     @map("registration_verified_at")
+  activationVerifiedAt     DateTime?     @map("activation_verified_at")
   doNotContact             Boolean       @default(false) @map("do_not_contact")
   dataSource               DataSource    @default(ACTUAL) @map("data_source")
   /// Retensi: data pribadi dihapus/dianonimkan setelah tanggal ini
@@ -790,6 +793,8 @@ model KnowledgeDocument {
 model TrackingLink {
   id              String    @id @default(uuid()) @db.Uuid
   code            String    @unique
+  /// Label internal, mis. "Bio @akun_b" atau "LIVE Sabtu"
+  name            String?
   campaignId      String    @map("campaign_id") @db.Uuid
   tiktokAccountId String?   @map("tiktok_account_id") @db.Uuid
   destinationUrl  String    @map("destination_url")
@@ -845,8 +850,11 @@ model ConversionEvent {
 
   @@index([type, occurredAt])
   @@index([campaignId, type])
-  @@index([visitorId])
+  @@index([trackingLinkId, type])
+  @@index([tiktokAccountId, type])
+  @@index([visitorId, occurredAt])
   @@index([externalUserId])
+  @@index([leadId])
   @@map("conversion_events")
 }
 

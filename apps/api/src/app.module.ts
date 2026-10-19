@@ -21,6 +21,7 @@ import { OutboundModule } from './outbound/outbound.module';
 import { PrismaModule } from './prisma/prisma.service';
 import { RetentionModule } from './retention/retention.module';
 import { TemplatesModule } from './templates/templates.module';
+import { TrackingModule } from './tracking/tracking.module';
 import { UsersModule } from './users/users.module';
 
 @Module({
@@ -42,6 +43,7 @@ import { UsersModule } from './users/users.module';
     RetentionModule,
     AiModule,
     IntegrationsModule,
+    TrackingModule,
     AnalyticsModule,
     HealthModule,
   ],

@@ -1,8 +1,16 @@
-import { Controller, Get, Injectable, Module } from '@nestjs/common';
-import { DataSource, MARKETING_LANES, PERMISSIONS } from '@smge/shared';
+import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
+import {
+  analyticsQuerySchema,
+  DataSource,
+  MARKETING_LANES,
+  PERMISSIONS,
+  type AnalyticsQuery,
+} from '@smge/shared';
 import type { DashboardOverview, MetricValue } from '@smge/types';
 import { RequirePermissions } from '../common/decorators/auth.decorators';
+import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { PrismaService } from '../prisma/prisma.service';
+import { AnalyticsReportService } from './analytics-report.service';
 
 const NOT_SIMULATED = { not: 'SIMULATED' as const };
 
@@ -25,6 +33,9 @@ export class AnalyticsService {
       outreachTasks,
       usersTotal,
       usersActive,
+      verifiedRegs,
+      verifiedActs,
+      operatorRegs,
     ] = await Promise.all([
       p.tikTokAccount.count(),
       p.tikTokAccount.count({ where: { status: 'ACTIVE' } }),
@@ -60,6 +71,19 @@ export class AnalyticsService {
       p.outreachTask.count({ where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } } }),
       p.user.count(),
       p.user.count({ where: { status: 'ACTIVE' } }),
+      p.$queryRaw<
+        [{ n: bigint }]
+      >`SELECT count(DISTINCT external_user_id) AS n FROM conversion_events WHERE type = 'REGISTRATION' AND is_verified = true AND data_source <> 'SIMULATED'`,
+      p.$queryRaw<
+        [{ n: bigint }]
+      >`SELECT count(DISTINCT external_user_id) AS n FROM conversion_events WHERE type = 'ACTIVATION' AND is_verified = true AND data_source <> 'SIMULATED'`,
+      p.lead.count({
+        where: {
+          registeredAt: { not: null },
+          registrationVerifiedAt: null,
+          dataSource: NOT_SIMULATED,
+        },
+      }),
     ]);
 
     const followersBySource: Record<DataSource, number> = { ACTUAL: 0, MANUAL: 0, SIMULATED: 0 };
@@ -67,8 +91,6 @@ export class AnalyticsService {
       followersBySource[g.followersSource] = g._sum.followersCount ?? 0;
 
     const actual = (value: number): MetricValue => ({ value, source: 'ACTUAL' });
-    // Registrasi & pengguna aktif baru tersedia setelah integrasi backend Solid Mini (Fase 5).
-    const unavailable: MetricValue = { value: null, source: null };
 
     return {
       generatedAt: new Date().toISOString(),
@@ -98,8 +120,10 @@ export class AnalyticsService {
         interestedLeads: actual(interestedLeads),
         conversations: actual(conversations),
         outreachTasks: actual(outreachTasks),
-        registrations: unavailable,
-        activeUsers: unavailable,
+        // Hanya dari Conversion API backend Solid Mini (terverifikasi)
+        registrations: actual(Number(verifiedRegs[0].n)),
+        activeUsers: actual(Number(verifiedActs[0].n)),
+        registrationsOperator: { value: operatorRegs, source: 'MANUAL' },
       },
       users: { total: usersTotal, active: usersActive },
     };
@@ -108,7 +132,16 @@ export class AnalyticsService {
 
 @Controller('analytics')
 export class AnalyticsController {
-  constructor(private readonly analytics: AnalyticsService) {}
+  constructor(
+    private readonly analytics: AnalyticsService,
+    private readonly reports: AnalyticsReportService,
+  ) {}
+
+  @Get('report')
+  @RequirePermissions(PERMISSIONS.ANALYTICS_READ)
+  report(@Query(new ZodValidationPipe(analyticsQuerySchema)) q: AnalyticsQuery) {
+    return this.reports.report(q);
+  }
 
   @Get('overview')
   @RequirePermissions(PERMISSIONS.DASHBOARD_VIEW)
@@ -117,5 +150,8 @@ export class AnalyticsController {
   }
 }
 
-@Module({ controllers: [AnalyticsController], providers: [AnalyticsService] })
+@Module({
+  controllers: [AnalyticsController],
+  providers: [AnalyticsService, AnalyticsReportService],
+})
 export class AnalyticsModule {}

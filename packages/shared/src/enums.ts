@@ -175,3 +175,29 @@ export type AiInteractionType = (typeof AI_INTERACTION_TYPES)[number];
 /** COPILOT = AI hanya memberi saran. AUTO_REPLY hanya boleh bila kanal resmi mengizinkan. */
 export const AI_MODES = values('COPILOT', 'AUTO_REPLY');
 export type AiMode = (typeof AI_MODES)[number];
+
+export const CONVERSION_EVENT_TYPES = values(
+  'LANDING_VISIT',
+  'CTA_CLICK',
+  'STORE_CLICK',
+  'INSTALL_VERIFIED',
+  'REGISTRATION',
+  'ACTIVATION',
+  'TRANSACTION',
+  'SUBSCRIPTION',
+);
+export type ConversionEventType = (typeof CONVERSION_EVENT_TYPES)[number];
+
+/** Event dari browser/landing page — tidak terverifikasi, tidak membuktikan instalasi. */
+export const CLIENT_EVENT_TYPES = values('LANDING_VISIT', 'CTA_CLICK', 'STORE_CLICK');
+/** Event yang hanya boleh datang dari server (Conversion API backend Solid Mini). */
+export const SERVER_EVENT_TYPES = values(
+  'INSTALL_VERIFIED',
+  'REGISTRATION',
+  'ACTIVATION',
+  'TRANSACTION',
+  'SUBSCRIPTION',
+);
+
+export const ATTRIBUTION_MODELS = values('FIRST_TOUCH', 'LAST_TOUCH');
+export type AttributionModel = (typeof ATTRIBUTION_MODELS)[number];

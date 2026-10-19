@@ -15,7 +15,10 @@ export function configureApp(app: INestApplication) {
   app.use(cookieParser());
   app.setGlobalPrefix('api');
   app.enableCors({
-    origin: e.CORS_ORIGINS.split(',').map((o) => o.trim()),
+    // Dashboard + landing page (event tracking dari browser)
+    origin: [...e.CORS_ORIGINS.split(','), ...e.TRACKING_ALLOWED_ORIGINS.split(',')]
+      .map((o) => o.trim())
+      .filter(Boolean),
     credentials: true,
   });
   app.enableShutdownHooks();

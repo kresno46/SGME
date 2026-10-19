@@ -161,8 +161,12 @@ export interface DashboardOverview {
     interestedLeads: MetricValue;
     conversations: MetricValue;
     outreachTasks: MetricValue;
+    /** Registrasi terverifikasi (Conversion API backend Solid Mini) */
     registrations: MetricValue;
+    /** Pengguna teraktivasi terverifikasi */
     activeUsers: MetricValue;
+    /** Registrasi yang hanya dikonfirmasi operator (belum terverifikasi) */
+    registrationsOperator: MetricValue;
   };
   users: { total: number; active: number };
 }
@@ -598,4 +602,129 @@ export interface SyncResultDto {
   status: AccountIntegrationDto['status'];
   followersCount: number | null;
   message: string;
+}
+
+// =====================================================================
+// Fase 5 — Tracking konversi & analitik
+// =====================================================================
+
+export interface TrackingLinkDto {
+  id: string;
+  code: string;
+  name: string | null;
+  campaign: RefDto;
+  account: AccountRefDto | null;
+  destinationUrl: string;
+  /** Link pendek publik untuk dibagikan (bio, video, DM) */
+  shortUrl: string;
+  utmSource: string | null;
+  utmMedium: string | null;
+  utmCampaign: string | null;
+  utmContent: string | null;
+  isActive: boolean;
+  createdAt: string;
+  stats: { clicks: number; uniqueVisitors: number; registrations: number };
+}
+
+export interface ConversionResultDto {
+  ok: true;
+  eventId: string;
+  duplicate: boolean;
+  leadMatched: boolean;
+  attribution: { firstTouch: RefDto | null; lastTouch: RefDto | null };
+}
+
+export interface AnalyticsKpis {
+  leads: number;
+  contacted: number;
+  replies: number;
+  /** Pengunjung unik dari link/landing page (tidak terverifikasi) */
+  visitors: number;
+  storeClicks: number;
+  installsVerified: number;
+  registrationsVerified: number;
+  /** Registrasi yang hanya dikonfirmasi operator (belum terverifikasi backend) */
+  registrationsOperator: number;
+  activationsVerified: number;
+  /** registrasi terverifikasi / pengunjung, persen; null bila belum ada pengunjung */
+  conversionRate: number | null;
+  spend: number;
+  spendSources: DataSource[];
+  costPerLead: number | null;
+  costPerRegistration: number | null;
+  costPerActivatedUser: number | null;
+  aiCostUsd: number;
+}
+
+export interface FunnelStageDto {
+  type: string;
+  label: string;
+  count: number;
+  verified: boolean;
+}
+
+export interface LanePerformanceDto {
+  lane: MarketingLane;
+  leads: number;
+  contacted: number;
+  replies: number;
+  registrations: number;
+  activations: number;
+  spend: number;
+  costPerLead: number | null;
+  costPerRegistration: number | null;
+}
+
+export interface CampaignPerformanceDto {
+  id: string;
+  name: string;
+  lane: MarketingLane;
+  status: string;
+  spend: number;
+  spendSource: DataSource;
+  leads: number;
+  visitors: number;
+  registrations: number;
+  activations: number;
+  costPerLead: number | null;
+  costPerRegistration: number | null;
+  costPerActivatedUser: number | null;
+  conversionRate: number | null;
+}
+
+export interface AccountPerformanceDto {
+  id: string;
+  username: string;
+  lane: MarketingLane;
+  followers: number;
+  followersSource: DataSource;
+  leads: number;
+  messagesSent: number;
+  replies: number;
+  replyRate: number | null;
+  visitors: number;
+  registrations: number;
+}
+
+export interface OperatorProductivityDto {
+  id: string;
+  name: string;
+  leadsAssigned: number;
+  tasksCreated: number;
+  messagesSent: number;
+  replies: number;
+  tasksCompleted: number;
+  registeredOutcomes: number;
+}
+
+export interface AnalyticsReportDto {
+  range: { days: number; from: string; to: string; model: 'FIRST_TOUCH' | 'LAST_TOUCH' };
+  kpis: AnalyticsKpis;
+  funnel: FunnelStageDto[];
+  lanes: LanePerformanceDto[];
+  leadsGrowth: Array<{ date: string; OFFICIAL: number; OUTBOUND: number; NONE: number }>;
+  leadStatus: Array<{ status: string; count: number }>;
+  campaigns: CampaignPerformanceDto[];
+  accounts: AccountPerformanceDto[];
+  operators: OperatorProductivityDto[];
 }
