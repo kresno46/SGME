@@ -1,0 +1,103 @@
+# =====================================================================
+# Nginx — Solid Mini Growth Engine
+# File ini diproses envsubst oleh image nginx resmi: hanya ${DOMAIN} yang diganti,
+# variabel nginx ($host, $remote_addr, …) tetap utuh.
+# =====================================================================
+
+server_tokens off;
+
+# Rate limit di tepi (lapisan kedua setelah rate limit aplikasi)
+limit_req_zone $binary_remote_addr zone=smge_auth:10m rate=20r/m;
+limit_req_zone $binary_remote_addr zone=smge_public:10m rate=120r/m;
+limit_req_status 429;
+
+upstream smge_api {
+    server api:4000;
+    keepalive 16;
+}
+
+upstream smge_web {
+    server dashboard:3000;
+    keepalive 16;
+}
+
+# ---------------------------------------------------------------- HTTP → HTTPS
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ${DOMAIN};
+
+    # Verifikasi Let's Encrypt (perpanjangan sertifikat)
+    location /.well-known/acme-challenge/ {
+        root /var/www/certbot;
+    }
+
+    location / {
+        return 301 https://$host$request_uri;
+    }
+}
+
+# ---------------------------------------------------------------- HTTPS
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name ${DOMAIN};
+
+    ssl_certificate     /etc/letsencrypt/live/${DOMAIN}/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/${DOMAIN}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers off;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 1d;
+    ssl_session_tickets off;
+
+    # Header keamanan ditetapkan di sini saja; versi dari aplikasi disembunyikan agar tidak ganda/bertentangan
+    proxy_hide_header Strict-Transport-Security;
+    proxy_hide_header X-Content-Type-Options;
+    proxy_hide_header X-Frame-Options;
+    proxy_hide_header Referrer-Policy;
+    proxy_hide_header X-Powered-By;
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Import CSV maks. 5 MB di aplikasi
+    client_max_body_size 6m;
+
+    gzip on;
+    gzip_comp_level 5;
+    gzip_min_length 1024;
+    gzip_types text/plain text/css application/javascript application/json image/svg+xml;
+
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_read_timeout 60s;
+
+    # Login & reset password
+    location ~ ^/api/auth/(login|2fa/verify|forgot-password|reset-password) {
+        limit_req zone=smge_auth burst=10 nodelay;
+        proxy_pass http://smge_api;
+    }
+
+    # Endpoint publik: link pendek, event landing page, Conversion API, webhook
+    location ~ ^/api/(t/|track/|conversions|webhooks/) {
+        limit_req zone=smge_public burst=60 nodelay;
+        proxy_pass http://smge_api;
+    }
+
+    location /api/ {
+        proxy_pass http://smge_api;
+    }
+
+    # Catatan: Next.js sudah mengirim Cache-Control "public, max-age=31536000, immutable"
+    # untuk /_next/static (nama file mengandung hash), jadi tidak ditambah di sini.
+    location / {
+        proxy_pass http://smge_web;
+    }
+}

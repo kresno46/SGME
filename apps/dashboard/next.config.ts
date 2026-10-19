@@ -1,3 +1,4 @@
+import path from 'node:path';
 import type { NextConfig } from 'next';
 
 const apiUrl = process.env.API_INTERNAL_URL ?? 'http://127.0.0.1:4000';
@@ -12,6 +13,8 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   // Output standalone untuk image Docker (Linux). Di Windows tanpa hak symlink, build biasa saja.
   output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
+  // Monorepo: lacak dependency sampai root agar paket workspace (@smge/*) ikut ke output standalone
+  outputFileTracingRoot: path.join(__dirname, '../../'),
   poweredByHeader: false,
   reactStrictMode: true,
   images: { remotePatterns: [{ protocol: 'https', hostname: '**.tiktokcdn.com' }] },

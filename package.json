@@ -32,7 +32,12 @@
       "sharp",
       "unrs-resolver",
       "@tailwindcss/oxide"
-    ]
+    ],
+    "overrides": {
+      "postcss@<8.5.23": "^8.5.23",
+      "uuid@<11.1.1": "^11.1.1",
+      "deepmerge-ts@<8.0.0": "^8.0.0"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

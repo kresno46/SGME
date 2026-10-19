@@ -14,12 +14,12 @@ Platform ini memakai dua jalur:
 
 ## Teknologi
 
-| Lapisan   | Teknologi                                                                 |
-| --------- | ------------------------------------------------------------------------- |
+| Lapisan   | Teknologi                                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | Dashboard | Next.js 15 (App Router), TypeScript, Tailwind CSS 4, komponen gaya shadcn/ui, TanStack Query, React Hook Form, Zod, Recharts |
-| API       | NestJS 11, REST, Prisma 6, Argon2id, JWT + refresh token berotasi, RBAC  |
-| Data      | PostgreSQL (14+), Redis + BullMQ (worker retensi data)                    |
-| Monorepo  | pnpm workspaces                                                           |
+| API       | NestJS 11, REST, Prisma 6, Argon2id, JWT + refresh token berotasi, RBAC                                                      |
+| Data      | PostgreSQL (14+), Redis + BullMQ (worker retensi data)                                                                       |
+| Monorepo  | pnpm workspaces                                                                                                              |
 
 ## Struktur
 
@@ -108,14 +108,26 @@ pnpm build         # build produksi semua package & aplikasi
 
 ## Akun & role
 
-| Role               | Ringkasan akses                                                         |
-| ------------------ | ----------------------------------------------------------------------- |
-| Super Admin        | Semua fitur termasuk pengaturan sistem                                  |
+| Role               | Ringkasan akses                                                             |
+| ------------------ | --------------------------------------------------------------------------- |
+| Super Admin        | Semua fitur termasuk pengaturan sistem                                      |
 | Admin              | Kelola pengguna (di bawah Admin), akun, campaign, integrasi, knowledge base |
-| Marketing Operator | Prospek, Outbound Workstation, percakapan, AI copilot                   |
-| Viewer             | Hanya melihat                                                           |
+| Marketing Operator | Prospek, Outbound Workstation, percakapan, AI copilot                       |
+| Viewer             | Hanya melihat                                                               |
 
 Detail permission: [packages/shared/src/permissions.ts](packages/shared/src/permissions.ts).
+
+## Produksi
+
+Deployment memakai Docker Compose + Nginx + Let's Encrypt di VPS Ubuntu:
+
+```bash
+cp .env.production.example .env.production   # isi semua secret, chmod 600
+./infrastructure/scripts/smge.sh init-ssl     # sertifikat pertama
+./infrastructure/scripts/smge.sh up           # build & jalankan
+```
+
+Panduan lengkap (hardening server, backup, update, rollback): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Dokumentasi
 
@@ -123,4 +135,5 @@ Detail permission: [packages/shared/src/permissions.ts](packages/shared/src/perm
 - [docs/DATABASE.md](docs/DATABASE.md): rancangan database, deduplikasi, dan retensi
 - [docs/API.md](docs/API.md): referensi endpoint REST
 - [docs/ROADMAP.md](docs/ROADMAP.md): status fase, keterbatasan, dan langkah berikutnya
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): deployment produksi di VPS Ubuntu
 - [docs/CONVERSION-API.md](docs/CONVERSION-API.md): spesifikasi tracking untuk tim landing page & backend Solid Mini

@@ -3,7 +3,7 @@
 ## Gambaran umum
 
 ```text
-Browser ──HTTPS──▶ Nginx (Fase 6)
+Browser ──HTTPS──▶ Nginx
                      ├─ /        ▶ Next.js dashboard (:3000)
                      └─ /api/*   ▶ NestJS API (:4000) ──▶ PostgreSQL
                                                       └──▶ Redis / BullMQ worker (Fase 2+)
@@ -12,17 +12,18 @@ Browser ──HTTPS──▶ Nginx (Fase 6)
 Di development, Next.js meneruskan `/api/*` ke API melalui `rewrites` sehingga browser hanya berbicara
 dengan satu origin. Di produksi, Nginx meneruskan `/api` langsung ke API.
 
-PostgreSQL dan Redis tidak pernah diekspos ke internet; di `docker-compose.yml` port hanya di-bind ke `127.0.0.1`.
+PostgreSQL dan Redis tidak pernah diekspos ke internet; di `docker-compose.yml` (development) port hanya di-bind ke
+`127.0.0.1`, dan di `docker-compose.prod.yml` keduanya hanya berada di jaringan internal tanpa port publik.
 
 ## Monorepo
 
-| Package          | Peran                                                                                   |
-| ---------------- | --------------------------------------------------------------------------------------- |
-| `@smge/shared`   | Satu sumber kebenaran untuk enum, label bahasa Indonesia, permission, dan skema Zod. Validasi form di dashboard dan validasi request di API memakai skema yang sama. |
-| `@smge/types`    | Bentuk DTO respons API.                                                                 |
-| `@smge/database` | Skema Prisma, migrasi, seed; mengekspor `PrismaClient`.                                 |
-| `@smge/api`      | Modul NestJS per fitur (`auth`, `users`, `audit`, `accounts`, `analytics`, `health`). Modul fase berikutnya (`campaigns`, `leads`, `outbound`, `ai-sales`, `conversations`, `integrations`) ditambahkan dengan pola yang sama. |
-| `@smge/dashboard`| Next.js App Router. `features/<modul>` berisi UI + hook data per fitur.                 |
+| Package           | Peran                                                                                                                                                                                                                          |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@smge/shared`    | Satu sumber kebenaran untuk enum, label bahasa Indonesia, permission, dan skema Zod. Validasi form di dashboard dan validasi request di API memakai skema yang sama.                                                           |
+| `@smge/types`     | Bentuk DTO respons API.                                                                                                                                                                                                        |
+| `@smge/database`  | Skema Prisma, migrasi, seed; mengekspor `PrismaClient`.                                                                                                                                                                        |
+| `@smge/api`       | Modul NestJS per fitur (`auth`, `users`, `audit`, `accounts`, `analytics`, `health`). Modul fase berikutnya (`campaigns`, `leads`, `outbound`, `ai-sales`, `conversations`, `integrations`) ditambahkan dengan pola yang sama. |
+| `@smge/dashboard` | Next.js App Router. `features/<modul>` berisi UI + hook data per fitur.                                                                                                                                                        |
 
 ## Autentikasi
 
@@ -31,7 +32,7 @@ PostgreSQL dan Redis tidak pernah diekspos ke internet; di `docker-compose.yml` 
 2. Login berhasil membuat baris `user_sessions` dan menyetel tiga cookie:
    - `smge_at`: access token JWT (HS256, 15 menit), **httpOnly**
    - `smge_rt`: refresh token acak 256-bit, **httpOnly**; yang disimpan di DB hanya hash SHA-256-nya
-   - `smge_csrf`: token CSRF (dapat dibaca JS) untuk pola *double-submit*
+   - `smge_csrf`: token CSRF (dapat dibaca JS) untuk pola _double-submit_
 3. Setiap request, `JwtAuthGuard` memverifikasi JWT **dan** memeriksa sesi di DB (belum dicabut, belum
    kedaluwarsa, pengguna aktif). Logout, ganti password, atau penonaktifan pengguna berlaku seketika.
 4. `POST /api/auth/refresh` merotasi refresh token. Token lama yang dipakai ulang di luar jendela toleransi
@@ -42,23 +43,23 @@ Urutan guard global: **Throttler → JwtAuth → CSRF → Permissions (RBAC)**.
 
 ## Kontrol keamanan yang diterapkan (Fase 1)
 
-| Kontrol | Implementasi |
-| --- | --- |
-| Hash password | Argon2id (`@node-rs/argon2`); verifikasi dummy untuk email tak dikenal agar waktu respons tidak membocorkan keberadaan akun |
-| Kebijakan password | ≥10 karakter, huruf besar, huruf kecil, angka (skema Zod bersama) |
-| Penguncian login | `LOGIN_MAX_ATTEMPTS` gagal berturut-turut → akun dikunci `LOGIN_LOCK_MINUTES` (HTTP 423); kode 2FA salah ikut dihitung |
-| Rate limiting | Global `THROTTLE_LIMIT_PER_MINUTE` per IP; endpoint auth `THROTTLE_AUTH_LIMIT_PER_MINUTE` |
-| CSRF | Double-submit cookie + header `X-CSRF-Token`, perbandingan *timing-safe* |
-| RBAC | Permission per role disimpan di tabel `roles`; pengguna hanya bisa mengelola role di bawahnya |
-| 2FA | TOTP (RFC 6238); secret dienkripsi AES-256-GCM |
-| Enkripsi at-rest | `CryptoService` AES-256-GCM (`ENCRYPTION_KEY`) untuk token integrasi & secret 2FA |
-| Reset password | Token acak sekali pakai (hash di DB), berlaku 30 menit, mencabut semua sesi |
-| Audit log | Login/gagal/kunci, perubahan pengguna, akun TikTok, dll. Field sensitif disensor otomatis |
-| Header keamanan | Helmet (API); X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy (dashboard) |
-| SQL injection | Hanya Prisma query builder; satu-satunya raw SQL (`TRUNCATE` di test) memakai nama tabel dari katalog |
-| Secret | Semua dari environment, divalidasi saat start (`apps/api/src/config/env.ts`); produksi menolak `COOKIE_SECURE=false` |
-| Data ke frontend | Token integrasi tidak pernah di-`select`; DTO eksplisit |
-| Open redirect | Parameter `?next=` di login hanya menerima path internal |
+| Kontrol            | Implementasi                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------- |
+| Hash password      | Argon2id (`@node-rs/argon2`); verifikasi dummy untuk email tak dikenal agar waktu respons tidak membocorkan keberadaan akun |
+| Kebijakan password | ≥10 karakter, huruf besar, huruf kecil, angka (skema Zod bersama)                                                           |
+| Penguncian login   | `LOGIN_MAX_ATTEMPTS` gagal berturut-turut → akun dikunci `LOGIN_LOCK_MINUTES` (HTTP 423); kode 2FA salah ikut dihitung      |
+| Rate limiting      | Global `THROTTLE_LIMIT_PER_MINUTE` per IP; endpoint auth `THROTTLE_AUTH_LIMIT_PER_MINUTE`                                   |
+| CSRF               | Double-submit cookie + header `X-CSRF-Token`, perbandingan _timing-safe_                                                    |
+| RBAC               | Permission per role disimpan di tabel `roles`; pengguna hanya bisa mengelola role di bawahnya                               |
+| 2FA                | TOTP (RFC 6238); secret dienkripsi AES-256-GCM                                                                              |
+| Enkripsi at-rest   | `CryptoService` AES-256-GCM (`ENCRYPTION_KEY`) untuk token integrasi & secret 2FA                                           |
+| Reset password     | Token acak sekali pakai (hash di DB), berlaku 30 menit, mencabut semua sesi                                                 |
+| Audit log          | Login/gagal/kunci, perubahan pengguna, akun TikTok, dll. Field sensitif disensor otomatis                                   |
+| Header keamanan    | Helmet (API); X-Frame-Options, nosniff, Referrer-Policy, Permissions-Policy (dashboard)                                     |
+| SQL injection      | Hanya Prisma query builder; satu-satunya raw SQL (`TRUNCATE` di test) memakai nama tabel dari katalog                       |
+| Secret             | Semua dari environment, divalidasi saat start (`apps/api/src/config/env.ts`); produksi menolak `COOKIE_SECURE=false`        |
+| Data ke frontend   | Token integrasi tidak pernah di-`select`; DTO eksplisit                                                                     |
+| Open redirect      | Parameter `?next=` di login hanya menerima path internal                                                                    |
 
 ## Prinsip data: aktual vs manual vs simulasi
 
@@ -170,11 +171,11 @@ Browser ◀──302 /integrations?connected|error── API /integrations/tikto
 
 ## Tracking konversi & atribusi
 
-| Sumber | Event | Status |
-|---|---|---|
-| Link pendek `/api/t/:code` | `CTA_CLICK` | tidak terverifikasi |
-| Skrip landing page `/api/track/events` | `LANDING_VISIT`, `CTA_CLICK`, `STORE_CLICK` | tidak terverifikasi |
-| Conversion API `/api/conversions` (HMAC, server-to-server) | `INSTALL_VERIFIED`, `REGISTRATION`, `ACTIVATION`, `TRANSACTION`, `SUBSCRIPTION` | **terverifikasi** |
+| Sumber                                                     | Event                                                                           | Status              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------- |
+| Link pendek `/api/t/:code`                                 | `CTA_CLICK`                                                                     | tidak terverifikasi |
+| Skrip landing page `/api/track/events`                     | `LANDING_VISIT`, `CTA_CLICK`, `STORE_CLICK`                                     | tidak terverifikasi |
+| Conversion API `/api/conversions` (HMAC, server-to-server) | `INSTALL_VERIFIED`, `REGISTRATION`, `ACTIVATION`, `TRANSACTION`, `SUBSCRIPTION` | **terverifikasi**   |
 
 - **Klik ≠ instalasi.** Instalasi/registrasi/aktivasi hanya dihitung dari Conversion API. Registrasi yang hanya
   dikonfirmasi operator (`leads.registered_at` tanpa `registration_verified_at`) dilaporkan terpisah.
@@ -187,3 +188,22 @@ Browser ◀──302 /integrations?connected|error── API /integrations/tikto
   untuk model `FIRST_TOUCH` dan `LAST_TOUCH`; laporan dapat memilih model.
 - **Biaya**: biaya per lead/registrasi/aktivasi = total biaya campaign yang berjalan dalam periode ÷ jumlah terkait.
   Kosong ("—") bila biaya belum diisi. Biaya per hari belum tersedia (menunggu Ads Reporting resmi).
+
+## Deployment & keamanan produksi
+
+- **Satu pintu masuk:** hanya Nginx membuka port 80/443. API, dashboard, PostgreSQL, dan Redis berada di jaringan
+  Docker internal; Redis memakai password.
+- **TLS:** Let's Encrypt, TLS 1.2/1.3, HSTS. Header keamanan (HSTS, `nosniff`, `X-Frame-Options: DENY`,
+  `Referrer-Policy`) ditetapkan oleh Nginx; versi dari aplikasi disembunyikan agar tidak ganda atau bertentangan.
+- **Rate limit dua lapis:** Nginx (login/2FA/reset 20/menit; endpoint publik tracking/konversi/webhook 120/menit)
+  di depan throttler aplikasi.
+- **Container:** image multi-stage, berjalan sebagai user `node` (non-root), healthcheck untuk API & dashboard.
+  Migrasi dijalankan oleh layanan `migrate` sekali jalan sebelum API/worker start.
+- **Guard konfigurasi:** dengan `NODE_ENV=production` API menolak start bila secret masih nilai contoh, URL bukan
+  https, `CORS_ORIGINS` berisi localhost, `COOKIE_SECURE` bukan `true`, atau mode simulasi TikTok/AI aktif.
+- **Secret:** hanya di `.env.production` (chmod 600) pada server; tidak pernah masuk image (`.dockerignore`) maupun
+  bundle dashboard.
+- **Dependensi:** `pnpm audit --prod` bersih; kerentanan transitif (postcss, uuid, deepmerge-ts) dipaksa ke versi
+  aman lewat `pnpm.overrides` di `package.json`.
+- **Backup:** `pg_dump` harian via cron dengan retensi; `ENCRYPTION_KEY` wajib disimpan terpisah karena token
+  integrasi & secret 2FA terenkripsi dengannya.

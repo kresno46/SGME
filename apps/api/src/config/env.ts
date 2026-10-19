@@ -81,6 +81,25 @@ const envSchema = z.object({
 
 export type Env = z.infer<typeof envSchema>;
 
+/** Pemeriksaan tambahan khusus produksi (dipisah agar dapat diuji). */
+export function productionProblems(e: Env): string[] {
+  const problems: string[] = [];
+  const placeholder = /ganti|changeme|contoh|example/i;
+  if (placeholder.test(e.JWT_ACCESS_SECRET))
+    problems.push('JWT_ACCESS_SECRET masih berisi nilai contoh');
+  if (e.CONVERSION_API_SECRET && placeholder.test(e.CONVERSION_API_SECRET)) {
+    problems.push('CONVERSION_API_SECRET masih berisi nilai contoh');
+  }
+  if (!e.APP_PUBLIC_URL.startsWith('https://'))
+    problems.push('APP_PUBLIC_URL wajib https di produksi');
+  if (e.TIKTOK_REDIRECT_URI && !e.TIKTOK_REDIRECT_URI.startsWith('https://')) {
+    problems.push('TIKTOK_REDIRECT_URI wajib https');
+  }
+  if (/localhost|127\.0\.0\.1/.test(e.CORS_ORIGINS))
+    problems.push('CORS_ORIGINS masih berisi localhost');
+  return problems;
+}
+
 let cached: Env | null = null;
 
 export function env(): Env {
@@ -94,6 +113,13 @@ export function env(): Env {
   }
   if (parsed.data.NODE_ENV === 'production' && !parsed.data.COOKIE_SECURE) {
     throw new Error('COOKIE_SECURE wajib true di produksi (HTTPS).');
+  }
+  if (parsed.data.NODE_ENV === 'production') {
+    const problems = productionProblems(parsed.data);
+    if (problems.length) {
+      const list = problems.map((p) => `  - ${p}`).join('\n');
+      throw new Error(`Konfigurasi produksi tidak aman:\n${list}`);
+    }
   }
   if (parsed.data.NODE_ENV === 'production' && parsed.data.TIKTOK_USE_MOCK) {
     throw new Error('TIKTOK_USE_MOCK tidak boleh aktif di produksi (data simulasi).');
