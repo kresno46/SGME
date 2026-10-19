@@ -178,7 +178,9 @@ describe('Akun TikTok, analitik & health (integration)', () => {
       followers: 500,
       simulatedFollowers: 9999,
     });
-    expect(res.body.metrics.registrations).toEqual({ value: null, source: null });
+    // Registrasi hanya dari Conversion API (terverifikasi); belum ada event → 0
+    expect(res.body.metrics.registrations).toEqual({ value: 0, source: 'ACTUAL' });
+    expect(res.body.metrics.registrationsOperator).toEqual({ value: 0, source: 'MANUAL' });
   });
 
   it('health check publik melaporkan status database', async () => {

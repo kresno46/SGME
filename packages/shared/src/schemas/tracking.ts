@@ -11,7 +11,7 @@ const utm = z
   .string()
   .trim()
   .max(100)
-  .regex(/^[\w.\-]*$/, 'Hanya huruf, angka, titik, garis bawah, dan tanda hubung')
+  .regex(/^[\w.-]*$/, 'Hanya huruf, angka, titik, garis bawah, dan tanda hubung')
   .nullish()
   .transform((v) => v || null);
 

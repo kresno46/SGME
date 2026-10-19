@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@smge/database';
-import type { PublicTrackEventInput, TrackingLinkInput } from '@smge/shared';
+import type { PublicTrackEventInput } from '@smge/shared';
 import type { TrackingLinkDto } from '@smge/types';
 import { randomBytes } from 'node:crypto';
 import type { z } from 'zod';
