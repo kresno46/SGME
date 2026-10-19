@@ -152,6 +152,16 @@ export class IntegrationsService {
             : ['TIKTOK_CLIENT_SECRET', 'Atur Callback URL webhook di portal TikTok'],
         },
         {
+          key: 'CONVERSION_API',
+          name: 'Conversion API Solid Mini',
+          status: e.CONVERSION_API_SECRET ? 'READY' : 'NOT_CONFIGURED',
+          description:
+            'Menerima registrasi, aktivasi, dan transaksi terverifikasi dari backend Solid Mini (HMAC). Spesifikasi: docs/CONVERSION-API.md.',
+          missing: e.CONVERSION_API_SECRET
+            ? []
+            : ['CONVERSION_API_SECRET', 'Backend Solid Mini memanggil POST /api/conversions'],
+        },
+        {
           key: 'MOCK',
           name: 'Mock Adapter (Simulasi)',
           status: this.adapters.mock ? 'SIMULATION' : 'NOT_CONFIGURED',

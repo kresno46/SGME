@@ -153,7 +153,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <SidebarNav />
         </div>
         <Badge variant="secondary" className="justify-center">
-          Fase {CURRENT_PHASE} — Integrasi TikTok
+          Fase {CURRENT_PHASE} — Analitik
         </Badge>
       </aside>
 

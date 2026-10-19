@@ -95,4 +95,4 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export const CURRENT_PHASE = 4;
+export const CURRENT_PHASE = 5;

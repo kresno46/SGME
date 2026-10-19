@@ -259,7 +259,10 @@ export interface CampaignDto {
   stats: {
     leads: number;
     interestedLeads: number;
+    /** Prospek berstatus Terdaftar/Aktif (termasuk konfirmasi operator) */
     registeredLeads: number;
+    /** Registrasi terverifikasi backend Solid Mini, atribusi last-touch */
+    registrationsVerified: number;
     outreachTasks: number;
     /** null bila belum ada prospek */
     costPerLead: number | null;
@@ -551,7 +554,14 @@ export interface AiInteractionDto {
 export type CapabilityStatus = 'READY' | 'NOT_CONFIGURED' | 'SIMULATION' | 'NOT_VERIFIED';
 
 export interface IntegrationCapabilityDto {
-  key: 'LOGIN_KIT' | 'MOCK' | 'WEBHOOK' | 'BUSINESS_API' | 'LEAD_GENERATION' | 'MESSAGING';
+  key:
+    | 'LOGIN_KIT'
+    | 'MOCK'
+    | 'WEBHOOK'
+    | 'BUSINESS_API'
+    | 'LEAD_GENERATION'
+    | 'MESSAGING'
+    | 'CONVERSION_API';
   name: string;
   status: CapabilityStatus;
   description: string;

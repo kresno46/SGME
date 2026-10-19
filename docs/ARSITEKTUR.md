@@ -167,3 +167,23 @@ Browser ◀──302 /integrations?connected|error── API /integrations/tikto
 - **Belum diimplementasikan** (dokumentasi resmi belum dapat diverifikasi): TikTok API for Business (Ads
   Reporting), Lead Generation, Business Messaging. Statusnya ditampilkan "Menunggu verifikasi" di halaman Integrasi.
   Sementara itu prospek dari Lead Generation dapat masuk lewat export CSV Ads Manager → Import CSV.
+
+## Tracking konversi & atribusi
+
+| Sumber | Event | Status |
+|---|---|---|
+| Link pendek `/api/t/:code` | `CTA_CLICK` | tidak terverifikasi |
+| Skrip landing page `/api/track/events` | `LANDING_VISIT`, `CTA_CLICK`, `STORE_CLICK` | tidak terverifikasi |
+| Conversion API `/api/conversions` (HMAC, server-to-server) | `INSTALL_VERIFIED`, `REGISTRATION`, `ACTIVATION`, `TRANSACTION`, `SUBSCRIPTION` | **terverifikasi** |
+
+- **Klik ≠ instalasi.** Instalasi/registrasi/aktivasi hanya dihitung dari Conversion API. Registrasi yang hanya
+  dikonfirmasi operator (`leads.registered_at` tanpa `registration_verified_at`) dilaporkan terpisah.
+- **ID pengunjung** (`smge_vid`, cookie first-party pada path `/api/t` + parameter URL) menghubungkan klik dengan
+  registrasi; backend Solid Mini meneruskannya pada event konversi. IP disimpan hanya sebagai hash bergaram.
+- **Pencocokan prospek**: `solid_mini_user_id`, lalu email/telepon/username ternormalisasi (opsional dari backend).
+  Registrasi/aktivasi terverifikasi memperbarui status prospek dan menghentikan follow-up.
+- **Atribusi** (`apps/api/src/tracking/attribution.ts`): touchpoint = klik pengunjung yang sama, `ref` pada event,
+  dan campaign sumber prospek; jendela `ATTRIBUTION_LOOKBACK_DAYS` (default 30). Disimpan di `campaign_attributions`
+  untuk model `FIRST_TOUCH` dan `LAST_TOUCH`; laporan dapat memilih model.
+- **Biaya**: biaya per lead/registrasi/aktivasi = total biaya campaign yang berjalan dalam periode ÷ jumlah terkait.
+  Kosong ("—") bila biaya belum diisi. Biaya per hari belum tersedia (menunggu Ads Reporting resmi).

@@ -287,6 +287,7 @@ describe('Integrasi TikTok (integration)', () => {
       MOCK: 'SIMULATION',
       BUSINESS_API: 'NOT_VERIFIED',
       MESSAGING: 'NOT_VERIFIED',
+      CONVERSION_API: 'READY',
     });
     expect(overview.body.connectProviders).toEqual(['TIKTOK_LOGIN_KIT', 'MOCK']);
     expect(overview.body.webhookUrl).toBe('http://dashboard.test/api/webhooks/tiktok');

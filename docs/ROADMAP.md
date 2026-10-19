@@ -158,10 +158,43 @@
 - `follower_count` hanya terisi bila scope `user.info.stats` disetujui; bila tidak, angka followers tetap input manual.
 - Business API, Lead Generation, dan Messaging belum ada (lihat tabel di atas); halaman Percakapan masih placeholder.
 
-## Fase 5 — Analitik
+## Fase 5 — Analitik ✅ (19 Oktober 2026) — menunggu integrasi dari backend Solid Mini
 
-Link tracking & UTM, endpoint conversion API untuk backend Solid Mini (HMAC), atribusi first/last-touch,
-funnel, CPL/CPR/CPA, perbandingan jalur & akun, produktivitas operator, biaya AI.
+| Item | Status |
+|---|---|
+| Link tracking per campaign/akun (link pendek, UTM otomatis, `smge_ref`, ID pengunjung, dedup klik, filter bot) | ✅ |
+| Event landing page (kunjungan, klik CTA, klik store) — tidak terverifikasi | ✅ |
+| Conversion API server-to-server (HMAC + timestamp, idempoten): instal, registrasi, aktivasi, transaksi — terverifikasi | ✅ kode siap; **menunggu backend Solid Mini memanggilnya** |
+| Pencocokan prospek & pembaruan status terverifikasi | ✅ |
+| Atribusi first-touch & last-touch | ✅ |
+| Dashboard analitik: KPI, funnel, Jalur A vs B, pertumbuhan prospek, status, campaign (CPL/CPR/CPA), akun, operator, biaya AI | ✅ |
+| Pemisahan data terverifikasi / konfirmasi operator / simulasi | ✅ |
+| Spesifikasi untuk tim Solid Mini ([CONVERSION-API.md](CONVERSION-API.md)) | ✅ |
+
+### Hasil verifikasi Fase 5
+
+| Pemeriksaan | Hasil |
+|---|---|
+| `pnpm lint` / `pnpm typecheck` | bersih / lulus |
+| Unit test | shared 43/43, API 34/34 (atribusi, metrik biaya, signature Conversion API, kode link) |
+| Integration test API | 79/79 — redirect & UTM, dedup klik, bot, link nonaktif, event publik, HMAC (salah/kedaluwarsa), registrasi → prospek + atribusi first/last-touch, idempotensi, aktivasi, angka laporan & filter, RBAC |
+| `next build` dashboard | lulus (19 route) |
+| Uji browser end-to-end | buat link lewat UI → 3 pengunjung anonim klik → 2 registrasi + 1 aktivasi dikirim dengan HMAC → Analitik (konversi 66,7%, Rp250.000/registrasi), detail campaign, dashboard tampil benar |
+
+### Untuk mengaktifkan
+
+1. Isi `CONVERSION_API_SECRET` (≥ 32 karakter acak) di `.env` SMGE dan bagikan ke tim backend Solid Mini lewat kanal aman.
+2. Tim Solid Mini mengikuti [CONVERSION-API.md](CONVERSION-API.md): simpan `smge_ref` & `smge_vid` saat registrasi,
+   kirim event `REGISTRATION`/`ACTIVATION` ke `POST /api/conversions`.
+3. (Opsional) Daftarkan domain landing page di `TRACKING_ALLOWED_ORIGINS` dan pasang skrip event.
+4. Buat link tracking di tiap campaign, lalu pakai link pendeknya di bio, video, atau DM.
+
+### Keterbatasan Fase 5
+
+- Belum diuji dengan backend Solid Mini sungguhan (diuji dengan request bertanda tangan buatan sendiri).
+- Biaya campaign masih total input manual (bukan per hari); biaya iklan otomatis menunggu Ads Reporting resmi (Fase 4).
+- Laporan dihitung langsung dari database tiap kali dibuka; untuk volume sangat besar perlu tabel agregat/cache.
+- Instalasi hanya tercatat bila backend/MMP mengirim `INSTALL_VERIFIED`.
 
 ## Fase 6 — Produksi
 

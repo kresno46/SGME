@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { formatDateTime, formatNumber } from '@/lib/utils';
 import { useCampaign } from './api';
 import { CampaignFormDialog } from './campaign-form-dialog';
+import { TrackingLinksCard } from './tracking-links-card';
 import { formatPeriod, formatRupiah } from './campaigns-page';
 
 export function CampaignDetail({ id }: { id: string }) {
@@ -86,10 +87,10 @@ export function CampaignDetail({ id }: { id: string }) {
           value={formatNumber(c.stats.interestedLeads)}
         />
         <StatCard
-          label="Terdaftar"
+          label="Registrasi terverifikasi"
           icon={UserCheck}
-          value={formatNumber(c.stats.registeredLeads)}
-          hint="Dikonfirmasi operator; verifikasi otomatis di Fase 5"
+          value={formatNumber(c.stats.registrationsVerified)}
+          hint={`Last-touch · ${formatNumber(c.stats.registeredLeads)} prospek berstatus terdaftar`}
         />
         <StatCard label="Tugas outbound" icon={Send} value={formatNumber(c.stats.outreachTasks)} />
       </div>
@@ -192,6 +193,7 @@ export function CampaignDetail({ id }: { id: string }) {
           </Card>
         </div>
       </div>
+      <TrackingLinksCard campaign={c} />
       <CampaignFormDialog open={editOpen} onOpenChange={setEditOpen} campaign={c} />
     </>
   );

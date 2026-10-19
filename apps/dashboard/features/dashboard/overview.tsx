@@ -63,7 +63,6 @@ export function DashboardOverviewPage() {
   const d = q.data;
   const loading = q.isPending;
   const m = d?.metrics;
-  const notYet = <span>Tersedia di fase berikutnya</span>;
 
   return (
     <>
@@ -138,11 +137,18 @@ export function DashboardOverviewPage() {
           value={formatNumber(m?.outreachTasks.value ?? 0)}
         />
         <StatCard
-          label="Registrasi / pengguna aktif"
+          label="Registrasi terverifikasi"
           icon={UserCheck}
           loading={loading}
-          value={m?.registrations.value == null ? '—' : formatNumber(m.registrations.value)}
-          hint={notYet}
+          value={formatNumber(m?.registrations.value ?? 0)}
+          hint={
+            m && (
+              <span>
+                {formatNumber(m.activeUsers.value ?? 0)} aktif ·{' '}
+                {formatNumber(m.registrationsOperator.value ?? 0)} dikonfirmasi operator
+              </span>
+            )
+          }
         />
       </div>
 

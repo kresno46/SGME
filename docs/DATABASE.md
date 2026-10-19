@@ -75,6 +75,8 @@ Kolom `leads.anonymized_at` dan `deleted_at` diisi saat anonimisasi. Implementas
 |---|---|
 | `20261015080705_init` | Seluruh tabel awal (Fase 1) |
 | `20261015085102_outbound_review_fields` | `outreach_tasks`: `review_note`, `submitted_at`, `approved_at`, `last_sent_at`, `sent_count`, `outcome` + index antrean |
+| `20261016033006_ai_interaction_simulation_flag` | `ai_interactions.is_simulation` + index per pengguna |
+| `20261019003346_conversion_tracking` | `leads.registration_verified_at`, `activation_verified_at`; `tracking_links.name`; index analitik `conversion_events` |
 
 ## Migrasi & seed
 

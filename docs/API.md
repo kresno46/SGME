@@ -220,3 +220,23 @@ Endpoint TikTok yang dipanggil (diverifikasi dari developers.tiktok.com pada 16 
 | `POST https://open.tiktokapis.com/v2/oauth/token/` | Tukar code (`grant_type=authorization_code`) & refresh (`grant_type=refresh_token`), form-urlencoded |
 | `POST https://open.tiktokapis.com/v2/oauth/revoke/` | Cabut token |
 | `GET https://open.tiktokapis.com/v2/user/info/?fields=…` | Profil; field diminta sesuai scope yang diberikan |
+
+---
+
+# Fase 5 — Tracking konversi & analitik
+
+Spesifikasi lengkap untuk tim Solid Mini (landing page & backend): [CONVERSION-API.md](CONVERSION-API.md).
+
+| Method | Path | Akses | Keterangan |
+|---|---|---|---|
+| GET | `/campaigns/:id/tracking-links` | `campaigns:read` | Link tracking + statistik (klik, pengunjung unik, registrasi terverifikasi) |
+| POST | `/campaigns/:id/tracking-links` | `campaigns:manage` | `{ name?, destinationUrl, tiktokAccountId?, utmSource?, utmMedium?, utmContent? }` — UTM campaign = tracking code |
+| PATCH | `/tracking-links/:id` | `campaigns:manage` | `{ name?, isActive? }` |
+| GET | `/t/:code` | publik | Redirect 302 ke tujuan + UTM + `smge_ref` + `smge_vid`; mencatat `CTA_CLICK` (dedup 30 menit/pengunjung, bot diabaikan) |
+| POST | `/track/events` | publik (CORS `TRACKING_ALLOWED_ORIGINS`, rate limit) | `{ type: LANDING_VISIT\|CTA_CLICK\|STORE_CLICK, ref?, visitorId?, utm… }` — tidak terverifikasi |
+| POST | `/conversions` | HMAC (`X-SMGE-Timestamp`, `X-SMGE-Signature`) | Event terverifikasi dari backend Solid Mini; idempoten per `eventId` |
+| GET | `/analytics/report` | `analytics:read` | `days`, `lane`, `campaignId`, `accountId`, `model` (`LAST_TOUCH`/`FIRST_TOUCH`) → KPI, funnel, per jalur, pertumbuhan prospek, status, campaign, akun, operator |
+
+`GET /analytics/overview` kini mengembalikan `registrations` & `activeUsers` dari event terverifikasi (sumber
+`ACTUAL`) dan `registrationsOperator` (konfirmasi operator, sumber `MANUAL`). `CampaignDto.stats.registrationsVerified`
+= registrasi terverifikasi dengan atribusi last-touch.

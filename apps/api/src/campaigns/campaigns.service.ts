@@ -59,6 +59,15 @@ export class CampaignsService {
           _count: { _all: true },
         })
       : [];
+    // Registrasi terverifikasi (Conversion API) yang diatribusikan last-touch ke campaign
+    const verified = ids.length
+      ? await this.prisma.$queryRaw<Array<{ id: string; n: bigint }>>`
+          SELECT ca.campaign_id::text AS id, count(DISTINCT ce.external_user_id) AS n
+          FROM campaign_attributions ca JOIN conversion_events ce ON ce.id = ca.conversion_event_id
+          WHERE ca.campaign_id = ANY(${ids}::uuid[]) AND ca.model = 'LAST_TOUCH'
+            AND ce.type = 'REGISTRATION' AND ce.is_verified = true
+          GROUP BY 1`
+      : [];
     return rows.map((c) => {
       const mine = groups.filter((g) => g.sourceCampaignId === c.id);
       const sum = (statuses: string[]) =>
@@ -87,6 +96,7 @@ export class CampaignsService {
           leads,
           interestedLeads: sum(['INTERESTED', 'QUALIFIED']),
           registeredLeads: sum(['REGISTERED', 'ACTIVE']),
+          registrationsVerified: Number(verified.find((v) => v.id === c.id)?.n ?? 0),
           outreachTasks: c._count.outreachTasks,
           costPerLead: leads > 0 && spend > 0 ? Math.round(spend / leads) : null,
         },

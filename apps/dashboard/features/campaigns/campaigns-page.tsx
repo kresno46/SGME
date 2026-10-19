@@ -180,7 +180,7 @@ export function CampaignsPage() {
                   <TableHead>Status</TableHead>
                   <TableHead>Periode</TableHead>
                   <TableHead className="text-right">Prospek</TableHead>
-                  <TableHead className="text-right">Terdaftar</TableHead>
+                  <TableHead className="text-right">Registrasi*</TableHead>
                   <TableHead className="text-right">Biaya / lead</TableHead>
                   <TableHead className="w-10">
                     <span className="sr-only">Aksi</span>
@@ -211,7 +211,7 @@ export function CampaignsPage() {
                       {formatNumber(c.stats.leads)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatNumber(c.stats.registeredLeads)}
+                      {formatNumber(c.stats.registrationsVerified)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatRupiah(c.stats.costPerLead)}
@@ -262,6 +262,10 @@ export function CampaignsPage() {
               pageSize={q.data.pageSize}
               onPageChange={setPage}
             />
+            <p className="border-t px-3 py-2 text-xs text-muted-foreground">
+              * Registrasi terverifikasi dari backend Solid Mini (atribusi last-touch). Rincian di
+              halaman Analitik.
+            </p>
           </>
         )}
       </Card>

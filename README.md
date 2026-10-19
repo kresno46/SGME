@@ -8,7 +8,7 @@ Platform ini memakai dua jalur:
 - **Jalur B — Outbound**: akun tambahan dengan penjangkauan personal yang ditinjau operator.
   Sistem **tidak** mengirim DM massal, tidak melakukan scraping, dan tidak memakai rotasi akun.
 
-> **Status: Fase 1–3 selesai; Fase 4 (integrasi TikTok Login Kit) siap menunggu kredensial.** AI aktif setelah
+> **Status: Fase 1–3 & 5 selesai; Fase 4 (integrasi TikTok Login Kit) siap menunggu kredensial.** AI aktif setelah
 > `OPENAI_API_KEY` diisi; koneksi TikTok resmi aktif setelah `TIKTOK_CLIENT_KEY/SECRET/REDIRECT_URI` diisi. Lihat [docs/ROADMAP.md](docs/ROADMAP.md) untuk status tiap fase
 > dan keterbatasan yang diketahui.
 
@@ -123,3 +123,4 @@ Detail permission: [packages/shared/src/permissions.ts](packages/shared/src/perm
 - [docs/DATABASE.md](docs/DATABASE.md): rancangan database, deduplikasi, dan retensi
 - [docs/API.md](docs/API.md): referensi endpoint REST
 - [docs/ROADMAP.md](docs/ROADMAP.md): status fase, keterbatasan, dan langkah berikutnya
+- [docs/CONVERSION-API.md](docs/CONVERSION-API.md): spesifikasi tracking untuk tim landing page & backend Solid Mini

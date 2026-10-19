@@ -83,6 +83,7 @@ describe('Campaign (integration)', () => {
       leads: 3,
       interestedLeads: 1,
       registeredLeads: 1,
+      registrationsVerified: 0,
       outreachTasks: 0,
       costPerLead: 100000,
     });
