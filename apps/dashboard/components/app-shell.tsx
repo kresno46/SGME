@@ -25,16 +25,16 @@ function Brand() {
   return (
     <Link href="/" className="flex items-center gap-2.5 px-2">
       <Image
-        src="/logo.png"
-        alt="Logo Solid Mini"
-        width={314}
-        height={537}
-        className="h-9 w-auto"
+        src="/logo.svg"
+        alt="Logo Marketing Bias Growth"
+        width={64}
+        height={64}
+        className="size-10 shrink-0"
         priority
       />
       <div className="leading-tight">
-        <p className="text-sm font-semibold">Solid Mini</p>
-        <p className="text-xs text-muted-foreground">Growth Engine</p>
+        <p className="text-sm font-semibold">Marketing Bias</p>
+        <p className="text-xs text-muted-foreground">Growth</p>
       </div>
     </Link>
   );

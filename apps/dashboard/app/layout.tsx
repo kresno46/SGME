@@ -6,8 +6,8 @@ import { Providers } from './providers';
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
 
 export const metadata: Metadata = {
-  title: { default: 'Solid Mini Growth Engine', template: '%s · SMGE' },
-  description: 'Platform pemasaran TikTok, CRM, dan AI Sales untuk Solid Mini',
+  title: { default: 'Marketing Bias Growth', template: '%s | Marketing Bias Growth' },
+  description: 'Marketing Bias Growth - platform pengumpulan followers, outreach DM TikTok, dan CRM',
   robots: { index: false, follow: false },
 };
 
