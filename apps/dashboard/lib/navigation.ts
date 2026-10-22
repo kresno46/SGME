@@ -1,4 +1,5 @@
 import { PERMISSIONS, type Permission } from '@smge/shared';
+import { isHiddenMarketingPage } from './marketing-scope';
 import {
   BarChart3,
   Bot,
@@ -22,7 +23,7 @@ export interface NavItem {
   phase: number;
 }
 
-export const NAV_ITEMS: NavItem[] = [
+const ALL_NAV_ITEMS: NavItem[] = [
   {
     title: 'Dashboard',
     href: '/',
@@ -95,4 +96,5 @@ export const NAV_ITEMS: NavItem[] = [
   },
 ];
 
+export const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => !isHiddenMarketingPage(item.href));
 export const CURRENT_PHASE = 6;

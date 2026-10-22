@@ -6,7 +6,10 @@ Platform ini memakai dua jalur:
 
 - **Jalur A — Official**: akun utama/terverifikasi, konten, LIVE, Messaging Ads, dan auto-reply resmi.
 - **Jalur B — Outbound**: akun tambahan dengan penjangkauan personal yang ditinjau operator.
-  Sistem **tidak** mengirim DM massal, tidak melakukan scraping, dan tidak memakai rotasi akun.
+  Pengiriman tugas DM yang disetujui melalui extension browser tersedia sebagai versi awal;
+  lihat [panduan DM browser](docs/BROWSER-DM.md). Pengambilan daftar followers yang tampil melalui extension browser
+  tersedia dengan ekspor JSON dan import ke CRM; lihat [panduan collector](docs/FOLLOWER-COLLECTOR.md).
+  Tidak memakai rotasi akun.
 
 > **Status: Fase 1–3 & 5 selesai; Fase 4 (integrasi TikTok Login Kit) siap menunggu kredensial.** AI aktif setelah
 > `OPENAI_API_KEY` diisi; koneksi TikTok resmi aktif setelah `TIKTOK_CLIENT_KEY/SECRET/REDIRECT_URI` diisi. Lihat [docs/ROADMAP.md](docs/ROADMAP.md) untuk status tiap fase

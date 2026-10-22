@@ -8,6 +8,7 @@ describe('Outbound Workstation (integration)', () => {
   let op: Session;
   let admin: Session;
   let accountId: string;
+  let ownerId: string;
 
   beforeAll(async () => {
     ({ app, prisma } = await createTestApp());
@@ -15,10 +16,11 @@ describe('Outbound Workstation (integration)', () => {
   beforeEach(async () => {
     await resetDatabase(prisma);
     op = await loginAs(app, 'MARKETING_OPERATOR');
-    admin = await loginAs(app, 'ADMIN');
+    admin = await loginAs(app, 'SUPER_ADMIN');
+    ownerId = (await prisma.user.findUniqueOrThrow({ where: { email: 'operator@test.local' } })).id;
     accountId = (
       await prisma.tikTokAccount.create({
-        data: { username: 'akun_b', displayName: 'Akun B', lane: 'OUTBOUND' },
+        data: { ownerId, username: 'akun_b', displayName: 'Akun B', lane: 'OUTBOUND' },
       })
     ).id;
   });
@@ -27,6 +29,7 @@ describe('Outbound Workstation (integration)', () => {
   const lead = (data: Record<string, unknown> = {}) =>
     prisma.lead.create({
       data: {
+        ownerId,
         name: 'Prospek',
         tiktokUsername: 'calon',
         tiktokUsernameNormalized: 'calon',
@@ -85,7 +88,7 @@ describe('Outbound Workstation (integration)', () => {
 
   it('hanya akun Jalur B yang aktif yang dapat dipakai', async () => {
     const official = await prisma.tikTokAccount.create({
-      data: { username: 'resmi', displayName: 'R', lane: 'OFFICIAL' },
+      data: { ownerId, username: 'resmi', displayName: 'R', lane: 'OFFICIAL' },
     });
     await op.agent.get(`/api/outbound/queue?accountId=${official.id}`).expect(400);
     await prisma.tikTokAccount.update({ where: { id: accountId }, data: { status: 'RESTRICTED' } });
@@ -186,13 +189,21 @@ describe('Outbound Workstation (integration)', () => {
   }
   const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString();
 
-  it('follow-up tanpa balasan ditolak bila prospek belum memberi izin', async () => {
+  it('follow-up TikTok tanpa balasan boleh dijadwalkan sekali setelah 24 jam tanpa izin tambahan', async () => {
     const { taskId } = await sentTask();
+    await act(op, taskId, {
+      action: 'schedule_follow_up',
+      followUpAt: new Date(Date.now() + 3600000).toISOString(),
+      draftMessage: 'Halo lagi, apakah ingin info singkatnya?',
+    }).expect(409);
     const res = await act(op, taskId, {
       action: 'schedule_follow_up',
       followUpAt: tomorrow(),
-    }).expect(409);
-    expect(res.body.message).toMatch(/izin komunikasi/);
+      draftMessage: 'Halo lagi, apakah ingin info singkatnya?',
+    }).expect(200);
+    expect(res.body.status).toBe('FOLLOW_UP');
+    expect(res.body.approvedAt).toBeNull();
+    expect(res.body.finalMessage).toBeNull();
   });
 
   it('follow-up dengan izin dibatasi maksimal 2 pesan tanpa balasan', async () => {
@@ -219,7 +230,10 @@ describe('Outbound Workstation (integration)', () => {
     // Muncul di daftar follow-up setelah jatuh tempo
     await prisma.outreachTask.update({
       where: { id: taskId },
-      data: { followUpAt: new Date(Date.now() - 1000) },
+      data: {
+        followUpAt: new Date(Date.now() - 1000),
+        lastSentAt: new Date(Date.now() - 25 * 3600000),
+      },
     });
     const due = await op.agent.get('/api/outbound/tasks?followUpDue=true').expect(200);
     expect(due.body.items.map((t: { id: string }) => t.id)).toEqual([taskId]);

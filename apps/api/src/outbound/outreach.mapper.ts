@@ -19,8 +19,16 @@ export const ACTION_RULES: Record<
   { from: OutreachTaskStatus[]; to: OutreachTaskStatus | null; permission: Permission }
 > = {
   edit_draft: { from: ['DRAFT', 'FOLLOW_UP'], to: null, permission: PERMISSIONS.OUTREACH_WORK },
-  submit: { from: ['DRAFT'], to: 'WAITING_REVIEW', permission: PERMISSIONS.OUTREACH_WORK },
-  approve: { from: ['WAITING_REVIEW'], to: 'APPROVED', permission: PERMISSIONS.OUTREACH_REVIEW },
+  submit: {
+    from: ['DRAFT', 'FOLLOW_UP'],
+    to: 'WAITING_REVIEW',
+    permission: PERMISSIONS.OUTREACH_WORK,
+  },
+  approve: {
+    from: ['WAITING_REVIEW', 'FOLLOW_UP'],
+    to: 'APPROVED',
+    permission: PERMISSIONS.OUTREACH_REVIEW,
+  },
   reject: { from: ['WAITING_REVIEW'], to: 'DRAFT', permission: PERMISSIONS.OUTREACH_REVIEW },
   reopen: { from: ['APPROVED'], to: 'DRAFT', permission: PERMISSIONS.OUTREACH_WORK },
   mark_sent: {
@@ -29,17 +37,17 @@ export const ACTION_RULES: Record<
     permission: PERMISSIONS.OUTREACH_WORK,
   },
   log_reply: {
-    from: ['MANUALLY_SENT', 'FOLLOW_UP'],
+    from: ['MANUALLY_SENT', 'BROWSER_SENT', 'FOLLOW_UP'],
     to: 'REPLIED',
     permission: PERMISSIONS.OUTREACH_WORK,
   },
   schedule_follow_up: {
-    from: ['MANUALLY_SENT', 'REPLIED'],
+    from: ['MANUALLY_SENT', 'BROWSER_SENT', 'REPLIED'],
     to: 'FOLLOW_UP',
     permission: PERMISSIONS.OUTREACH_WORK,
   },
   complete: {
-    from: ['MANUALLY_SENT', 'REPLIED', 'FOLLOW_UP'],
+    from: ['MANUALLY_SENT', 'BROWSER_SENT', 'REPLIED', 'FOLLOW_UP'],
     to: 'COMPLETED',
     permission: PERMISSIONS.OUTREACH_WORK,
   },

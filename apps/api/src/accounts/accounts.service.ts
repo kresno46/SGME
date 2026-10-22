@@ -1,3 +1,4 @@
+import { ownerScope } from '../common/data-scope';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import type { AccountIntegration, Prisma, TikTokAccount } from '@smge/database';
 import type {
@@ -11,6 +12,7 @@ import { AuditService } from '../audit/audit.service';
 import type { RequestUser } from '../common/decorators/auth.decorators';
 import { paginate, RequestMeta } from '../common/utils/request';
 import { PrismaService } from '../prisma/prisma.service';
+import { USER_REF_SELECT, toRef } from '../common/utils/refs';
 
 /** Kolom integrasi yang aman dikirim ke frontend — token terenkripsi TIDAK pernah dipilih. */
 const SAFE_INTEGRATION_SELECT = {
@@ -25,6 +27,7 @@ const SAFE_INTEGRATION_SELECT = {
 } satisfies Prisma.AccountIntegrationSelect;
 
 const ACCOUNT_INCLUDE = {
+  owner: { select: USER_REF_SELECT },
   integrations: { select: SAFE_INTEGRATION_SELECT },
   _count: { select: { campaignLinks: true, sourcedLeads: true, outreachTasks: true } },
 } satisfies Prisma.TikTokAccountInclude;
@@ -48,6 +51,7 @@ export class AccountsService {
 
   async list(q: ListTikTokAccountsQuery) {
     const where: Prisma.TikTokAccountWhereInput = {
+      ...ownerScope(),
       ...(q.lane ? { lane: q.lane } : {}),
       ...(q.status ? { status: q.status } : {}),
       ...(q.search
@@ -73,8 +77,8 @@ export class AccountsService {
   }
 
   async get(id: string) {
-    const row = await this.prisma.tikTokAccount.findUnique({
-      where: { id },
+    const row = await this.prisma.tikTokAccount.findFirst({
+      where: { id, ...ownerScope() },
       include: ACCOUNT_INCLUDE,
     });
     if (!row) throw new NotFoundException('Akun TikTok tidak ditemukan');
@@ -86,9 +90,13 @@ export class AccountsService {
     input: CreateTikTokAccountInput & { username: string },
     meta: RequestMeta,
   ) {
-    await this.assertUsernameFree(input.username);
+    await this.assertUsernameFree(input.username, actor.id);
     const row = await this.prisma.tikTokAccount.create({
-      data: { ...(input as Prisma.TikTokAccountCreateInput), followersSource: 'MANUAL' },
+      data: {
+        ...(input as Prisma.TikTokAccountUncheckedCreateInput),
+        followersSource: 'MANUAL',
+        ownerId: actor.id,
+      },
       include: ACCOUNT_INCLUDE,
     });
     await this.audit.log({
@@ -103,10 +111,10 @@ export class AccountsService {
   }
 
   async update(actor: RequestUser, id: string, input: UpdateTikTokAccountInput, meta: RequestMeta) {
-    const existing = await this.prisma.tikTokAccount.findUnique({ where: { id } });
+    const existing = await this.prisma.tikTokAccount.findFirst({ where: { id, ...ownerScope() } });
     if (!existing) throw new NotFoundException('Akun TikTok tidak ditemukan');
     if (input.username && input.username !== existing.username) {
-      await this.assertUsernameFree(input.username);
+      await this.assertUsernameFree(input.username, existing.ownerId);
     }
     const data = input as Prisma.TikTokAccountUpdateInput;
     // Angka followers yang diubah operator selalu ditandai sebagai input manual.
@@ -130,8 +138,8 @@ export class AccountsService {
   }
 
   async remove(actor: RequestUser, id: string, meta: RequestMeta) {
-    const row = await this.prisma.tikTokAccount.findUnique({
-      where: { id },
+    const row = await this.prisma.tikTokAccount.findFirst({
+      where: { id, ...ownerScope() },
       include: { _count: { select: { outreachTasks: true, conversations: true } } },
     });
     if (!row) throw new NotFoundException('Akun TikTok tidak ditemukan');
@@ -151,8 +159,8 @@ export class AccountsService {
     });
   }
 
-  private async assertUsernameFree(username: string) {
-    const exists = await this.prisma.tikTokAccount.findUnique({ where: { username } });
+  private async assertUsernameFree(username: string, ownerId: string | null) {
+    const exists = await this.prisma.tikTokAccount.findFirst({ where: { username, ownerId } });
     if (exists) throw new ConflictException(`Akun @${username} sudah terdaftar`);
   }
 }
@@ -188,6 +196,7 @@ function toAccountDto(a: AccountRow): TikTokAccountDto {
   }));
   return {
     id: a.id,
+    owner: toRef(a.owner),
     username: a.username,
     displayName: a.displayName,
     profileUrl: a.profileUrl,

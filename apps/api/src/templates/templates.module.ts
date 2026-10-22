@@ -1,3 +1,4 @@
+import { scopeUser, ownerScope } from '../common/data-scope';
 import {
   Body,
   Controller,
@@ -71,11 +72,14 @@ export class TemplatesService {
   async list(q: z.output<typeof listQuery>) {
     const rows = await this.prisma.messageTemplate.findMany({
       where: {
+        ...(scopeUser() && scopeUser()!.role !== 'SUPER_ADMIN'
+          ? { AND: [{ OR: [{ createdById: scopeUser()!.id }, { createdById: null }] }] }
+          : {}),
         ...(q.lane ? { OR: [{ lane: q.lane }, { lane: null }] } : {}),
         ...(q.purpose ? { purpose: q.purpose } : {}),
         ...(q.activeOnly ? { isActive: true } : {}),
       },
-      include: INCLUDE,
+      include: { ...INCLUDE, _count: { select: { outreachTasks: { where: ownerScope() } } } },
       orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
     });
     return rows.map(toDto);
@@ -131,7 +135,16 @@ export class TemplatesService {
   }
 
   private async ensure(id: string) {
-    if (!(await this.prisma.messageTemplate.findUnique({ where: { id } }))) {
+    if (
+      !(await this.prisma.messageTemplate.findFirst({
+        where: {
+          id,
+          ...(scopeUser() && scopeUser()!.role !== 'SUPER_ADMIN'
+            ? { createdById: scopeUser()!.id }
+            : {}),
+        },
+      }))
+    ) {
       throw new NotFoundException('Template tidak ditemukan');
     }
   }

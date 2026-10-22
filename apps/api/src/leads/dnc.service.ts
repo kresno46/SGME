@@ -1,3 +1,4 @@
+import { ownerScope, scopeUser } from '../common/data-scope';
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import type { ContactChannel, Prisma } from '@smge/database';
 import {
@@ -77,6 +78,7 @@ export class DncService {
 
   async list(q: { page: number; pageSize: number; search?: string; channel?: ContactChannel }) {
     const where: Prisma.DoNotContactEntryWhereInput = {
+      ...(scopeUser() && scopeUser()!.role !== 'SUPER_ADMIN' ? { addedById: scopeUser()!.id } : {}),
       ...(q.channel ? { channel: q.channel } : {}),
       ...(q.search
         ? { valueNormalized: { contains: q.search.toLowerCase().replace(/^@/, '') } }
@@ -126,7 +128,7 @@ export class DncService {
             ? 'emailNormalized'
             : 'phoneNormalized';
       const leads = await tx.lead.findMany({
-        where: { [field]: n.value, doNotContact: false },
+        where: { ...ownerScope(), [field]: n.value, doNotContact: false },
         select: { id: true },
       });
       for (const l of leads) {
@@ -184,7 +186,7 @@ export class DncService {
   /** Menandai satu prospek DNC dan menyimpan identitasnya ke daftar larangan. */
   async markLead(actor: RequestUser, leadId: string, reason: string, meta: RequestMeta) {
     await this.prisma.$transaction(async (tx) => {
-      const lead = await tx.lead.findUnique({ where: { id: leadId } });
+      const lead = await tx.lead.findFirst({ where: { id: leadId, ...ownerScope() } });
       if (!lead || lead.deletedAt) throw new NotFoundException('Prospek tidak ditemukan');
       for (const i of DncService.identitiesOf(lead)) {
         await tx.doNotContactEntry.upsert({
@@ -209,7 +211,7 @@ export class DncService {
   /** Mencabut larangan (hanya permission dnc:manage). Izin komunikasi TIDAK dipulihkan otomatis. */
   async unmarkLead(actor: RequestUser, leadId: string, meta: RequestMeta) {
     await this.prisma.$transaction(async (tx) => {
-      const lead = await tx.lead.findUnique({ where: { id: leadId } });
+      const lead = await tx.lead.findFirst({ where: { id: leadId, ...ownerScope() } });
       if (!lead || lead.deletedAt) throw new NotFoundException('Prospek tidak ditemukan');
       const identities = DncService.identitiesOf(lead);
       if (identities.length) {

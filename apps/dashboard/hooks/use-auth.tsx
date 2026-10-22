@@ -1,6 +1,6 @@
 'use client';
 
-import type { Permission } from '@smge/shared';
+import { PERMISSIONS, type Permission } from '@smge/shared';
 import type { AuthUser } from '@smge/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
@@ -14,6 +14,14 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const SUPER_ADMIN_ONLY: readonly string[] = [
+  PERMISSIONS.USERS_READ,
+  PERMISSIONS.USERS_MANAGE,
+  PERMISSIONS.ROLES_READ,
+  PERMISSIONS.AUDIT_READ,
+  PERMISSIONS.KNOWLEDGE_MANAGE,
+  PERMISSIONS.DNC_MANAGE,
+];
 
 export const ME_QUERY_KEY = ['auth', 'me'] as const;
 
@@ -43,7 +51,9 @@ export function AuthProvider({ user, children }: { user: AuthUser; children: Rea
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
-      can: (p) => user.permissions.includes(p),
+      can: (p) =>
+        user.permissions.includes(p) &&
+        (user.role === 'SUPER_ADMIN' || !SUPER_ADMIN_ONLY.includes(p)),
       logout: async () => {
         await api.post('/auth/logout').catch(() => undefined);
         qc.clear();

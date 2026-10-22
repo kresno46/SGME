@@ -16,3 +16,5 @@ export * from './schemas/outbound';
 export * from './ai-guardrails';
 export * from './schemas/ai';
 export * from './schemas/tracking';
+export * from './schemas/followers';
+export * from './schemas/browser-dm';

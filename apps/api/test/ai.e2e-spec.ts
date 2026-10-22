@@ -33,6 +33,7 @@ describe('AI Sales Agent (integration, provider palsu)', () => {
   let prisma: PrismaService;
   let admin: Session;
   let op: Session;
+  let ownerId: string;
   const fake = new FakeProvider();
 
   beforeAll(async () => {
@@ -42,8 +43,9 @@ describe('AI Sales Agent (integration, provider palsu)', () => {
     await resetDatabase(prisma);
     fake.next = null;
     fake.lastRequest = null;
-    admin = await loginAs(app, 'ADMIN');
+    admin = await loginAs(app, 'SUPER_ADMIN');
     op = await loginAs(app, 'MARKETING_OPERATOR');
+    ownerId = (await prisma.user.findUniqueOrThrow({ where: { email: 'operator@test.local' } })).id;
   });
   afterAll(() => app.close());
 
@@ -202,10 +204,11 @@ describe('AI Sales Agent (integration, provider palsu)', () => {
 
   it('draft outbound: data kontak prospek tidak dikirim ke penyedia AI; hanya untuk status Draft/Follow-up', async () => {
     const account = await prisma.tikTokAccount.create({
-      data: { username: 'akun_b', displayName: 'B', lane: 'OUTBOUND' },
+      data: { ownerId, username: 'akun_b', displayName: 'B', lane: 'OUTBOUND' },
     });
     const lead = await prisma.lead.create({
       data: {
+        ownerId,
         name: 'Dewi Lestari',
         email: 'dewi@rahasia.co',
         emailNormalized: 'dewi@rahasia.co',
@@ -257,7 +260,9 @@ describe('AI Sales Agent (integration, provider palsu)', () => {
   });
 
   it('skor prospek menyimpan skor & riwayat; ringkasan tercatat di timeline', async () => {
-    const lead = await prisma.lead.create({ data: { name: 'Andi', source: 'INBOUND_DM' } });
+    const lead = await prisma.lead.create({
+      data: { ownerId, name: 'Andi', source: 'INBOUND_DM' },
+    });
     fake.next = {
       score: 72,
       interestLevel: 'HIGH',
@@ -291,7 +296,7 @@ describe('AI Sales Agent (integration, provider palsu)', () => {
   });
 
   it('pengaturan: hanya Super Admin; Auto-Reply ditolak selama belum ada kanal resmi', async () => {
-    await admin.agent.get('/api/ai/settings').expect(403);
+    await (await loginAs(app, 'ADMIN')).agent.get('/api/ai/settings').expect(403);
     const sa = await loginAs(app, 'SUPER_ADMIN');
     const bad = await sa.agent
       .put('/api/ai/settings')

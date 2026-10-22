@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { isHiddenMarketingPage } from '@/lib/marketing-scope';
 
 const PUBLIC_PATHS = ['/login', '/forgot-password', '/reset-password'];
 
@@ -20,6 +21,12 @@ export function middleware(req: NextRequest) {
   if (hasSession && pathname === '/login') {
     const url = req.nextUrl.clone();
     url.pathname = '/';
+    url.search = '';
+    return NextResponse.redirect(url);
+  }
+  if (isHiddenMarketingPage(pathname)) {
+    const url = req.nextUrl.clone();
+    url.pathname = '/outbound';
     url.search = '';
     return NextResponse.redirect(url);
   }

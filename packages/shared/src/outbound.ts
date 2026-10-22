@@ -15,10 +15,11 @@ import type {
 export const OUTREACH_TRANSITIONS: Record<OutreachTaskStatus, OutreachTaskStatus[]> = {
   DRAFT: ['WAITING_REVIEW', 'CANCELLED'],
   WAITING_REVIEW: ['APPROVED', 'DRAFT', 'CANCELLED'],
-  APPROVED: ['MANUALLY_SENT', 'DRAFT', 'CANCELLED'],
+  APPROVED: ['BROWSER_SENT', 'MANUALLY_SENT', 'DRAFT', 'CANCELLED'],
+  BROWSER_SENT: ['REPLIED', 'FOLLOW_UP', 'COMPLETED'],
   MANUALLY_SENT: ['REPLIED', 'FOLLOW_UP', 'COMPLETED'],
   REPLIED: ['FOLLOW_UP', 'COMPLETED'],
-  FOLLOW_UP: ['MANUALLY_SENT', 'REPLIED', 'COMPLETED', 'CANCELLED'],
+  FOLLOW_UP: ['WAITING_REVIEW', 'APPROVED', 'MANUALLY_SENT', 'REPLIED', 'COMPLETED', 'CANCELLED'],
   COMPLETED: [],
   CANCELLED: [],
 };
@@ -33,6 +34,7 @@ export const OPEN_OUTREACH_STATUSES: OutreachTaskStatus[] = [
   'WAITING_REVIEW',
   'APPROVED',
   'MANUALLY_SENT',
+  'BROWSER_SENT',
   'REPLIED',
   'FOLLOW_UP',
 ];
@@ -47,6 +49,7 @@ export const NON_CONTACTABLE_LEAD_STATUSES: LeadStatus[] = [
 
 /** Maksimum pesan tanpa balasan dalam satu tugas (pesan awal + 1 follow-up). */
 export const MAX_UNANSWERED_MESSAGES = 2;
+export const MIN_UNANSWERED_FOLLOW_UP_HOURS = 24;
 
 /** Batas default tugas baru per akun per hari — menjaga penjangkauan tetap personal. */
 export const DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT = 30;
@@ -89,16 +92,17 @@ export function checkOutreachEligibility(i: EligibilityInput): EligibilityResult
 }
 
 /**
- * Follow-up hanya boleh bila prospek sudah membalas, atau sudah memberi izin untuk kanal tsb.
+ * TikTok membolehkan satu pengingat tanpa balasan; kanal lain tetap membutuhkan izin.
  * Tanpa balasan, jumlah pesan dibatasi MAX_UNANSWERED_MESSAGES.
  */
 export function checkFollowUpAllowed(i: {
+  channel?: ContactChannel;
   replied: boolean;
   hasConsentForChannel: boolean;
   sentCount: number;
 }): EligibilityResult {
   if (i.replied) return { eligible: true };
-  if (!i.hasConsentForChannel) {
+  if (i.channel !== 'TIKTOK_DM' && !i.hasConsentForChannel) {
     return {
       eligible: false,
       reason:

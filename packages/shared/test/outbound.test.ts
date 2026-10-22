@@ -73,6 +73,32 @@ describe('kelayakan penjangkauan', () => {
       checkFollowUpAllowed({ replied: false, hasConsentForChannel: true, sentCount: 2 }).eligible,
     ).toBe(false);
   });
+  it('allows one unanswered TikTok reminder while other channels still require consent', () => {
+    expect(
+      checkFollowUpAllowed({
+        channel: 'TIKTOK_DM',
+        replied: false,
+        hasConsentForChannel: false,
+        sentCount: 1,
+      }).eligible,
+    ).toBe(true);
+    expect(
+      checkFollowUpAllowed({
+        channel: 'TIKTOK_DM',
+        replied: false,
+        hasConsentForChannel: false,
+        sentCount: 2,
+      }).eligible,
+    ).toBe(false);
+    expect(
+      checkFollowUpAllowed({
+        channel: 'EMAIL',
+        replied: false,
+        hasConsentForChannel: false,
+        sentCount: 1,
+      }).eligible,
+    ).toBe(false);
+  });
 });
 
 describe('prioritas prospek', () => {

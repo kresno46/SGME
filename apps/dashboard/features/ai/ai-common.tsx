@@ -106,7 +106,7 @@ export function AiStatusBanner({ status }: { status: AiStatusDto | undefined }) 
           {can(PERMISSIONS.KNOWLEDGE_MANAGE) && (
             <Link
               href="/ai-sales?tab=knowledge"
-              className="font-medium text-primary hover:underline"
+              className="font-medium text-brand-text hover:underline"
             >
               Tambahkan dokumen →
             </Link>

@@ -1,3 +1,4 @@
+import { scopeUser } from '../common/data-scope';
 import {
   BadRequestException,
   ConflictException,
@@ -60,6 +61,7 @@ export class UsersService {
   async assignable() {
     return this.prisma.user.findMany({
       where: {
+        ...(scopeUser() && scopeUser()!.role !== 'SUPER_ADMIN' ? { id: scopeUser()!.id } : {}),
         status: 'ACTIVE',
         role: { code: { in: ['SUPER_ADMIN', 'ADMIN', 'MARKETING_OPERATOR'] } },
       },

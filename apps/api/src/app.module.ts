@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
-import { APP_FILTER, APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { DataScopeInterceptor } from './common/data-scope';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AccountsModule } from './accounts/accounts.module';
 import { AiModule } from './ai/ai.module';
@@ -48,6 +49,7 @@ import { UsersModule } from './users/users.module';
     HealthModule,
   ],
   providers: [
+    { provide: APP_INTERCEPTOR, useClass: DataScopeInterceptor },
     // Urutan guard: rate limit → autentikasi → CSRF → otorisasi (RBAC)
     { provide: APP_GUARD, useClass: ThrottlerGuard },
     { provide: APP_GUARD, useClass: JwtAuthGuard },

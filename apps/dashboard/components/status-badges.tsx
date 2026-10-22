@@ -62,6 +62,7 @@ const TASK_VARIANT: Record<OutreachTaskStatus, Variant> = {
   WAITING_REVIEW: 'warning',
   APPROVED: 'default',
   MANUALLY_SENT: 'outline',
+  BROWSER_SENT: 'outline',
   REPLIED: 'success',
   FOLLOW_UP: 'warning',
   COMPLETED: 'success',

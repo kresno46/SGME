@@ -73,7 +73,9 @@ Setiap angka yang bisa berasal dari sumber berbeda memiliki kolom `DataSource` (
 ## Kepatuhan platform
 
 - Password TikTok tidak pernah diminta; koneksi akun hanya lewat OAuth resmi (Fase 4).
-- Tidak ada scraping followers, bot DM massal, bypass CAPTCHA, atau rotasi akun.
+- Pengambilan followers melalui browser operator tersedia dengan ekspor/import terbatas; lihat
+  [panduan collector](FOLLOWER-COLLECTOR.md). Pengiriman tugas disetujui melalui browser dijelaskan dalam
+  [panduan DM browser](BROWSER-DM.md). Tidak ada bypass CAPTCHA atau rotasi akun.
 - Pengiriman otomatis hanya diaktifkan bila API resmi mengizinkan **dan** penerima memiliki persetujuan
   (`lead_consents`). Mengikuti akun ≠ persetujuan.
 - Status "terkirim" pada tugas outbound hanya diisi setelah operator mengonfirmasi (`sent_confirmed_at`).

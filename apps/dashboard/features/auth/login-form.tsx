@@ -100,7 +100,7 @@ function PasswordStep({ onDone }: { onDone: (r: LoginResponse) => void }) {
         </div>
       </FormField>
       <div className="-mt-1 text-right">
-        <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+        <Link href="/forgot-password" className="text-sm text-brand-text hover:underline">
           Lupa password?
         </Link>
       </div>
@@ -144,7 +144,7 @@ function TwoFactorStep({
   return (
     <form onSubmit={onSubmit} className="grid gap-4" noValidate>
       <div className="flex items-start gap-3">
-        <ShieldCheck className="mt-0.5 size-5 text-primary" />
+        <ShieldCheck className="mt-0.5 size-5 text-brand-text" />
         <div>
           <h1 className="text-xl font-semibold">Verifikasi dua langkah</h1>
           <p className="text-sm text-muted-foreground">

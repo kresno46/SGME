@@ -1,3 +1,4 @@
+import { scopeUser } from '../common/data-scope';
 import { Injectable } from '@nestjs/common';
 import type { Prisma } from '@smge/database';
 import type { AiInteractionDto, AiUsageDto } from '@smge/types';
@@ -11,8 +12,14 @@ export class AiUsageService {
   constructor(private readonly prisma: PrismaService) {}
 
   async usage(days: number): Promise<AiUsageDto> {
+    const actor = scopeUser();
+    const userId = actor && actor.role !== 'SUPER_ADMIN' ? actor.id : null;
     const since = new Date(startOfToday().getTime() - (days - 1) * 86_400_000);
-    const real: Prisma.AiInteractionWhereInput = { createdAt: { gte: since }, isSimulation: false };
+    const real: Prisma.AiInteractionWhereInput = {
+      ...(userId ? { userId } : {}),
+      createdAt: { gte: since },
+      isSimulation: false,
+    };
 
     const [totals, failed, blocked, simulated, byType, byModel, byDay] = await Promise.all([
       this.prisma.aiInteraction.aggregate({
@@ -22,7 +29,9 @@ export class AiUsageService {
       }),
       this.prisma.aiInteraction.count({ where: { ...real, status: 'FAILED' } }),
       this.prisma.aiInteraction.count({ where: { ...real, status: 'BLOCKED' } }),
-      this.prisma.aiInteraction.count({ where: { createdAt: { gte: since }, isSimulation: true } }),
+      this.prisma.aiInteraction.count({
+        where: { ...(userId ? { userId } : {}), createdAt: { gte: since }, isSimulation: true },
+      }),
       this.prisma.aiInteraction.groupBy({
         by: ['type'],
         where: real,
@@ -43,7 +52,7 @@ export class AiUsageService {
                sum(cost_usd)::float8 AS cost,
                sum(total_tokens) AS tokens
         FROM ai_interactions
-        WHERE created_at >= ${since} AND is_simulation = false
+        WHERE created_at >= ${since} AND is_simulation = false AND (${userId}::uuid IS NULL OR user_id = ${userId}::uuid)
         GROUP BY 1 ORDER BY 1`,
     ]);
 
@@ -94,6 +103,7 @@ export class AiUsageService {
 
   async list(q: { page: number; pageSize: number; type?: string; status?: string }) {
     const where: Prisma.AiInteractionWhereInput = {
+      ...(scopeUser() && scopeUser()!.role !== 'SUPER_ADMIN' ? { userId: scopeUser()!.id } : {}),
       ...(q.type ? { type: q.type as Prisma.AiInteractionWhereInput['type'] } : {}),
       ...(q.status ? { status: q.status as Prisma.AiInteractionWhereInput['status'] } : {}),
     };

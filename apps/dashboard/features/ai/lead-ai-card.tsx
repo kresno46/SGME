@@ -32,7 +32,7 @@ export function LeadAiCard({ leadId }: { leadId: string }) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Sparkles className="size-4 text-primary" /> Analisis AI
+          <Sparkles className="size-4 text-brand-text" /> Analisis AI
         </CardTitle>
         <CardDescription>
           {ready

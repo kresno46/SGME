@@ -8,8 +8,10 @@ import {
 } from '@smge/shared';
 import { CircleCheck, CircleDashed, CircleX, Clock } from 'lucide-react';
 import { Badge } from '@/components/ui/primitives';
+import { HIDE_OFFICIAL_LANE } from '@/lib/marketing-scope';
 
 export function LaneBadge({ lane }: { lane: MarketingLane }) {
+  if (HIDE_OFFICIAL_LANE) return null;
   return (
     <Badge variant="outline" className="gap-1.5">
       <span

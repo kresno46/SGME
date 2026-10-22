@@ -68,6 +68,7 @@ import {
 } from '@/components/ui/primitives';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
+import { HIDE_OFFICIAL_LANE } from '@/lib/marketing-scope';
 import { formatDateTime, formatRelative } from '@/lib/utils';
 import { useInvalidateLeads, useLead, useLeadMutation } from './api';
 import { LeadAiCard } from '../ai/lead-ai-card';
@@ -208,7 +209,7 @@ export function LeadDetail({ id }: { id: string }) {
                       href={`https://www.tiktok.com/@${l.tiktokUsername}`}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-primary hover:underline"
+                      className="inline-flex items-center gap-1 text-brand-text hover:underline"
                     >
                       @{l.tiktokUsername} <ExternalLink className="size-3" />
                     </a>
@@ -225,19 +226,23 @@ export function LeadDetail({ id }: { id: string }) {
                   {LEAD_SOURCE_LABELS[l.source]}
                   {l.sourceAccount && ` · @${l.sourceAccount.username}`}
                 </dd>
-                <dt className="text-muted-foreground">Campaign</dt>
-                <dd>
-                  {l.sourceCampaign ? (
-                    <Link
-                      href={`/campaigns/${l.sourceCampaign.id}`}
-                      className="text-primary hover:underline"
-                    >
-                      {l.sourceCampaign.name}
-                    </Link>
-                  ) : (
-                    '—'
-                  )}
-                </dd>
+                {!HIDE_OFFICIAL_LANE && (
+                  <>
+                    <dt className="text-muted-foreground">Campaign</dt>
+                    <dd>
+                      {l.sourceCampaign ? (
+                        <Link
+                          href={`/campaigns/${l.sourceCampaign.id}`}
+                          className="text-brand-text hover:underline"
+                        >
+                          {l.sourceCampaign.name}
+                        </Link>
+                      ) : (
+                        '—'
+                      )}
+                    </dd>
+                  </>
+                )}
                 <dt className="text-muted-foreground">Operator</dt>
                 <dd>{l.operator?.name ?? 'Belum ditugaskan'}</dd>
                 <dt className="text-muted-foreground">Follow-up</dt>

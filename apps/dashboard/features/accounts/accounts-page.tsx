@@ -2,7 +2,6 @@
 
 import {
   LANE_LABELS,
-  MARKETING_LANES,
   PERMISSIONS,
   TIKTOK_ACCOUNT_STATUS_LABELS,
   TIKTOK_ACCOUNT_STATUSES,
@@ -55,6 +54,11 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useDebounce } from '@/hooks/use-debounce';
 import { formatNumber, formatRelative } from '@/lib/utils';
+import {
+  HIDE_OFFICIAL_LANE,
+  VISIBLE_MARKETING_LANES,
+  visibleLaneFilter,
+} from '@/lib/marketing-scope';
 import { AccountFormDialog } from './account-form-dialog';
 import { useAccounts, useDeleteAccount } from './api';
 import { AccountStatusBadge, IntegrationBadge, LaneBadge } from './status-badges';
@@ -62,7 +66,7 @@ import { AccountStatusBadge, IntegrationBadge, LaneBadge } from './status-badges
 const ALL = '__all__';
 
 export function AccountsPage() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const canManage = can(PERMISSIONS.ACCOUNTS_MANAGE);
   const [search, setSearch] = useState('');
   const [lane, setLane] = useState(ALL);
@@ -78,7 +82,7 @@ export function AccountsPage() {
     page,
     pageSize: 20,
     search: debouncedSearch || undefined,
-    lane: lane === ALL ? undefined : lane,
+    lane: visibleLaneFilter(lane === ALL ? undefined : lane),
     status: status === ALL ? undefined : status,
   });
   const filtered = !!debouncedSearch || lane !== ALL || status !== ALL;
@@ -92,7 +96,7 @@ export function AccountsPage() {
     <>
       <PageHeader
         title="Akun TikTok"
-        description="Kelola akun Official (Jalur A) dan Outbound (Jalur B) dari satu tempat."
+        description="Kelola akun TikTok untuk mengambil followers dan mengirim DM."
         actions={
           canManage && (
             <Button onClick={openCreate}>
@@ -117,25 +121,27 @@ export function AccountsPage() {
               aria-label="Cari akun"
             />
           </div>
-          <Select
-            value={lane}
-            onValueChange={(v) => {
-              setLane(v);
-              setPage(1);
-            }}
-          >
-            <SelectTrigger className="md:w-52" aria-label="Filter jalur">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Semua jalur</SelectItem>
-              {MARKETING_LANES.map((l) => (
-                <SelectItem key={l} value={l}>
-                  {LANE_LABELS[l]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!HIDE_OFFICIAL_LANE && (
+            <Select
+              value={lane}
+              onValueChange={(v) => {
+                setLane(v);
+                setPage(1);
+              }}
+            >
+              <SelectTrigger className="md:w-52" aria-label="Filter jalur">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Semua jalur</SelectItem>
+                {VISIBLE_MARKETING_LANES.map((l) => (
+                  <SelectItem key={l} value={l}>
+                    {LANE_LABELS[l]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select
             value={status}
             onValueChange={(v) => {
@@ -176,7 +182,7 @@ export function AccountsPage() {
             <EmptyState
               icon={Smartphone}
               title="Belum ada akun TikTok"
-              description="Tambahkan akun utama (terverifikasi) ke Jalur A dan akun tambahan ke Jalur B."
+              description="Tambahkan akun TikTok untuk mulai mengambil followers dan menjangkau prospek."
               action={
                 canManage && (
                   <Button onClick={openCreate}>
@@ -192,7 +198,7 @@ export function AccountsPage() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Akun</TableHead>
-                  <TableHead>Jalur</TableHead>
+                  {!HIDE_OFFICIAL_LANE && <TableHead>Jalur</TableHead>}
                   <TableHead className="text-right">Followers</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Integrasi</TableHead>
@@ -216,7 +222,7 @@ export function AccountsPage() {
                             @{a.username}
                             {a.isVerified && (
                               <BadgeCheck
-                                className="size-4 text-primary"
+                                className="size-4 text-brand-text"
                                 aria-label="Terverifikasi"
                               />
                             )}
@@ -224,12 +230,19 @@ export function AccountsPage() {
                           <span className="block max-w-56 truncate text-xs text-muted-foreground">
                             {a.displayName}
                           </span>
+                          {user.role === 'SUPER_ADMIN' && (
+                            <span className="block text-xs text-muted-foreground">
+                              Pemilik: {a.owner?.name ?? 'Belum ditetapkan'}
+                            </span>
+                          )}
                         </span>
                       </Link>
                     </TableCell>
-                    <TableCell>
-                      <LaneBadge lane={a.lane} />
-                    </TableCell>
+                    {!HIDE_OFFICIAL_LANE && (
+                      <TableCell>
+                        <LaneBadge lane={a.lane} />
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <div className="font-medium tabular-nums">
                         {formatNumber(a.followersCount)}

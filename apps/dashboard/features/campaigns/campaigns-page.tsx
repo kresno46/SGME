@@ -5,7 +5,6 @@ import {
   CAMPAIGN_STATUSES,
   CAMPAIGN_TYPE_LABELS,
   LANE_LABELS,
-  MARKETING_LANES,
   PERMISSIONS,
 } from '@smge/shared';
 import type { CampaignDto } from '@smge/types';
@@ -48,6 +47,11 @@ import { LaneBadge } from '@/features/accounts/status-badges';
 import { useAuth } from '@/hooks/use-auth';
 import { useDebounce } from '@/hooks/use-debounce';
 import { formatNumber } from '@/lib/utils';
+import {
+  HIDE_OFFICIAL_LANE,
+  VISIBLE_MARKETING_LANES,
+  visibleLaneFilter,
+} from '@/lib/marketing-scope';
 import { useCampaigns, useDeleteCampaign } from './api';
 import { CampaignFormDialog } from './campaign-form-dialog';
 
@@ -80,7 +84,7 @@ export function CampaignsPage() {
     page,
     pageSize: 20,
     search: debounced || undefined,
-    lane: lane === ALL ? undefined : lane,
+    lane: visibleLaneFilter(lane === ALL ? undefined : lane),
     status: status === ALL ? undefined : status,
   });
   const filtered = !!debounced || lane !== ALL || status !== ALL;
@@ -99,7 +103,7 @@ export function CampaignsPage() {
     <>
       <PageHeader
         title="Campaign"
-        description="Kelola aktivitas pemasaran Jalur A dan Jalur B beserta hasilnya."
+        description="Kelola campaign outreach beserta hasilnya."
         actions={
           canManage && (
             <Button onClick={openCreate}>
@@ -120,19 +124,21 @@ export function CampaignsPage() {
               aria-label="Cari campaign"
             />
           </div>
-          <Select value={lane} onValueChange={reset(setLane)}>
-            <SelectTrigger className="md:w-52" aria-label="Filter jalur">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Semua jalur</SelectItem>
-              {MARKETING_LANES.map((l) => (
-                <SelectItem key={l} value={l}>
-                  {LANE_LABELS[l]}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {!HIDE_OFFICIAL_LANE && (
+            <Select value={lane} onValueChange={reset(setLane)}>
+              <SelectTrigger className="md:w-52" aria-label="Filter jalur">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>Semua jalur</SelectItem>
+                {VISIBLE_MARKETING_LANES.map((l) => (
+                  <SelectItem key={l} value={l}>
+                    {LANE_LABELS[l]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <Select value={status} onValueChange={reset(setStatus)}>
             <SelectTrigger className="md:w-48" aria-label="Filter status">
               <SelectValue />
@@ -176,7 +182,7 @@ export function CampaignsPage() {
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead>Campaign</TableHead>
-                  <TableHead>Jalur</TableHead>
+                  {!HIDE_OFFICIAL_LANE && <TableHead>Jalur</TableHead>}
                   <TableHead>Status</TableHead>
                   <TableHead>Periode</TableHead>
                   <TableHead className="text-right">Prospek</TableHead>
@@ -198,9 +204,11 @@ export function CampaignsPage() {
                         {CAMPAIGN_TYPE_LABELS[c.type]} · {c.accounts.length} akun
                       </p>
                     </TableCell>
-                    <TableCell>
-                      <LaneBadge lane={c.lane} />
-                    </TableCell>
+                    {!HIDE_OFFICIAL_LANE && (
+                      <TableCell>
+                        <LaneBadge lane={c.lane} />
+                      </TableCell>
+                    )}
                     <TableCell>
                       <CampaignStatusBadge status={c.status} />
                     </TableCell>

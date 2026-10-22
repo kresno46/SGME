@@ -6,11 +6,16 @@ import type {
 } from '@smge/types';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { isVisibleLane } from '@/lib/marketing-scope';
 
 export function useIntegrationsOverview() {
   return useQuery({
     queryKey: ['integrations', 'overview'],
     queryFn: () => api.get<IntegrationsOverviewDto>('/integrations/overview'),
+    select: (data) => ({
+      ...data,
+      accounts: data.accounts.filter((a) => isVisibleLane(a.account.lane)),
+    }),
   });
 }
 

@@ -201,7 +201,7 @@ export class ConversionsService {
 
   /** Cocokkan prospek: ID pengguna Solid Mini → kontak ternormalisasi. */
   private async matchLead(input: ConversionInput) {
-    const byUser = await this.prisma.lead.findUnique({
+    const byUser = await this.prisma.lead.findFirst({
       where: { solidMiniUserId: input.externalUserId },
     });
     if (byUser && !byUser.deletedAt) return byUser;

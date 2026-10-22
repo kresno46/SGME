@@ -1,3 +1,4 @@
+import { ownerScope, scopeUser } from '../common/data-scope';
 import {
   BadGatewayException,
   BadRequestException,
@@ -159,6 +160,22 @@ export class AiService {
       this.spentThisMonth(),
     ]);
     const model = this.provider ? this.resolveModel(s) : null;
+    const actor = scopeUser();
+    const visibleSpent =
+      actor && actor.role !== 'SUPER_ADMIN'
+        ? Number(
+            (
+              await this.prisma.aiInteraction.aggregate({
+                where: {
+                  userId: actor.id,
+                  createdAt: { gte: startOfMonth() },
+                  isSimulation: false,
+                },
+                _sum: { costUsd: true },
+              })
+            )._sum.costUsd ?? 0,
+          )
+        : spent;
     return {
       configured: !!this.provider,
       provider: this.provider?.name ?? null,
@@ -170,7 +187,7 @@ export class AiService {
         : 'AI belum dikonfigurasi. Isi OPENAI_API_KEY di file .env server lalu restart API.',
       publishedDocuments: published,
       monthlyBudgetUsd: s.monthlyBudgetUsd,
-      spentThisMonthUsd: spent,
+      spentThisMonthUsd: visibleSpent,
       priceConfigured: !!(model && s.pricing[model]),
     };
   }
@@ -294,8 +311,8 @@ export class AiService {
   // ------------------------------------------------------------ konteks prospek (tanpa data kontak)
 
   private async leadContext(leadId: string) {
-    const lead = await this.prisma.lead.findUnique({
-      where: { id: leadId },
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: leadId, ...ownerScope() },
       include: {
         sourceCampaign: { select: { name: true } },
         consents: { where: { status: 'GRANTED' }, select: { channel: true } },
@@ -332,6 +349,7 @@ export class AiService {
   // ------------------------------------------------------------ fitur
 
   async ask(user: RequestUser, question: string, leadId?: string | null): Promise<AiAnswerDto> {
+    const ctx = leadId ? await this.leadContext(leadId) : null;
     const kb = await this.knowledge.buildContext(question);
     if (!kb.sources.length) {
       return {
@@ -346,7 +364,6 @@ export class AiService {
         sources: [],
       };
     }
-    const ctx = leadId ? await this.leadContext(leadId) : null;
     const { out, meta } = await this.run({
       type: 'KNOWLEDGE_QA',
       user,
@@ -378,8 +395,8 @@ export class AiService {
   ): Promise<AiReplySuggestionDto> {
     let leadId = input.leadId ?? null;
     if (input.taskId) {
-      const task = await this.prisma.outreachTask.findUnique({
-        where: { id: input.taskId },
+      const task = await this.prisma.outreachTask.findFirst({
+        where: { id: input.taskId, ...ownerScope() },
         select: { leadId: true },
       });
       if (!task) throw new NotFoundException('Tugas tidak ditemukan');
@@ -420,8 +437,8 @@ export class AiService {
     taskId: string,
     instructions: string | null,
   ): Promise<AiDraftDto> {
-    const task = await this.prisma.outreachTask.findUnique({
-      where: { id: taskId },
+    const task = await this.prisma.outreachTask.findFirst({
+      where: { id: taskId, ...ownerScope() },
       include: {
         tiktokAccount: { select: { username: true } },
         campaign: { select: { name: true, description: true } },

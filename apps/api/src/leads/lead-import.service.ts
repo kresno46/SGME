@@ -1,3 +1,4 @@
+import { ownerScope, assertReferences } from '../common/data-scope';
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { ContactChannel, Prisma } from '@smge/database';
 import {
@@ -157,6 +158,7 @@ export class LeadImportService {
     const [existing, blocked] = await Promise.all([
       this.prisma.lead.findMany({
         where: {
+          ...ownerScope(),
           OR: [
             { tiktokUsernameNormalized: { in: us } },
             { emailNormalized: { in: es } },
@@ -239,6 +241,10 @@ export class LeadImportService {
     opts: LeadImportOptions,
     meta: RequestMeta,
   ): Promise<LeadImportResultDto> {
+    await assertReferences(this.prisma, {
+      accountId: opts.sourceAccountId,
+      campaignId: opts.sourceCampaignId,
+    });
     const { rows, invalid } = this.parse(buffer);
     const classified = await this.classify(rows);
     const result: LeadImportResultDto = {
@@ -278,6 +284,8 @@ export class LeadImportService {
             notes: r.notes,
             tags: [...new Set([...opts.tags, ...r.tags])],
             source: 'IMPORT',
+            ownerId: actor.id,
+            operatorId: actor.id,
             sourceAccountId: opts.sourceAccountId,
             sourceCampaignId: opts.sourceCampaignId,
           },
@@ -323,7 +331,7 @@ export class LeadImportService {
 
   /** Mengisi kolom kosong prospek lama tanpa menimpa data yang sudah ada. */
   private async mergeInto(leadId: string, r: ParsedRow, opts: LeadImportOptions, actorId: string) {
-    const lead = await this.prisma.lead.findUnique({ where: { id: leadId } });
+    const lead = await this.prisma.lead.findFirst({ where: { id: leadId, ...ownerScope() } });
     if (!lead || lead.deletedAt || lead.doNotContact) return false;
     const data: Prisma.LeadUpdateInput = {};
     const filled: string[] = [];

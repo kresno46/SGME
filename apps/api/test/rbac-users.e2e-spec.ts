@@ -23,14 +23,26 @@ describe('RBAC & manajemen pengguna (integration)', () => {
     await agent.get('/api/audit-logs').expect(403);
   });
 
-  it('Marketing Operator tidak dapat mengelola akun TikTok atau pengguna', async () => {
+  it('Marketing Operator dapat membuat akun miliknya tetapi tidak mengelola pengguna', async () => {
     const { agent, csrf } = await loginAs(app, 'MARKETING_OPERATOR');
-    await agent.post('/api/tiktok-accounts').set('x-csrf-token', csrf).send(account).expect(403);
+    await agent.post('/api/tiktok-accounts').set('x-csrf-token', csrf).send(account).expect(201);
     await agent.get('/api/users').expect(403);
   });
 
-  it('Admin dapat membuat Operator tetapi tidak dapat membuat Admin/Super Admin', async () => {
-    const { agent, csrf } = await loginAs(app, 'ADMIN');
+  it('hanya Super Admin mengelola pengguna; validasi dan email unik tetap berlaku', async () => {
+    const denied = await loginAs(app, 'ADMIN');
+    await denied.agent.get('/api/users').expect(403);
+    await denied.agent
+      .post('/api/users')
+      .set('x-csrf-token', denied.csrf)
+      .send({
+        name: 'Denied',
+        email: 'denied@test.local',
+        password: 'PasswordKuat123',
+        role: 'MARKETING_OPERATOR',
+      })
+      .expect(403);
+    const { agent, csrf } = await loginAs(app, 'SUPER_ADMIN');
     const user = { name: 'Operator Baru', email: 'baru@test.local', password: 'PasswordKuat123' };
 
     const created = await agent
@@ -45,12 +57,12 @@ describe('RBAC & manajemen pengguna (integration)', () => {
       .post('/api/users')
       .set('x-csrf-token', csrf)
       .send({ ...user, email: 'x@test.local', role: 'ADMIN' })
-      .expect(403);
+      .expect(201);
     await agent
       .post('/api/users')
       .set('x-csrf-token', csrf)
       .send({ ...user, email: 'y@test.local', role: 'SUPER_ADMIN' })
-      .expect(403);
+      .expect(201);
 
     // email duplikat
     await agent
@@ -82,12 +94,12 @@ describe('RBAC & manajemen pengguna (integration)', () => {
       .patch(`/api/users/${self.id}`)
       .set('x-csrf-token', csrf)
       .send({ role: 'VIEWER' })
-      .expect(400);
+      .expect(403);
     await agent
       .patch(`/api/users/${self.id}`)
       .set('x-csrf-token', csrf)
       .send({ name: 'Nama Baru' })
-      .expect(200);
+      .expect(403);
   });
 
   it('menonaktifkan pengguna langsung mengakhiri sesinya', async () => {
@@ -127,7 +139,7 @@ describe('RBAC & manajemen pengguna (integration)', () => {
   });
 
   it('log audit dapat dibaca Admin dan menyensor data sensitif', async () => {
-    const { agent, csrf } = await loginAs(app, 'ADMIN');
+    const { agent, csrf } = await loginAs(app, 'SUPER_ADMIN');
     const target = await prisma.user.findUniqueOrThrow({ where: { email: TEST_USERS.VIEWER } });
     await agent
       .post(`/api/users/${target.id}/reset-password`)

@@ -38,6 +38,7 @@ import {
 import { Input, Textarea } from '@/components/ui/primitives';
 import { useAccountOptions, useAssignableUsers, useCampaignOptions } from '@/hooks/use-lookups';
 import { api, ApiError, applyServerErrors } from '@/lib/api';
+import { HIDE_OFFICIAL_LANE } from '@/lib/marketing-scope';
 import { toDateTimeLocal } from '@/lib/utils';
 import { useInvalidateLeads } from './api';
 
@@ -187,7 +188,7 @@ function LeadForm({ lead, onDone }: { lead?: LeadDetailDto | null; onDone: () =>
               <li key={d.id}>
                 <Link
                   href={`/leads/${d.id}`}
-                  className="text-primary hover:underline"
+                  className="text-brand-text hover:underline"
                   onClick={onDone}
                 >
                   {d.name ?? 'Prospek tanpa nama'}
@@ -262,14 +263,16 @@ function LeadForm({ lead, onDone }: { lead?: LeadDetailDto | null; onDone: () =>
             options={(accounts.data ?? []).map((a) => ({ value: a.id, label: `@${a.username}` }))}
           />
         </FormField>
-        <FormField label="Campaign sumber">
-          <OptionalSelect
-            control={form.control}
-            name="sourceCampaignId"
-            placeholder="Tidak ada"
-            options={(campaigns.data ?? []).map((c) => ({ value: c.id, label: c.name }))}
-          />
-        </FormField>
+        {!HIDE_OFFICIAL_LANE && (
+          <FormField label="Campaign sumber">
+            <OptionalSelect
+              control={form.control}
+              name="sourceCampaignId"
+              placeholder="Tidak ada"
+              options={(campaigns.data ?? []).map((c) => ({ value: c.id, label: c.name }))}
+            />
+          </FormField>
+        )}
         <FormField label="Operator">
           <OptionalSelect
             control={form.control}

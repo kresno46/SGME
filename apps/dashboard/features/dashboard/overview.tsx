@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/primitives';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
+import { HIDE_OFFICIAL_LANE, VISIBLE_MARKETING_LANES, isVisibleLane } from '@/lib/marketing-scope';
 import { formatCompact, formatDateTime, formatNumber } from '@/lib/utils';
 
 export const LANE_COLOR: Record<MarketingLane, string> = {
@@ -63,12 +64,19 @@ export function DashboardOverviewPage() {
   const d = q.data;
   const loading = q.isPending;
   const m = d?.metrics;
+  const visibleAccounts = d?.accounts.byLane.filter((a) => isVisibleLane(a.lane));
+  const accountTotal = HIDE_OFFICIAL_LANE
+    ? visibleAccounts?.reduce((sum, a) => sum + a.accounts, 0)
+    : d?.accounts.total;
+  const followerTotal = HIDE_OFFICIAL_LANE
+    ? visibleAccounts?.reduce((sum, a) => sum + a.followers, 0)
+    : d?.accounts.totalFollowers;
 
   return (
     <>
       <PageHeader
         title={`Halo, ${user.name.split(' ')[0]}`}
-        description="Ringkasan performa pemasaran Solid Mini di seluruh akun TikTok."
+        description="Pantau akun TikTok, followers, prospek, dan aktivitas outreach DM."
       />
 
       {q.isError && (
@@ -82,16 +90,19 @@ export function DashboardOverviewPage() {
           label="Akun TikTok"
           icon={Smartphone}
           loading={loading}
-          value={formatNumber(d?.accounts.total ?? 0)}
-          hint={d && <span>{formatNumber(d.accounts.active)} aktif</span>}
+          value={formatNumber(accountTotal ?? 0)}
+          hint={!HIDE_OFFICIAL_LANE && d && <span>{formatNumber(d.accounts.active)} aktif</span>}
         />
         <StatCard
           label="Total followers"
           icon={Users}
           loading={loading}
-          value={formatNumber(d?.accounts.totalFollowers ?? 0)}
+          value={formatNumber(followerTotal ?? 0)}
           source={
-            d && d.accounts.followersBySource.ACTUAL === 0 && d.accounts.totalFollowers > 0
+            !HIDE_OFFICIAL_LANE &&
+            d &&
+            d.accounts.followersBySource.ACTUAL === 0 &&
+            d.accounts.totalFollowers > 0
               ? 'MANUAL'
               : null
           }
@@ -106,12 +117,14 @@ export function DashboardOverviewPage() {
             )
           }
         />
-        <StatCard
-          label="Campaign aktif"
-          icon={Megaphone}
-          loading={loading}
-          value={formatNumber(m?.activeCampaigns.value ?? 0)}
-        />
+        {!HIDE_OFFICIAL_LANE && (
+          <StatCard
+            label="Campaign aktif"
+            icon={Megaphone}
+            loading={loading}
+            value={formatNumber(m?.activeCampaigns.value ?? 0)}
+          />
+        )}
         <StatCard
           label="Total prospek"
           icon={UserPlus}
@@ -124,32 +137,36 @@ export function DashboardOverviewPage() {
           loading={loading}
           value={formatNumber(m?.interestedLeads.value ?? 0)}
         />
-        <StatCard
-          label="Percakapan"
-          icon={MessagesSquare}
-          loading={loading}
-          value={formatNumber(m?.conversations.value ?? 0)}
-        />
+        {!HIDE_OFFICIAL_LANE && (
+          <StatCard
+            label="Percakapan"
+            icon={MessagesSquare}
+            loading={loading}
+            value={formatNumber(m?.conversations.value ?? 0)}
+          />
+        )}
         <StatCard
           label="Tugas outbound terbuka"
           icon={Send}
           loading={loading}
           value={formatNumber(m?.outreachTasks.value ?? 0)}
         />
-        <StatCard
-          label="Registrasi terverifikasi"
-          icon={UserCheck}
-          loading={loading}
-          value={formatNumber(m?.registrations.value ?? 0)}
-          hint={
-            m && (
-              <span>
-                {formatNumber(m.activeUsers.value ?? 0)} aktif ·{' '}
-                {formatNumber(m.registrationsOperator.value ?? 0)} dikonfirmasi operator
-              </span>
-            )
-          }
-        />
+        {!HIDE_OFFICIAL_LANE && (
+          <StatCard
+            label="Registrasi terverifikasi"
+            icon={UserCheck}
+            loading={loading}
+            value={formatNumber(m?.registrations.value ?? 0)}
+            hint={
+              m && (
+                <span>
+                  {formatNumber(m.activeUsers.value ?? 0)} aktif ·{' '}
+                  {formatNumber(m.registrationsOperator.value ?? 0)} dikonfirmasi operator
+                </span>
+              )
+            }
+          />
+        )}
       </div>
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -164,11 +181,11 @@ export function DashboardOverviewPage() {
           <CardContent>
             {loading ? (
               <Skeleton className="h-72 w-full" />
-            ) : !d?.accounts.top.length ? (
+            ) : !d?.accounts.top.filter((a) => isVisibleLane(a.lane)).length ? (
               <EmptyState
                 icon={Smartphone}
                 title="Belum ada akun TikTok"
-                description="Tambahkan akun Official dan Outbound untuk mulai memantau performa."
+                description="Tambahkan akun TikTok untuk mulai memantau performa."
                 action={
                   <Button asChild size="sm">
                     <Link href="/accounts">Kelola akun</Link>
@@ -176,50 +193,57 @@ export function DashboardOverviewPage() {
                 }
               />
             ) : (
-              <FollowersChart data={d.accounts.top} />
+              <FollowersChart data={d.accounts.top.filter((a) => isVisibleLane(a.lane))} />
             )}
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Jalur A vs Jalur B</CardTitle>
-            <CardDescription>Sebaran akun dan followers per jalur</CardDescription>
+            <CardTitle>
+              {HIDE_OFFICIAL_LANE ? 'Ringkasan akun outreach' : 'Jalur A vs Jalur B'}
+            </CardTitle>
+            <CardDescription>Jumlah akun dan followers</CardDescription>
           </CardHeader>
           <CardContent className="grid gap-3">
             {loading
               ? [0, 1].map((i) => <Skeleton key={i} className="h-24 w-full" />)
-              : d?.accounts.byLane.map((l) => {
-                  const share = d.accounts.totalFollowers
-                    ? (l.followers / d.accounts.totalFollowers) * 100
-                    : 0;
-                  return (
-                    <div key={l.lane} className="rounded-lg border p-4">
-                      <div className="flex items-center gap-2 text-sm font-medium">
-                        <LaneDot lane={l.lane} /> {LANE_LABELS[l.lane]}
-                      </div>
-                      <p className="mt-2 text-2xl font-semibold tabular-nums">
-                        {formatNumber(l.followers)}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        followers dari {formatNumber(l.accounts)} akun
-                        {l.simulatedFollowers > 0 &&
-                          ` · ${formatCompact(l.simulatedFollowers)} simulasi tidak dihitung`}
-                      </p>
-                      <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden>
+              : d?.accounts.byLane
+                  .filter((l) => isVisibleLane(l.lane))
+                  .map((l) => {
+                    const share = d.accounts.totalFollowers
+                      ? (l.followers / d.accounts.totalFollowers) * 100
+                      : 0;
+                    return (
+                      <div key={l.lane} className="rounded-lg border p-4">
+                        <div className="flex items-center gap-2 text-sm font-medium">
+                          <LaneDot lane={l.lane} /> {LANE_LABELS[l.lane]}
+                        </div>
+                        <p className="mt-2 text-2xl font-semibold tabular-nums">
+                          {formatNumber(l.followers)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          followers dari {formatNumber(l.accounts)} akun
+                          {l.simulatedFollowers > 0 &&
+                            ` · ${formatCompact(l.simulatedFollowers)} simulasi tidak dihitung`}
+                        </p>
                         <div
-                          className="h-full rounded-full"
-                          style={{ width: `${share}%`, background: LANE_COLOR[l.lane] }}
-                        />
+                          className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
+                          aria-hidden
+                        >
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${share}%`, background: LANE_COLOR[l.lane] }}
+                          />
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
           </CardContent>
         </Card>
       </div>
 
-      {d && (
+      {d && !HIDE_OFFICIAL_LANE && (
         <p className="mt-6 text-xs text-muted-foreground">
           Diperbarui {formatDateTime(d.generatedAt)}. Metrik registrasi, aktivasi, dan biaya per
           konversi akan tersedia setelah integrasi backend Solid Mini (Fase 5).
@@ -235,7 +259,7 @@ export function LaneLegend() {
       className="flex flex-wrap gap-4 pt-1 text-xs text-muted-foreground"
       aria-label="Legenda jalur"
     >
-      {(['OFFICIAL', 'OUTBOUND'] as const).map((lane) => (
+      {VISIBLE_MARKETING_LANES.map((lane) => (
         <span key={lane} className="inline-flex items-center gap-1.5">
           <LaneDot lane={lane} /> {LANE_LABELS[lane]}
         </span>
@@ -256,7 +280,7 @@ function FollowersChart({ data }: { data: TopAccount[] }) {
     >
       <svg width="0" height="0" className="absolute">
         <defs>
-          {(['OFFICIAL', 'OUTBOUND'] as const).map((lane) => (
+          {VISIBLE_MARKETING_LANES.map((lane) => (
             <pattern
               key={lane}
               id={`sim-${lane}`}
@@ -327,7 +351,7 @@ function FollowersTooltip({
       <p className="flex items-center gap-1.5 font-medium">
         {a.label}{' '}
         {a.isVerified && (
-          <BadgeCheck className="size-3.5 text-primary" aria-label="Terverifikasi" />
+          <BadgeCheck className="size-3.5 text-brand-text" aria-label="Terverifikasi" />
         )}
       </p>
       <p className="text-xs text-muted-foreground">{a.displayName}</p>

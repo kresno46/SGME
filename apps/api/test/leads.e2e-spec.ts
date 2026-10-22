@@ -15,7 +15,7 @@ describe('CRM prospek (integration)', () => {
   beforeEach(async () => {
     await resetDatabase(prisma);
     op = await loginAs(app, 'MARKETING_OPERATOR');
-    admin = await loginAs(app, 'ADMIN');
+    admin = await loginAs(app, 'SUPER_ADMIN');
   });
   afterAll(() => app.close());
 
@@ -142,14 +142,22 @@ describe('CRM prospek (integration)', () => {
     const me = await prisma.user.findFirstOrThrow({ where: { email: 'operator@test.local' } });
     await prisma.lead.createMany({
       data: [
-        { name: 'A', source: 'MANUAL', status: 'INTERESTED', tags: ['vip'], operatorId: me.id },
         {
+          ownerId: me.id,
+          name: 'A',
+          source: 'MANUAL',
+          status: 'INTERESTED',
+          tags: ['vip'],
+          operatorId: me.id,
+        },
+        {
+          ownerId: me.id,
           name: 'B',
           source: 'MANUAL',
           status: 'NEW',
           nextFollowUpAt: new Date(Date.now() - 3600_000),
         },
-        { name: 'C', source: 'MANUAL', status: 'QUALIFIED', tags: ['vip'] },
+        { ownerId: me.id, name: 'C', source: 'MANUAL', status: 'QUALIFIED', tags: ['vip'] },
       ],
     });
     const byStatus = await op.agent.get('/api/leads?status=INTERESTED,QUALIFIED').expect(200);
@@ -190,7 +198,11 @@ describe('CRM prospek (integration)', () => {
       email: 'hapus@contoh.com',
       source: 'MANUAL',
     }).expect(201);
-    await op.agent.delete(`/api/leads/${lead.body.id}`).set('x-csrf-token', op.csrf).expect(403);
+    const viewer = await loginAs(app, 'VIEWER');
+    await viewer.agent
+      .delete(`/api/leads/${lead.body.id}`)
+      .set('x-csrf-token', viewer.csrf)
+      .expect(403);
     await admin.agent
       .delete(`/api/leads/${lead.body.id}`)
       .set('x-csrf-token', admin.csrf)
@@ -206,7 +218,7 @@ describe('CRM prospek (integration)', () => {
 
   it('export CSV & Excel hanya untuk role berwenang dan tercatat di audit', async () => {
     await create(op, { name: 'Ekspor', tiktokUsername: 'ekspor_1', source: 'MANUAL' }).expect(201);
-    await op.agent.get('/api/leads/export').expect(403);
+    await op.agent.get('/api/leads/export').expect(200);
 
     const csv = await admin.agent.get('/api/leads/export?format=csv').expect(200);
     expect(csv.headers['content-type']).toMatch(/text\/csv/);
@@ -225,7 +237,7 @@ describe('CRM prospek (integration)', () => {
     const wb = new ExcelJS.Workbook();
     await wb.xlsx.load(xlsx.body as Buffer);
     expect(wb.getWorksheet('Prospek')!.getRow(2).getCell(2).value).toBe('Ekspor');
-    expect(await prisma.auditLog.count({ where: { action: 'lead.exported' } })).toBe(2);
+    expect(await prisma.auditLog.count({ where: { action: 'lead.exported' } })).toBe(3);
   });
 
   describe('import CSV', () => {
@@ -276,7 +288,7 @@ describe('CRM prospek (integration)', () => {
         .post('/api/leads/import')
         .set('x-csrf-token', op.csrf)
         .attach('file', file(), 'p.csv')
-        .expect(403);
+        .expect(400);
       const noBasis = await admin.agent
         .post('/api/leads/import')
         .set('x-csrf-token', admin.csrf)

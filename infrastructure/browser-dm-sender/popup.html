@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>SMGE DM Sender</title>
+  </head>
+  <body>
+    <h1>SMGE DM Sender <small id="version"></small></h1>
+    <p>
+      Login TikTok di browser ini sebagai akun pengirim. Di SMGE, setujui tugas dan masukkan ke
+      antrean Pengiriman browser.
+    </p>
+    <p>
+      Buka tab Outbound SMGE dengan akun pengirim yang dipilih, lalu klik Mulai. Tab SMGE harus
+      tetap terbuka dan login.
+    </p>
+    <label
+      ><input type="checkbox" id="confirm" /> Saya sudah memeriksa penerima dan menyetujui
+      pengiriman pesan di antrean.</label
+    >
+    <button id="start">Mulai dari tab Outbound ini</button
+    ><button id="stop">Hentikan setelah pesan ini</button>
+    <button id="diagnose">Unduh diagnostik chat TikTok</button>
+    <p>
+      Input template memakai izin debugger browser pada tab TikTok yang diproses. Tutup DevTools di
+      tab tersebut saat mengirim.
+    </p>
+    <p id="status" role="status">Memuat…</p>
+    <p>
+      Hasil “terlihat terkirim” berarti pesan terlihat dalam chat browser, bukan bukti sudah dibaca.
+      Login, CAPTCHA, atau identitas yang tidak jelas akan menghentikan antrean.
+    </p>
+    <script src="popup.js"></script>
+  </body>
+</html>

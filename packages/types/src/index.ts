@@ -94,6 +94,7 @@ export interface AccountIntegrationDto {
 }
 
 export interface TikTokAccountDto {
+  owner?: RefDto | null;
   id: string;
   username: string;
   displayName: string;
@@ -219,6 +220,7 @@ type OutreachTaskStatus =
   | 'DRAFT'
   | 'WAITING_REVIEW'
   | 'APPROVED'
+  | 'BROWSER_SENT'
   | 'MANUALLY_SENT'
   | 'REPLIED'
   | 'FOLLOW_UP'
@@ -281,6 +283,7 @@ export interface ConsentDto {
 }
 
 export interface LeadDto {
+  owner?: RefDto | null;
   id: string;
   name: string | null;
   tiktokUsername: string | null;
@@ -550,6 +553,16 @@ export interface AiInteractionDto {
 // =====================================================================
 // Fase 4 — Integrasi TikTok
 // =====================================================================
+
+export interface FollowerImportResultDto {
+  received: number;
+  unique: number;
+  duplicateRows: number;
+  blocked: number;
+  existing: number;
+  self: number;
+  created: number;
+}
 
 export type CapabilityStatus = 'READY' | 'NOT_CONFIGURED' | 'SIMULATION' | 'NOT_VERIFIED';
 

@@ -73,6 +73,7 @@ export const OUTREACH_TASK_STATUSES = values(
   'DRAFT',
   'WAITING_REVIEW',
   'APPROVED',
+  'BROWSER_SENT',
   'MANUALLY_SENT',
   'REPLIED',
   'FOLLOW_UP',

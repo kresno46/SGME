@@ -74,7 +74,7 @@ describe('Autentikasi (integration)', () => {
     expect(locked.body.message).toMatch(/dikunci sementara/);
 
     const viewer = await prisma.user.findUniqueOrThrow({ where: { email: TEST_USERS.VIEWER } });
-    const { agent, csrf } = await loginAs(app, 'ADMIN');
+    const { agent, csrf } = await loginAs(app, 'SUPER_ADMIN');
     await agent.post(`/api/users/${viewer.id}/unlock`).set('x-csrf-token', csrf).expect(200);
     await http()
       .post('/api/auth/login')

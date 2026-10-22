@@ -13,6 +13,8 @@ import {
 } from '@nestjs/common';
 import {
   createTaskSchema,
+  followerImportSchema,
+  type FollowerImport,
   listTasksQuerySchema,
   outboundQueueQuerySchema,
   PERMISSIONS,
@@ -29,10 +31,26 @@ import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { requestMeta } from '../common/utils/request';
 import { LeadsModule } from '../leads/leads.module';
 import { OutboundService } from './outbound.service';
+import { FollowerImportService } from './follower-import.service';
+import { BrowserDmService } from './browser-dm.service';
+import { BrowserDmController } from './browser-dm.controller';
 
 @Controller('outbound')
 export class OutboundController {
-  constructor(private readonly outbound: OutboundService) {}
+  constructor(
+    private readonly outbound: OutboundService,
+    private readonly followers: FollowerImportService,
+  ) {}
+
+  @Post('followers/import')
+  @RequirePermissions(PERMISSIONS.OUTREACH_WORK, PERMISSIONS.LEADS_IMPORT)
+  importFollowers(
+    @CurrentUser() user: RequestUser,
+    @Body(new ZodValidationPipe(followerImportSchema)) body: FollowerImport,
+    @Req() req: Request,
+  ) {
+    return this.followers.import(user, body, requestMeta(req));
+  }
 
   @Get('summary/:accountId')
   @RequirePermissions(PERMISSIONS.OUTREACH_WORK)
@@ -96,5 +114,9 @@ export class OutboundController {
   }
 }
 
-@Module({ imports: [LeadsModule], controllers: [OutboundController], providers: [OutboundService] })
+@Module({
+  imports: [LeadsModule],
+  controllers: [OutboundController, BrowserDmController],
+  providers: [OutboundService, FollowerImportService, BrowserDmService],
+})
 export class OutboundModule {}

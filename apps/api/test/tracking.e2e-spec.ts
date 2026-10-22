@@ -20,7 +20,7 @@ describe('Tracking konversi & analitik (integration)', () => {
   });
   beforeEach(async () => {
     await resetDatabase(prisma);
-    admin = await loginAs(app, 'ADMIN');
+    admin = await loginAs(app, 'SUPER_ADMIN');
     accountId = (
       await prisma.tikTokAccount.create({
         data: { username: 'akun_b', displayName: 'B', lane: 'OUTBOUND' },
@@ -350,12 +350,12 @@ describe('Tracking konversi & analitik (integration)', () => {
     expect(overview.body.metrics.registrationsOperator).toEqual({ value: 1, source: 'MANUAL' });
 
     const viewer = await loginAs(app, 'VIEWER');
-    await viewer.agent.get('/api/analytics/report').expect(200);
+    await viewer.agent.get('/api/analytics/report').expect(403);
   });
 
   it('hanya pengelola campaign yang dapat membuat link', async () => {
     const op = await loginAs(app, 'MARKETING_OPERATOR');
-    await op.agent.get(`/api/campaigns/${campA.id}/tracking-links`).expect(200);
+    await op.agent.get(`/api/campaigns/${campA.id}/tracking-links`).expect(403);
     await op.agent
       .post(`/api/campaigns/${campA.id}/tracking-links`)
       .set('x-csrf-token', op.csrf)

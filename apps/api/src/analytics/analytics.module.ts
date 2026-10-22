@@ -1,3 +1,4 @@
+import { ownerScope, scopeUser } from '../common/data-scope';
 import { Controller, Get, Injectable, Module, Query } from '@nestjs/common';
 import {
   analyticsQuerySchema,
@@ -20,6 +21,8 @@ export class AnalyticsService {
 
   async overview(): Promise<DashboardOverview> {
     const p = this.prisma;
+    const scope = ownerScope();
+    const scoped = !!scopeUser() && scopeUser()!.role !== 'SUPER_ADMIN';
     const [
       accountTotal,
       accountActive,
@@ -37,15 +40,21 @@ export class AnalyticsService {
       verifiedActs,
       operatorRegs,
     ] = await Promise.all([
-      p.tikTokAccount.count(),
-      p.tikTokAccount.count({ where: { status: 'ACTIVE' } }),
-      p.tikTokAccount.groupBy({ by: ['followersSource'], _sum: { followersCount: true } }),
+      p.tikTokAccount.count({ where: scope }),
+      p.tikTokAccount.count({ where: { ...scope, status: 'ACTIVE' } }),
       p.tikTokAccount.groupBy({
+        where: scope,
+        by: ['followersSource'],
+        _sum: { followersCount: true },
+      }),
+      p.tikTokAccount.groupBy({
+        where: scope,
         by: ['lane', 'followersSource'],
         _count: { _all: true },
         _sum: { followersCount: true },
       }),
       p.tikTokAccount.findMany({
+        where: scope,
         orderBy: { followersCount: 'desc' },
         take: 10,
         select: {
@@ -58,22 +67,25 @@ export class AnalyticsService {
           followersSource: true,
         },
       }),
-      p.campaign.count({ where: { status: 'ACTIVE' } }),
-      p.lead.count({ where: { deletedAt: null, dataSource: NOT_SIMULATED } }),
+      scoped ? Promise.resolve(0) : p.campaign.count({ where: { status: 'ACTIVE' } }),
+      p.lead.count({ where: { ...scope, deletedAt: null, dataSource: NOT_SIMULATED } }),
       p.lead.count({
         where: {
+          ...scope,
           deletedAt: null,
           dataSource: NOT_SIMULATED,
           status: { in: ['INTERESTED', 'QUALIFIED'] },
         },
       }),
-      p.conversation.count({ where: { dataSource: NOT_SIMULATED } }),
-      p.outreachTask.count({ where: { status: { notIn: ['COMPLETED', 'CANCELLED'] } } }),
-      p.user.count(),
-      p.user.count({ where: { status: 'ACTIVE' } }),
-      p.$queryRaw<
-        [{ n: bigint }]
-      >`SELECT count(DISTINCT external_user_id) AS n FROM conversion_events WHERE type = 'REGISTRATION' AND is_verified = true AND data_source <> 'SIMULATED'`,
+      scoped ? Promise.resolve(0) : p.conversation.count({ where: { dataSource: NOT_SIMULATED } }),
+      p.outreachTask.count({ where: { ...scope, status: { notIn: ['COMPLETED', 'CANCELLED'] } } }),
+      scoped ? Promise.resolve(1) : p.user.count(),
+      scoped ? Promise.resolve(1) : p.user.count({ where: { status: 'ACTIVE' } }),
+      scoped
+        ? Promise.resolve([{ n: 0n }])
+        : p.$queryRaw<
+            [{ n: bigint }]
+          >`SELECT count(DISTINCT external_user_id) AS n FROM conversion_events WHERE type = 'REGISTRATION' AND is_verified = true AND data_source <> 'SIMULATED'`,
       p.$queryRaw<
         [{ n: bigint }]
       >`SELECT count(DISTINCT external_user_id) AS n FROM conversion_events WHERE type = 'ACTIVATION' AND is_verified = true AND data_source <> 'SIMULATED'`,

@@ -14,7 +14,7 @@ describe('Campaign (integration)', () => {
   });
   beforeEach(async () => {
     await resetDatabase(prisma);
-    admin = await loginAs(app, 'ADMIN');
+    admin = await loginAs(app, 'SUPER_ADMIN');
     official = (
       await prisma.tikTokAccount.create({
         data: { username: 'resmi', displayName: 'Resmi', lane: 'OFFICIAL' },
@@ -116,9 +116,9 @@ describe('Campaign (integration)', () => {
     expect(list.body.total).toBe(0); // arsip disembunyikan secara default
   });
 
-  it('Marketing Operator hanya dapat melihat campaign', async () => {
+  it('Marketing Operator tidak mengakses campaign global', async () => {
     const op = await loginAs(app, 'MARKETING_OPERATOR');
-    await op.agent.get('/api/campaigns').expect(200);
+    await op.agent.get('/api/campaigns').expect(403);
     await op.agent
       .post('/api/campaigns')
       .set('x-csrf-token', op.csrf)

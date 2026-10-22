@@ -21,10 +21,21 @@ export default tseslint.config(
   {
     languageOptions: { globals: { ...globals.node } },
     rules: {
-      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
+      ],
       '@typescript-eslint/consistent-type-imports': 'off',
       'no-console': ['warn', { allow: ['warn', 'error'] }],
     },
+  },
+  {
+    files: [
+      'infrastructure/follower-collector/{collector,popup}.js',
+      'infrastructure/browser-dm-sender/*.js',
+      'infrastructure/browser-dm-sender/native-browser.test.mjs',
+    ],
+    languageOptions: { globals: { ...globals.browser, chrome: 'readonly' } },
   },
   {
     files: ['**/*.js', '**/*.cjs'],
@@ -32,7 +43,12 @@ export default tseslint.config(
   },
   {
     // Seed & test boleh menulis ke console
-    files: ['packages/database/prisma/**', 'infrastructure/scripts/**', '**/test/**', '**/*.spec.ts'],
+    files: [
+      'packages/database/prisma/**',
+      'infrastructure/scripts/**',
+      '**/test/**',
+      '**/*.spec.ts',
+    ],
     rules: { 'no-console': 'off' },
   },
   {

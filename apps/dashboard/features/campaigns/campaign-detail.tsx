@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle, Skeleton } from '@/components
 import { LaneBadge } from '@/features/accounts/status-badges';
 import { useAuth } from '@/hooks/use-auth';
 import { formatDateTime, formatNumber } from '@/lib/utils';
+import { HIDE_OFFICIAL_LANE } from '@/lib/marketing-scope';
 import { useCampaign } from './api';
 import { CampaignFormDialog } from './campaign-form-dialog';
 import { TrackingLinksCard } from './tracking-links-card';
@@ -102,8 +103,12 @@ export function CampaignDetail({ id }: { id: string }) {
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
-              <dt className="text-muted-foreground">Jalur</dt>
-              <dd>{LANE_LABELS[c.lane]}</dd>
+              {!HIDE_OFFICIAL_LANE && (
+                <>
+                  <dt className="text-muted-foreground">Jalur</dt>
+                  <dd>{LANE_LABELS[c.lane]}</dd>
+                </>
+              )}
               <dt className="text-muted-foreground">Kode tracking</dt>
               <dd className="flex items-center gap-2">
                 <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{c.trackingCode}</code>

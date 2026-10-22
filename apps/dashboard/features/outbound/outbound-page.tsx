@@ -18,6 +18,7 @@ import {
   MessageSquareReply,
   Plus,
   Search,
+  Send,
   Smartphone,
   Users,
 } from 'lucide-react';
@@ -69,20 +70,27 @@ import { useAuth } from '@/hooks/use-auth';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useAccountOptions, useCampaignOptions } from '@/hooks/use-lookups';
 import { formatNumber, formatRelative } from '@/lib/utils';
+import { HIDE_OFFICIAL_LANE } from '@/lib/marketing-scope';
 import { leadContact } from '../leads/leads-page';
 import { useCreateTask, useOutboundSummary, useQueue, useTasks, useTemplates } from './api';
 import { TaskDialog } from './task-dialog';
+import { BulkDmDialog } from './bulk-dm-dialog';
+import { FollowersDialog } from './followers-dialog';
+import { BrowserDmPanel } from './browser-dm-panel';
 import { TemplatesTab } from './templates-tab';
 
 const TASK_GROUPS: { value: string; label: string; statuses: OutreachTaskStatus[] }[] = [
   { value: 'action', label: 'Perlu tindakan', statuses: ['DRAFT', 'APPROVED', 'FOLLOW_UP'] },
   { value: 'review', label: 'Menunggu review', statuses: ['WAITING_REVIEW'] },
-  { value: 'sent', label: 'Menunggu balasan', statuses: ['MANUALLY_SENT'] },
+  { value: 'sent', label: 'Menunggu balasan', statuses: ['MANUALLY_SENT', 'BROWSER_SENT'] },
   { value: 'replied', label: 'Dibalas', statuses: ['REPLIED'] },
   { value: 'closed', label: 'Ditutup', statuses: ['COMPLETED', 'CANCELLED'] },
 ];
 
 export function OutboundPage() {
+  const { can, user } = useAuth();
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [followersOpen, setFollowersOpen] = useState(false);
   const router = useRouter();
   const params = useSearchParams();
   const accounts = useAccountOptions('OUTBOUND');
@@ -108,7 +116,7 @@ export function OutboundPage() {
     <>
       <PageHeader
         title="Outbound Workstation"
-        description="Penjangkauan personal Jalur B: antrean prospek → draft → review → kirim manual → catat hasil."
+        description="Pilih penerima dan pesan, tinjau, lalu mulai pengiriman melalui browser."
         actions={
           accounts.data && accounts.data.length > 0 ? (
             <Select value={accountId ?? undefined} onValueChange={(v) => setParam('account', v)}>
@@ -120,6 +128,7 @@ export function OutboundPage() {
                 {accounts.data.map((a) => (
                   <SelectItem key={a.id} value={a.id}>
                     @{a.username} {a.status !== 'ACTIVE' && '(tidak aktif)'}
+                    {user.role === 'SUPER_ADMIN' && ` · ${a.owner?.name ?? 'Belum ditetapkan'}`}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -134,8 +143,8 @@ export function OutboundPage() {
         <Card>
           <EmptyState
             icon={Smartphone}
-            title="Belum ada akun Jalur B"
-            description="Tambahkan akun TikTok dengan jalur Outbound terlebih dahulu."
+            title="Belum ada akun pengirim"
+            description="Tambahkan akun TikTok untuk mengambil followers dan mengirim DM."
             action={
               <Button asChild>
                 <Link href="/accounts">Kelola akun TikTok</Link>
@@ -152,6 +161,39 @@ export function OutboundPage() {
             </div>
           )}
           <Summary accountId={accountId} />
+          {can(PERMISSIONS.OUTREACH_WORK) && account && (
+            <div className="mt-4 flex flex-wrap items-center gap-3">
+              <Button
+                onClick={() => {
+                  if (!params.get('account')) setParam('account', account.id);
+                  setBulkOpen(true);
+                }}
+              >
+                <Send /> Kirim DM
+              </Button>
+              {can(PERMISSIONS.LEADS_IMPORT) && (
+                <Button variant="outline" onClick={() => setFollowersOpen(true)}>
+                  <Users /> Ambil followers
+                </Button>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Penerima → pesan → tinjau → mulai extension.
+              </p>
+            </div>
+          )}
+          {bulkOpen && account && (
+            <BulkDmDialog key={accountId} account={account} onClose={() => setBulkOpen(false)} />
+          )}
+          {followersOpen && account && can(PERMISSIONS.LEADS_IMPORT) && (
+            <FollowersDialog
+              key={accountId}
+              account={account}
+              onClose={() => setFollowersOpen(false)}
+            />
+          )}
+          {can(PERMISSIONS.OUTREACH_WORK) && (
+            <BrowserDmPanel key={`sender-${accountId}`} accountId={accountId} />
+          )}
           <Tabs value={tab} onValueChange={(v) => setParam('tab', v)} className="mt-6">
             <TabsList>
               <TabsTrigger value="queue">
@@ -483,21 +525,23 @@ function CreateTaskForm({
           {usable.find((t) => t.id === templateId)?.content}
         </p>
       )}
-      <FormField label="Campaign (opsional)">
-        <Select value={campaignId} onValueChange={setCampaignId}>
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={NONE}>Tidak ada</SelectItem>
-            {campaigns.data?.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </FormField>
+      {!HIDE_OFFICIAL_LANE && (
+        <FormField label="Campaign (opsional)">
+          <Select value={campaignId} onValueChange={setCampaignId}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NONE}>Tidak ada</SelectItem>
+              {campaigns.data?.map((c) => (
+                <SelectItem key={c.id} value={c.id}>
+                  {c.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </FormField>
+      )}
       <DialogFooter>
         <Button variant="outline" onClick={onCancel}>
           Batal

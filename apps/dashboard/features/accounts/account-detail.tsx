@@ -31,6 +31,7 @@ import {
 } from '@/components/ui/primitives';
 import { useAuth } from '@/hooks/use-auth';
 import { formatDateTime, formatNumber } from '@/lib/utils';
+import { HIDE_OFFICIAL_LANE } from '@/lib/marketing-scope';
 import { AccountFormDialog } from './account-form-dialog';
 import { Avatar } from './accounts-page';
 import { useAccount } from './api';
@@ -78,7 +79,7 @@ export function AccountDetail({ id }: { id: string }) {
           <h1 className="flex items-center gap-2 text-2xl font-semibold">
             @{a.username}
             {a.isVerified && (
-              <BadgeCheck className="size-5 text-primary" aria-label="Terverifikasi" />
+              <BadgeCheck className="size-5 text-brand-text" aria-label="Terverifikasi" />
             )}
           </h1>
           <p className="text-muted-foreground">{a.displayName}</p>
@@ -111,7 +112,9 @@ export function AccountDetail({ id }: { id: string }) {
           value={formatNumber(a.followersCount)}
           source={a.followersSource}
         />
-        <StatCard label="Campaign" icon={Megaphone} value={formatNumber(a.stats.campaigns)} />
+        {!HIDE_OFFICIAL_LANE && (
+          <StatCard label="Campaign" icon={Megaphone} value={formatNumber(a.stats.campaigns)} />
+        )}
         <StatCard
           label="Prospek bersumber dari akun"
           icon={UserPlus}
@@ -127,8 +130,12 @@ export function AccountDetail({ id }: { id: string }) {
           </CardHeader>
           <CardContent>
             <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-3 text-sm">
-              <dt className="text-muted-foreground">Jalur</dt>
-              <dd>{LANE_LABELS[a.lane]}</dd>
+              {!HIDE_OFFICIAL_LANE && (
+                <>
+                  <dt className="text-muted-foreground">Jalur</dt>
+                  <dd>{LANE_LABELS[a.lane]}</dd>
+                </>
+              )}
               <dt className="text-muted-foreground">Sumber angka followers</dt>
               <dd>
                 <DataSourceBadge source={a.followersSource} />

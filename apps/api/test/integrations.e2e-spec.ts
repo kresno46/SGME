@@ -69,7 +69,7 @@ describe('Integrasi TikTok (integration)', () => {
     await resetDatabase(prisma);
     tiktok.username = 'solid.official';
     tiktok.scope = 'user.info.basic,user.info.profile,user.info.stats';
-    admin = await loginAs(app, 'ADMIN');
+    admin = await loginAs(app, 'SUPER_ADMIN');
     officialId = (
       await prisma.tikTokAccount.create({
         data: {
@@ -293,7 +293,7 @@ describe('Integrasi TikTok (integration)', () => {
     expect(overview.body.webhookUrl).toBe('http://dashboard.test/api/webhooks/tiktok');
 
     const viewer = await loginAs(app, 'VIEWER');
-    await viewer.agent.get('/api/integrations/overview').expect(200);
+    await viewer.agent.get('/api/integrations/overview').expect(403);
     const op = await loginAs(app, 'MARKETING_OPERATOR');
     await op.agent
       .post(`/api/integrations/tiktok/accounts/${officialId}/connect`)

@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/primitives';
 import { useCampaignOptions } from '@/hooks/use-lookups';
 import { api, ApiError } from '@/lib/api';
+import { HIDE_OFFICIAL_LANE } from '@/lib/marketing-scope';
 import { formatNumber } from '@/lib/utils';
 import { useInvalidateLeads } from './api';
 
@@ -53,7 +54,7 @@ export function ImportDialog({
           <DialogTitle>Import prospek dari CSV</DialogTitle>
           <DialogDescription>
             Hanya untuk data yang diperoleh secara sah — misalnya formulir pendaftaran atau acara.
-            Jangan mengimpor daftar followers atau data hasil scraping.
+            Untuk hasil collector followers, gunakan Ambil followers di Outbound Workstation.
           </DialogDescription>
         </DialogHeader>
         <ImportWizard onDone={() => onOpenChange(false)} />
@@ -255,21 +256,23 @@ function ImportWizard({ onDone }: { onDone: () => void }) {
             />
           </FormField>
           <div className="grid gap-4 sm:grid-cols-3">
-            <FormField label="Campaign sumber">
-              <Select value={campaignId} onValueChange={setCampaignId}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={NONE}>Tidak ada</SelectItem>
-                  {campaigns.data?.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FormField>
+            {!HIDE_OFFICIAL_LANE && (
+              <FormField label="Campaign sumber">
+                <Select value={campaignId} onValueChange={setCampaignId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={NONE}>Tidak ada</SelectItem>
+                    {campaigns.data?.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </FormField>
+            )}
             <FormField label="Tag tambahan" htmlFor="imp-tags">
               <Input
                 id="imp-tags"

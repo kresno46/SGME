@@ -1,6 +1,7 @@
 import type { CampaignDto, Paginated, RefDto, TikTokAccountDto } from '@smge/types';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { visibleLaneFilter } from '@/lib/marketing-scope';
 
 /** Data referensi untuk dropdown (di-cache 5 menit). */
 
@@ -12,7 +13,7 @@ export function useAccountOptions(lane?: 'OFFICIAL' | 'OUTBOUND') {
         pageSize: 100,
         sortBy: 'username',
         sortDir: 'asc',
-        lane,
+        lane: visibleLaneFilter(lane),
       }),
     select: (d) => d.items,
     staleTime: 300_000,
@@ -25,7 +26,7 @@ export function useCampaignOptions(lane?: 'OFFICIAL' | 'OUTBOUND') {
     queryFn: () =>
       api.get<Paginated<CampaignDto>>('/campaigns', {
         pageSize: 100,
-        lane,
+        lane: visibleLaneFilter(lane),
         sortBy: 'name',
         sortDir: 'asc',
       }),

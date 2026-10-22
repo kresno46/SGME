@@ -61,6 +61,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useAccountOptions, useCampaignOptions } from '@/hooks/use-lookups';
 import { downloadUrl } from '@/lib/api';
+import { HIDE_OFFICIAL_LANE } from '@/lib/marketing-scope';
 import { formatRelative } from '@/lib/utils';
 import { useLeads } from './api';
 import { DncList } from './dnc-list';
@@ -128,7 +129,7 @@ function LeadsHeader() {
     <>
       <PageHeader
         title="CRM / Prospek"
-        description="Database terpusat calon pengguna Solid Mini dari seluruh jalur."
+        description="Kelola followers dan prospek yang dapat diakses oleh akun kamu."
         actions={
           <>
             {can(PERMISSIONS.LEADS_IMPORT) && (
@@ -151,7 +152,7 @@ function LeadsHeader() {
 }
 
 function LeadsTable() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const params = useSearchParams();
   const accounts = useAccountOptions();
   const campaigns = useCampaignOptions();
@@ -278,11 +279,12 @@ function LeadsTable() {
             'Akun',
             (accounts.data ?? []).map((a) => ({ value: a.id, label: `@${a.username}` })),
           )}
-          {filterSelect(
-            'sourceCampaignId',
-            'Campaign',
-            (campaigns.data ?? []).map((c) => ({ value: c.id, label: c.name })),
-          )}
+          {!HIDE_OFFICIAL_LANE &&
+            filterSelect(
+              'sourceCampaignId',
+              'Campaign',
+              (campaigns.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+            )}
           {filterSelect('operatorId', 'Operator', [
             { value: 'me', label: 'Prospek saya' },
             { value: 'none', label: 'Belum ditugaskan' },
@@ -355,6 +357,11 @@ function LeadsTable() {
                       <p className="max-w-64 truncate text-xs text-muted-foreground">
                         {leadContact(l)}
                       </p>
+                      {user.role === 'SUPER_ADMIN' && (
+                        <p className="text-xs text-muted-foreground">
+                          Pemilik: {l.owner?.name ?? 'Belum ditetapkan'}
+                        </p>
+                      )}
                       {l.tags.length > 0 && (
                         <div className="mt-1 flex flex-wrap gap-1">
                           {l.tags.slice(0, 3).map((t) => (

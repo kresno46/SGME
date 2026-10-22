@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <title>SMGE Followers</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <h1>SMGE · Followers</h1>
+    <p>
+      Buka profil akun sumber, login sendiri bila diminta, lalu buka daftar
+      <strong>Followers / Pengikut</strong>.
+    </p>
+    <label
+      ><input id="confirmed" type="checkbox" /> Saya membuka daftar followers akun yang saya
+      kelola.</label
+    >
+    <p>
+      Collector membaca daftar yang tampil dan menggulirnya. Maksimal 250 username per batch. Tutup
+      popup boleh; jangan refresh tab sebelum ekspor.
+    </p>
+    <div class="actions">
+      <button id="start">Mulai</button><button id="stop">Hentikan</button
+      ><button id="export">Ekspor JSON</button>
+    </div>
+    <p id="status" role="status">Menghubungkan ke tab…</p>
+    <p class="muted">
+      Sesi tetap di browser. Extension tidak membaca cookie, password, atau token dan tidak mengirim
+      DM. Hasil belum tentu seluruh followers.
+    </p>
+    <script src="popup.js"></script>
+  </body>
+</html>

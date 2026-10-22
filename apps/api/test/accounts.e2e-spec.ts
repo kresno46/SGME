@@ -14,7 +14,7 @@ describe('Akun TikTok, analitik & health (integration)', () => {
   });
   beforeEach(async () => {
     await resetDatabase(prisma);
-    admin = await loginAs(app, 'ADMIN');
+    admin = await loginAs(app, 'SUPER_ADMIN');
   });
   afterAll(() => app.close());
 

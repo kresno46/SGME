@@ -1,6 +1,7 @@
 'use client';
 
 import { ROLE_LABELS } from '@smge/shared';
+import Image from 'next/image';
 import { LogOut, Menu, Monitor, Moon, Sun, UserCog, X } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
@@ -23,9 +24,14 @@ import { cn } from '@/lib/utils';
 function Brand() {
   return (
     <Link href="/" className="flex items-center gap-2.5 px-2">
-      <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
-        SM
-      </div>
+      <Image
+        src="/logo.png"
+        alt="Logo Solid Mini"
+        width={314}
+        height={537}
+        className="h-9 w-auto"
+        priority
+      />
       <div className="leading-tight">
         <p className="text-sm font-semibold">Solid Mini</p>
         <p className="text-xs text-muted-foreground">Growth Engine</p>
@@ -50,7 +56,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             className={cn(
               'flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
               active
-                ? 'bg-primary/10 text-primary'
+                ? 'bg-primary/10 text-brand-text'
                 : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground',
             )}
           >
@@ -114,7 +120,7 @@ function UserMenu() {
           className="flex items-center gap-2 rounded-md p-1 pr-2 text-left hover:bg-accent"
           aria-label="Menu pengguna"
         >
-          <span className="flex size-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+          <span className="flex size-8 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-brand-text">
             {initials}
           </span>
           <span className="hidden leading-tight sm:block">

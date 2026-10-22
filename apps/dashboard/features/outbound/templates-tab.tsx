@@ -2,7 +2,6 @@
 
 import {
   LANE_LABELS,
-  MARKETING_LANES,
   PERMISSIONS,
   TEMPLATE_PLACEHOLDERS,
   TEMPLATE_PURPOSE_LABELS,
@@ -42,12 +41,13 @@ import {
 import { Badge, Card, CardContent, Input, Label, Textarea } from '@/components/ui/primitives';
 import { useAuth } from '@/hooks/use-auth';
 import { api, applyServerErrors } from '@/lib/api';
+import { HIDE_OFFICIAL_LANE, VISIBLE_MARKETING_LANES } from '@/lib/marketing-scope';
 import { useInvalidateOutbound, useTemplates } from './api';
 
 const ANY = '__any__';
 
 export function TemplatesTab() {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   const canManage = can(PERMISSIONS.TEMPLATES_MANAGE);
   const q = useTemplates();
   const invalidate = useInvalidateOutbound();
@@ -97,9 +97,17 @@ export function TemplatesTab() {
                         {t.lane ? LANE_LABELS[t.lane] : 'Semua jalur'}
                       </Badge>
                       {!t.isActive && <Badge variant="secondary">Nonaktif</Badge>}
+                      <Badge variant="outline">
+                        {t.createdBy ? 'Template pribadi' : 'Template bawaan'}
+                      </Badge>
+                      {user.role === 'SUPER_ADMIN' && t.createdBy && (
+                        <span className="text-xs text-muted-foreground">
+                          Pemilik: {t.createdBy.name}
+                        </span>
+                      )}
                     </div>
                   </div>
-                  {canManage && (
+                  {canManage && (user.role === 'SUPER_ADMIN' || t.createdBy?.id === user.id) && (
                     <>
                       <Button
                         variant="ghost"
@@ -224,30 +232,32 @@ function TemplateForm({
             )}
           />
         </FormField>
-        <FormField label="Jalur">
-          <Controller
-            control={form.control}
-            name="lane"
-            render={({ field }) => (
-              <Select
-                value={field.value || ANY}
-                onValueChange={(v) => field.onChange(v === ANY ? '' : v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ANY}>Semua jalur</SelectItem>
-                  {MARKETING_LANES.map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {LANE_LABELS[l]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </FormField>
+        {!HIDE_OFFICIAL_LANE && (
+          <FormField label="Jalur">
+            <Controller
+              control={form.control}
+              name="lane"
+              render={({ field }) => (
+                <Select
+                  value={field.value || ANY}
+                  onValueChange={(v) => field.onChange(v === ANY ? '' : v)}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ANY}>Semua jalur</SelectItem>
+                    {VISIBLE_MARKETING_LANES.map((l) => (
+                      <SelectItem key={l} value={l}>
+                        {LANE_LABELS[l]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </FormField>
+        )}
       </div>
       <FormField label="Isi pesan" htmlFor="t-content" error={errors.content?.message}>
         <Textarea

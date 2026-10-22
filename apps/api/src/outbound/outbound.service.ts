@@ -1,3 +1,4 @@
+import { ownerScope, assertReferences } from '../common/data-scope';
 import {
   BadRequestException,
   ConflictException,
@@ -12,6 +13,7 @@ import {
   computeLeadPriority,
   CONTACT_CHANNEL_LABELS,
   DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT,
+  MIN_UNANSWERED_FOLLOW_UP_HOURS,
   INTEREST_LEVEL_LABELS,
   NON_CONTACTABLE_LEAD_STATUSES,
   OPEN_OUTREACH_STATUSES,
@@ -71,7 +73,7 @@ export class OutboundService {
   // ------------------------------------------------------------ akun & ringkasan
 
   private async getOutboundAccount(id: string) {
-    const account = await this.prisma.tikTokAccount.findUnique({ where: { id } });
+    const account = await this.prisma.tikTokAccount.findFirst({ where: { id, ...ownerScope() } });
     if (!account) throw new NotFoundException('Akun TikTok tidak ditemukan');
     if (account.lane !== 'OUTBOUND') {
       throw new BadRequestException('Outbound Workstation hanya untuk akun Jalur B (Outbound)');
@@ -125,8 +127,9 @@ export class OutboundService {
    * berbasis aturan. Prospek DNC, terdaftar, tanpa kontak, atau yang punya tugas terbuka dikecualikan.
    */
   async queue(q: OutboundQueueQuery) {
-    await this.getOutboundAccount(q.accountId);
+    const account = await this.getOutboundAccount(q.accountId);
     const where: Prisma.LeadWhereInput = {
+      ownerId: account.ownerId,
       deletedAt: null,
       doNotContact: false,
       status: { notIn: NON_CONTACTABLE_LEAD_STATUSES },
@@ -181,6 +184,7 @@ export class OutboundService {
 
   async list(q: ListTasksQuery, user: RequestUser) {
     const where: Prisma.OutreachTaskWhereInput = {
+      ...ownerScope(),
       ...(q.accountId ? { tiktokAccountId: q.accountId } : {}),
       ...(q.status?.length ? { status: { in: q.status } } : {}),
       ...(q.operatorId === 'me'
@@ -236,15 +240,22 @@ export class OutboundService {
         'Akun sedang tidak aktif (dijeda/dibatasi). Penjangkauan dihentikan sementara.',
       );
     }
+    await assertReferences(this.prisma, {
+      leadId: input.leadId,
+      templateId: input.templateId,
+      campaignId: input.campaignId,
+    });
     const channel = input.channel;
-    const lead = await this.prisma.lead.findUnique({
-      where: { id: input.leadId },
+    const lead = await this.prisma.lead.findFirst({
+      where: { id: input.leadId, ...ownerScope() },
       include: {
         consents: { where: { status: 'GRANTED' } },
         outreachTasks: { where: { status: { in: OPEN_OUTREACH_STATUSES } }, select: { id: true } },
       },
     });
     if (!lead) throw new NotFoundException('Prospek tidak ditemukan');
+    if (account.ownerId !== lead.ownerId)
+      throw new ConflictException('Akun dan prospek harus memiliki pemilik yang sama.');
 
     const eligibility = checkOutreachEligibility({
       status: lead.status,
@@ -304,6 +315,7 @@ export class OutboundService {
     const task = await this.prisma.outreachTask.create({
       data: {
         leadId: lead.id,
+        ownerId: lead.ownerId ?? user.id,
         tiktokAccountId: account.id,
         campaignId: campaign?.id ?? null,
         templateId,
@@ -338,11 +350,29 @@ export class OutboundService {
 
   /** Menjalankan aksi transisi status. Seluruh perubahan prospek & riwayat dilakukan atomik. */
   async act(user: RequestUser, id: string, action: TaskAction, meta: RequestMeta) {
+    const browser = await this.prisma.browserDmDelivery.findUnique({ where: { taskId: id } });
+    if (browser && ['QUEUED', 'PROCESSING', 'UNVERIFIED'].includes(browser.status)) {
+      throw new ConflictException(
+        'Tugas sedang berada pada antrean browser. Hentikan/periksa pengiriman di panel Pengiriman browser terlebih dahulu.',
+      );
+    }
     const task = await this.findTask(id);
     this.assertAction(task.status, action.action, user);
     const now = new Date();
 
     await this.prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${task.tiktokAccountId}))`;
+      const fresh = await tx.outreachTask.findUniqueOrThrow({
+        where: { id },
+        include: OutreachMapper.include,
+      });
+      this.assertAction(fresh.status, action.action, user);
+      const pendingBrowser = await tx.browserDmDelivery.findUnique({ where: { taskId: id } });
+      if (pendingBrowser && ['QUEUED', 'PROCESSING', 'UNVERIFIED'].includes(pendingBrowser.status))
+        throw new ConflictException(
+          'Tugas masih dalam pengiriman browser; hentikan/periksa terlebih dahulu.',
+        );
+      Object.assign(task, fresh);
       const lead = await tx.lead.findUniqueOrThrow({
         where: { id: task.leadId },
         include: { consents: { where: { status: 'GRANTED' } } },
@@ -360,6 +390,8 @@ export class OutboundService {
           break;
         }
         case 'approve': {
+          if (!(action.finalMessage ?? task.draftMessage)?.trim())
+            throw new BadRequestException('Isi pesan sebelum menyetujui.');
           await set({
             status: 'APPROVED',
             approvedAt: now,
@@ -377,6 +409,27 @@ export class OutboundService {
           break;
         }
         case 'mark_sent': {
+          if (task.sentCount > 0) {
+            const allowed = checkFollowUpAllowed({
+              channel: task.channel,
+              replied: !!task.repliedAt,
+              hasConsentForChannel: hasConsent,
+              sentCount: task.sentCount,
+            });
+            if (!allowed.eligible) throw new ConflictException(allowed.reason);
+            if (!task.followUpAt || task.followUpAt > now)
+              throw new ConflictException('Jadwal follow-up belum tiba.');
+            if (
+              task.channel === 'TIKTOK_DM' &&
+              !task.repliedAt &&
+              (!task.lastSentAt ||
+                now.getTime() - task.lastSentAt.getTime() <
+                  MIN_UNANSWERED_FOLLOW_UP_HOURS * 3600000)
+            )
+              throw new ConflictException(
+                'Follow-up tanpa balasan menunggu minimal 24 jam sejak pesan terakhir.',
+              );
+          }
           // Pemeriksaan ulang saat pengiriman: larangan kontak bisa muncul setelah tugas dibuat.
           if (lead.doNotContact || lead.deletedAt) {
             throw new ConflictException(
@@ -464,14 +517,35 @@ export class OutboundService {
           const at = action.followUpAt as Date;
           if (at <= now) throw new BadRequestException('Jadwal follow-up harus di masa depan');
           const allowed = checkFollowUpAllowed({
+            channel: task.channel,
             replied: !!task.repliedAt,
             hasConsentForChannel: hasConsent,
             sentCount: task.sentCount,
           });
           if (!allowed.eligible) throw new ConflictException(allowed.reason);
+          if (
+            lead.doNotContact ||
+            lead.deletedAt ||
+            NON_CONTACTABLE_LEAD_STATUSES.includes(lead.status) ||
+            (await this.dnc.isBlocked(DncService.identitiesOf(lead), tx))
+          )
+            throw new ConflictException('Prospek tidak lagi dapat dihubungi.');
+          if (
+            task.channel === 'TIKTOK_DM' &&
+            !task.repliedAt &&
+            (!task.lastSentAt ||
+              at.getTime() - task.lastSentAt.getTime() < MIN_UNANSWERED_FOLLOW_UP_HOURS * 3600000)
+          )
+            throw new ConflictException('Jadwalkan minimal 24 jam setelah pesan terakhir.');
+          if (task.channel === 'TIKTOK_DM' && !action.draftMessage?.trim())
+            throw new BadRequestException('Tulis pesan baru untuk follow-up.');
           await set({
             status: 'FOLLOW_UP',
             followUpAt: at,
+            finalMessage: null,
+            approvedAt: null,
+            reviewerId: null,
+            submittedAt: null,
             ...(action.draftMessage ? { draftMessage: action.draftMessage } : {}),
           });
           await tx.lead.update({ where: { id: lead.id }, data: { nextFollowUpAt: at } });
@@ -568,8 +642,8 @@ export class OutboundService {
   }
 
   private async findTask(id: string): Promise<TaskRow> {
-    const task = await this.prisma.outreachTask.findUnique({
-      where: { id },
+    const task = await this.prisma.outreachTask.findFirst({
+      where: { id, ...ownerScope() },
       include: OutreachMapper.include,
     });
     if (!task) throw new NotFoundException('Tugas tidak ditemukan');

@@ -5,6 +5,7 @@ import {
   INTEREST_LEVEL_LABELS,
   INTEREST_LEVELS,
   MAX_UNANSWERED_MESSAGES,
+  MIN_UNANSWERED_FOLLOW_UP_HOURS,
   OUTCOME_LABELS,
   type InterestLevel,
   type TaskActionInput,
@@ -50,10 +51,11 @@ import {
   Skeleton,
   Textarea,
 } from '@/components/ui/primitives';
-import { formatDateTime, fromDateTimeLocal } from '@/lib/utils';
+import { formatDateTime, fromDateTimeLocal, toDateTimeLocal } from '@/lib/utils';
+import { api } from '@/lib/api';
 import { ClaimWarning } from '../ai/ai-common';
 import { AiDraftHelper, AiReplyHelper } from '../ai/task-ai';
-import { useTask, useTaskAction, useUpdateDraft } from './api';
+import { useTask, useTaskAction, useUpdateDraft, useInvalidateOutbound } from './api';
 
 type Panel =
   'reject' | 'mark_sent' | 'log_reply' | 'schedule_follow_up' | 'complete' | 'cancel' | null;
@@ -75,6 +77,8 @@ function TaskBody({ taskId }: { taskId: string }) {
   const [panel, setPanel] = useState<Panel>(null);
   const [draft, setDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [queueBusy, setQueueBusy] = useState(false);
+  const invalidate = useInvalidateOutbound();
 
   if (q.isPending) {
     return (
@@ -114,7 +118,28 @@ function TaskBody({ taskId }: { taskId: string }) {
       setError(e instanceof Error ? e.message : 'Gagal');
     }
   };
-  const busy = act.isPending || saveDraft.isPending;
+  const busy = act.isPending || saveDraft.isPending || queueBusy;
+  const queueBrowser = async () => {
+    if (busy) return;
+    setQueueBusy(true);
+    setError(null);
+    try {
+      const result = await api.post<{ queued: number }>('/outbound/browser-dm/queue', {
+        accountId: t.account.id,
+        taskIds: [t.id],
+      });
+      await invalidate();
+      toast.success(
+        result.queued
+          ? 'Siap dikirim. Tutup panel lalu klik Mulai di extension SMGE DM Sender.'
+          : 'Periksa status tugas ini pada panel Status pengiriman.',
+      );
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setQueueBusy(false);
+    }
+  };
 
   return (
     <>
@@ -137,7 +162,7 @@ function TaskBody({ taskId }: { taskId: string }) {
             {t.lead.consentChannels.map((c) => CONTACT_CHANNEL_LABELS[c]).join(', ')}
           </Badge>
         )}
-        <Link href={`/leads/${t.lead.id}`} className="ml-auto text-primary hover:underline">
+        <Link href={`/leads/${t.lead.id}`} className="ml-auto text-brand-text hover:underline">
           Profil prospek →
         </Link>
       </div>
@@ -212,12 +237,20 @@ function TaskBody({ taskId }: { taskId: string }) {
       )}
 
       <Timeline t={t} />
+      {t.sentCount > 0 && t.followUpAt && (
+        <p className="rounded-md bg-muted p-3 text-sm">
+          Follow-up: {formatDateTime(t.followUpAt)}.{' '}
+          {t.status === 'APPROVED'
+            ? 'Pesan sudah disetujui. Antrekan melalui extension saat jadwal tiba.'
+            : 'Tinjau dan setujui pesan baru sebelum mengantrekan ke extension.'}
+        </p>
+      )}
       <Separator />
 
       {/* Aksi utama */}
       {panel === null && (
         <div className="flex flex-wrap gap-2">
-          {can('submit') && (
+          {can('submit') && !(t.status === 'FOLLOW_UP' && can('approve')) && (
             <Button
               disabled={busy || !currentDraft.trim()}
               onClick={() => void run({ action: 'submit' }, 'Diajukan untuk review')}
@@ -230,7 +263,7 @@ function TaskBody({ taskId }: { taskId: string }) {
               disabled={busy}
               onClick={() => void run({ action: 'approve' }, 'Pesan disetujui')}
             >
-              <ThumbsUp /> Setujui
+              <ThumbsUp /> {t.sentCount > 0 ? 'Setujui follow-up' : 'Setujui'}
             </Button>
           )}
           {can('reject') && (
@@ -239,9 +272,19 @@ function TaskBody({ taskId }: { taskId: string }) {
             </Button>
           )}
           {can('mark_sent') && (
-            <Button onClick={() => setPanel('mark_sent')}>
-              <Send /> {t.status === 'FOLLOW_UP' ? 'Kirim follow-up' : 'Kirim pesan'}
-            </Button>
+            <>
+              {t.channel === 'TIKTOK_DM' && t.status === 'APPROVED' && (
+                <Button disabled={busy} onClick={() => void queueBrowser()}>
+                  <Send />{' '}
+                  {t.sentCount > 0
+                    ? 'Antrekan follow-up via extension'
+                    : 'Siapkan pengiriman browser'}
+                </Button>
+              )}
+              <Button variant="outline" disabled={busy} onClick={() => setPanel('mark_sent')}>
+                <CheckCircle2 /> Catat sudah dikirim manual
+              </Button>
+            </>
           )}
           {can('log_reply') && (
             <Button variant="outline" onClick={() => setPanel('log_reply')}>
@@ -250,7 +293,7 @@ function TaskBody({ taskId }: { taskId: string }) {
           )}
           {can('schedule_follow_up') && (
             <Button variant="outline" onClick={() => setPanel('schedule_follow_up')}>
-              Jadwalkan follow-up
+              {t.repliedAt ? 'Jadwalkan follow-up' : 'Follow-up belum dibalas'}
             </Button>
           )}
           {can('complete') && (
@@ -569,29 +612,49 @@ function FollowUpPanel({
   onCancel: () => void;
   onSubmit: (b: TaskActionInput) => void;
 }) {
-  const [at, setAt] = useState('');
-  const [message, setMessage] = useState('');
+  const [earliest] = useState(
+    () =>
+      new Date(
+        Math.max(
+          Date.now() + 60000,
+          !t.repliedAt && t.channel === 'TIKTOK_DM' && t.lastSentAt
+            ? new Date(t.lastSentAt).getTime() + MIN_UNANSWERED_FOLLOW_UP_HOURS * 3600000 + 60000
+            : 0,
+        ),
+      ),
+  );
+  const [at, setAt] = useState(toDateTimeLocal(earliest.toISOString()));
+  const [message, setMessage] = useState(
+    t.repliedAt
+      ? ''
+      : `Halo ${t.lead.name || 'Kak'}, aku mau menanyakan kembali apakah ingin menerima info singkat tentang Solid Mini? Kalau belum berminat, tidak apa-apa. Balas "stop" kalau tidak ingin dihubungi lagi ya.`,
+  );
   const replied = !!t.repliedAt;
   const consent = t.lead.consentChannels.includes(t.channel);
   return (
     <PanelShell onCancel={onCancel}>
       {!replied && (
         <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-          Prospek belum membalas. Follow-up hanya boleh bila prospek memberi izin komunikasi untuk
-          kanal ini
-          {consent ? ' (izin tersedia)' : ' — izin belum ada, sehingga follow-up akan ditolak'}, dan
-          maksimal {MAX_UNANSWERED_MESSAGES} pesan tanpa balasan.
+          {t.channel === 'TIKTOK_DM'
+            ? `Prospek belum membalas. Boleh satu follow-up setelah minimal ${MIN_UNANSWERED_FOLLOW_UP_HOURS} jam. Batas ${MAX_UNANSWERED_MESSAGES} pesan total tanpa balasan; setelah itu tunggu respons.`
+            : `Follow-up kanal ini memerlukan izin komunikasi (${consent ? 'tersedia' : 'belum ada'}), maksimal ${MAX_UNANSWERED_MESSAGES} pesan tanpa balasan.`}
         </p>
       )}
       <FormField label="Jadwal follow-up" htmlFor="fu-at">
         <Input
           id="fu-at"
           type="datetime-local"
+          min={toDateTimeLocal(earliest.toISOString())}
           value={at}
           onChange={(e) => setAt(e.target.value)}
         />
       </FormField>
-      <FormField label="Draft pesan follow-up (opsional)" htmlFor="fu-msg">
+      <FormField
+        label={
+          t.channel === 'TIKTOK_DM' ? 'Pesan follow-up baru' : 'Draft pesan follow-up (opsional)'
+        }
+        htmlFor="fu-msg"
+      >
         <Textarea
           id="fu-msg"
           rows={3}
@@ -600,7 +663,12 @@ function FollowUpPanel({
         />
       </FormField>
       <Button
-        disabled={busy || !at}
+        disabled={
+          busy ||
+          !at ||
+          (!replied && t.sentCount >= MAX_UNANSWERED_MESSAGES) ||
+          (t.channel === 'TIKTOK_DM' && message.trim().length < 5)
+        }
         onClick={() =>
           onSubmit({
             action: 'schedule_follow_up',

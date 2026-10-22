@@ -196,6 +196,7 @@ enum OutreachTaskStatus {
   DRAFT
   WAITING_REVIEW
   APPROVED
+  BROWSER_SENT
   MANUALLY_SENT
   REPLIED
   FOLLOW_UP
@@ -308,6 +309,10 @@ model User {
   createdAt          DateTime   @default(now()) @map("created_at")
   updatedAt          DateTime   @updatedAt @map("updated_at")
 
+  ownedTikTokAccounts TikTokAccount[] @relation("AccountOwner")
+  ownedLeads Lead[] @relation("LeadOwner")
+  ownedOutreachTasks OutreachTask[] @relation("TaskOwner")
+
   role                 Role                 @relation(fields: [roleId], references: [id])
   sessions             UserSession[]
   passwordResetTokens  PasswordResetToken[]
@@ -373,9 +378,12 @@ model PasswordResetToken {
 // ---------------------------------------------------------------------
 
 model TikTokAccount {
+  ownerId String? @map("owner_id") @db.Uuid
+  owner User? @relation("AccountOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  @@index([ownerId])
   id                 String              @id @default(uuid()) @db.Uuid
   /// Disimpan tanpa "@" dan huruf kecil
-  username           String              @unique
+  username           String
   displayName        String              @map("display_name")
   profileUrl         String?             @map("profile_url")
   avatarUrl          String?             @map("avatar_url")
@@ -400,6 +408,7 @@ model TikTokAccount {
   conversionEvents ConversionEvent[]
 
   @@index([lane, status])
+  @@unique([ownerId, username])
   @@map("tiktok_accounts")
 }
 
@@ -490,6 +499,9 @@ model CampaignAccount {
 // ---------------------------------------------------------------------
 
 model Lead {
+  ownerId String? @map("owner_id") @db.Uuid
+  owner User? @relation("LeadOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  @@index([ownerId])
   id                       String        @id @default(uuid()) @db.Uuid
   name                     String?
   /// Username TikTok hanya bila diperoleh secara sah (form, percakapan, dll.)
@@ -497,9 +509,9 @@ model Lead {
   email                    String?
   phone                    String?
   /// Kolom ternormalisasi untuk deteksi duplikasi
-  tiktokUsernameNormalized String?       @unique @map("tiktok_username_normalized")
-  emailNormalized          String?       @unique @map("email_normalized")
-  phoneNormalized          String?       @unique @map("phone_normalized")
+  tiktokUsernameNormalized String? @map("tiktok_username_normalized")
+  emailNormalized          String? @map("email_normalized")
+  phoneNormalized          String? @map("phone_normalized")
   source                   LeadSource
   sourceAccountId          String?       @map("source_account_id") @db.Uuid
   sourceCampaignId         String?       @map("source_campaign_id") @db.Uuid
@@ -546,6 +558,9 @@ model Lead {
   @@index([score])
   @@index([deletedAt])
   @@index([createdAt])
+  @@unique([ownerId, tiktokUsernameNormalized])
+  @@unique([ownerId, emailNormalized])
+  @@unique([ownerId, phoneNormalized])
   @@map("leads")
 }
 
@@ -690,6 +705,9 @@ model MessageTemplate {
 // ---------------------------------------------------------------------
 
 model OutreachTask {
+  ownerId String? @map("owner_id") @db.Uuid
+  owner User? @relation("TaskOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  @@index([ownerId])
   id              String             @id @default(uuid()) @db.Uuid
   leadId          String             @map("lead_id") @db.Uuid
   tiktokAccountId String             @map("tiktok_account_id") @db.Uuid
@@ -727,6 +745,7 @@ model OutreachTask {
   template      MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   operator      User?            @relation("OutreachOperator", fields: [operatorId], references: [id], onDelete: SetNull)
   reviewer      User?            @relation("OutreachReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  browserDelivery BrowserDmDelivery?
 
   @@index([tiktokAccountId, status])
   @@index([tiktokAccountId, createdAt])
@@ -734,6 +753,36 @@ model OutreachTask {
   @@index([status, followUpAt])
   @@index([leadId])
   @@map("outreach_tasks")
+}
+
+enum BrowserDmStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  UNVERIFIED
+  CANCELLED
+}
+
+model BrowserDmDelivery {
+  id String @id @default(uuid()) @db.Uuid
+  taskId String @unique @map("task_id") @db.Uuid
+  accountId String @map("account_id") @db.Uuid
+  requestedById String @map("requested_by_id") @db.Uuid
+  username String
+  senderUsername String @map("sender_username")
+  message String
+  status BrowserDmStatus @default(QUEUED)
+  clientId String? @map("client_id") @db.Uuid
+  attemptId String? @map("attempt_id") @db.Uuid
+  startedAt DateTime? @map("started_at")
+  completedAt DateTime? @map("completed_at")
+  detail String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  task OutreachTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  @@index([accountId, status, createdAt])
+  @@map("browser_dm_deliveries")
 }
 
 // ---------------------------------------------------------------------

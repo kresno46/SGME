@@ -8,7 +8,6 @@ import {
   CAMPAIGN_TYPES,
   createCampaignSchema,
   LANE_LABELS,
-  MARKETING_LANES,
   type CreateCampaignInput,
 } from '@smge/shared';
 import type { CampaignDto } from '@smge/types';
@@ -35,6 +34,7 @@ import {
 import { Checkbox, Input, Label, Textarea } from '@/components/ui/primitives';
 import { useAccountOptions, useAssignableUsers } from '@/hooks/use-lookups';
 import { applyServerErrors } from '@/lib/api';
+import { HIDE_OFFICIAL_LANE, VISIBLE_MARKETING_LANES } from '@/lib/marketing-scope';
 import { formatNumber } from '@/lib/utils';
 import { useSaveCampaign } from './api';
 
@@ -47,7 +47,7 @@ const dateInput = (iso: string | null) => (iso ? iso.slice(0, 10) : '');
 function toForm(c?: CampaignDto | null): FormInput {
   return {
     name: c?.name ?? '',
-    lane: c?.lane ?? 'OFFICIAL',
+    lane: c?.lane ?? 'OUTBOUND',
     type: c?.type ?? 'LEAD_ACQUISITION',
     status: c?.status ?? 'DRAFT',
     target: c?.target ?? '',
@@ -147,9 +147,11 @@ function CampaignForm({ campaign, onDone }: { campaign?: CampaignDto | null; onD
         <Input id="c-name" aria-invalid={!!errors.name} {...form.register('name')} />
       </FormField>
       <div className="grid gap-4 sm:grid-cols-3">
-        <FormField label="Jalur" error={errors.lane?.message}>
-          {select('lane', MARKETING_LANES, LANE_LABELS)}
-        </FormField>
+        {!HIDE_OFFICIAL_LANE && (
+          <FormField label="Jalur" error={errors.lane?.message}>
+            {select('lane', VISIBLE_MARKETING_LANES, LANE_LABELS)}
+          </FormField>
+        )}
         <FormField label="Jenis" error={errors.type?.message}>
           {select('type', CAMPAIGN_TYPES, CAMPAIGN_TYPE_LABELS)}
         </FormField>
@@ -214,7 +216,11 @@ function CampaignForm({ campaign, onDone }: { campaign?: CampaignDto | null; onD
       </FormField>
 
       <FormField
-        label={`Akun TikTok (${lane === 'OFFICIAL' ? 'Jalur A' : 'Jalur B'})`}
+        label={
+          HIDE_OFFICIAL_LANE
+            ? 'Akun TikTok pengirim'
+            : `Akun TikTok (${lane === 'OFFICIAL' ? 'Jalur A' : 'Jalur B'})`
+        }
         error={errors.accountIds?.message}
       >
         <Controller
@@ -238,7 +244,7 @@ function CampaignForm({ campaign, onDone }: { campaign?: CampaignDto | null; onD
                       }
                     />
                     <span className="truncate">@{a.username}</span>
-                    {a.isVerified && <BadgeCheck className="size-3.5 text-primary" />}
+                    {a.isVerified && <BadgeCheck className="size-3.5 text-brand-text" />}
                     <span className="ml-auto text-xs text-muted-foreground">
                       {formatNumber(a.followersCount)}
                     </span>

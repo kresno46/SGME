@@ -67,6 +67,12 @@ import { formatRupiah } from '@/features/campaigns/campaigns-page';
 import { LANE_COLOR, LaneDot } from '@/features/dashboard/overview';
 import { useCampaignOptions } from '@/hooks/use-lookups';
 import { api } from '@/lib/api';
+import {
+  HIDE_OFFICIAL_LANE,
+  VISIBLE_MARKETING_LANES,
+  visibleLaneFilter,
+  isVisibleLane,
+} from '@/lib/marketing-scope';
 import { formatNumber } from '@/lib/utils';
 
 const ALL = '__all__';
@@ -85,7 +91,7 @@ export function AnalyticsPage() {
       api.get<AnalyticsReportDto>('/analytics/report', {
         days,
         model,
-        lane: lane === ALL ? undefined : lane,
+        lane: visibleLaneFilter(lane === ALL ? undefined : lane),
         campaignId: campaignId === ALL ? undefined : campaignId,
       }),
     placeholderData: keepPreviousData,
@@ -112,19 +118,21 @@ export function AnalyticsPage() {
             {d} hari
           </Button>
         ))}
-        <Select value={lane} onValueChange={setLane}>
-          <SelectTrigger className="h-8 w-48" aria-label="Filter jalur">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Semua jalur</SelectItem>
-            {(['OFFICIAL', 'OUTBOUND'] as const).map((l) => (
-              <SelectItem key={l} value={l}>
-                {LANE_LABELS[l]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {!HIDE_OFFICIAL_LANE && (
+          <Select value={lane} onValueChange={setLane}>
+            <SelectTrigger className="h-8 w-48" aria-label="Filter jalur">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Semua jalur</SelectItem>
+              {VISIBLE_MARKETING_LANES.map((l) => (
+                <SelectItem key={l} value={l}>
+                  {LANE_LABELS[l]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={campaignId} onValueChange={setCampaignId}>
           <SelectTrigger className="h-8 w-56" aria-label="Filter campaign">
             <SelectValue />
@@ -235,7 +243,7 @@ export function AnalyticsPage() {
           loading={loading}
           value={formatUsd(k?.aiCostUsd ?? 0)}
           hint={
-            <Link href="/ai-sales?tab=usage" className="text-primary hover:underline">
+            <Link href="/ai-sales?tab=usage" className="text-brand-text hover:underline">
               Rincian →
             </Link>
           }
@@ -380,14 +388,16 @@ function GrowthCard({ report }: { report: AnalyticsReportDto }) {
                 }
               />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Line
-                type="monotone"
-                dataKey="OFFICIAL"
-                name={LANE_SHORT_LABELS.OFFICIAL}
-                stroke={LANE_COLOR.OFFICIAL}
-                strokeWidth={2}
-                dot={false}
-              />
+              {!HIDE_OFFICIAL_LANE && (
+                <Line
+                  type="monotone"
+                  dataKey="OFFICIAL"
+                  name={LANE_SHORT_LABELS.OFFICIAL}
+                  stroke={LANE_COLOR.OFFICIAL}
+                  strokeWidth={2}
+                  dot={false}
+                />
+              )}
               <Line
                 type="monotone"
                 dataKey="OUTBOUND"
@@ -429,7 +439,7 @@ function LaneCard({ report }: { report: AnalyticsReportDto }) {
   return (
     <Card className="lg:col-span-2">
       <CardHeader>
-        <CardTitle>Jalur A vs Jalur B</CardTitle>
+        <CardTitle>{HIDE_OFFICIAL_LANE ? 'Performa outreach' : 'Jalur A vs Jalur B'}</CardTitle>
         <CardDescription>
           Registrasi & aktivasi terverifikasi diatribusikan ke campaign sesuai model terpilih
         </CardDescription>
@@ -438,25 +448,29 @@ function LaneCard({ report }: { report: AnalyticsReportDto }) {
         <TableHeader>
           <TableRow className="hover:bg-transparent">
             <TableHead>Metrik</TableHead>
-            {report.lanes.map((l) => (
-              <TableHead key={l.lane} className="text-right">
-                <span className="inline-flex items-center gap-1.5">
-                  <LaneDot lane={l.lane as MarketingLane} />{' '}
-                  {LANE_SHORT_LABELS[l.lane as MarketingLane]}
-                </span>
-              </TableHead>
-            ))}
+            {report.lanes
+              .filter((l) => isVisibleLane(l.lane as MarketingLane))
+              .map((l) => (
+                <TableHead key={l.lane} className="text-right">
+                  <span className="inline-flex items-center gap-1.5">
+                    <LaneDot lane={l.lane as MarketingLane} />{' '}
+                    {LANE_SHORT_LABELS[l.lane as MarketingLane]}
+                  </span>
+                </TableHead>
+              ))}
           </TableRow>
         </TableHeader>
         <TableBody>
           {rows.map(([label, fn]) => (
             <TableRow key={label}>
               <TableCell className="text-sm text-muted-foreground">{label}</TableCell>
-              {report.lanes.map((l) => (
-                <TableCell key={l.lane} className="text-right tabular-nums">
-                  {fn(l)}
-                </TableCell>
-              ))}
+              {report.lanes
+                .filter((l) => isVisibleLane(l.lane as MarketingLane))
+                .map((l) => (
+                  <TableCell key={l.lane} className="text-right tabular-nums">
+                    {fn(l)}
+                  </TableCell>
+                ))}
             </TableRow>
           ))}
         </TableBody>

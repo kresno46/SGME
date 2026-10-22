@@ -1,3 +1,4 @@
+import { ownerScope, assertOwnOperator, assertReferences } from '../common/data-scope';
 import {
   ConflictException,
   Injectable,
@@ -37,6 +38,7 @@ import { DncService } from './dnc.service';
 import { LeadActivityService } from './lead-activity.service';
 
 export const LEAD_INCLUDE = {
+  owner: { select: USER_REF_SELECT },
   sourceAccount: { select: ACCOUNT_REF_SELECT },
   sourceCampaign: { select: CAMPAIGN_REF_SELECT },
   operator: { select: USER_REF_SELECT },
@@ -51,6 +53,7 @@ export type LeadRow = Prisma.LeadGetPayload<{ include: typeof LEAD_INCLUDE }>;
 export function toLeadDto(l: LeadRow): LeadDto {
   return {
     id: l.id,
+    owner: toRef(l.owner),
     name: l.name,
     tiktokUsername: l.tiktokUsername,
     email: l.email,
@@ -112,7 +115,7 @@ export class LeadsService {
     actor: RequestUser,
   ) {
     const now = new Date();
-    const and: Prisma.LeadWhereInput[] = [{ deletedAt: null }];
+    const and: Prisma.LeadWhereInput[] = [ownerScope(), { deletedAt: null }];
     if (!q.includeDoNotContact) and.push({ doNotContact: false });
     if (q.status?.length) and.push({ status: { in: q.status } });
     if (q.interestLevel) and.push({ interestLevel: q.interestLevel });
@@ -164,8 +167,8 @@ export class LeadsService {
   }
 
   async get(id: string): Promise<LeadDetailDto> {
-    const lead = await this.prisma.lead.findUnique({
-      where: { id },
+    const lead = await this.prisma.lead.findFirst({
+      where: { id, ...ownerScope() },
       include: {
         ...LEAD_INCLUDE,
         consents: {
@@ -229,7 +232,7 @@ export class LeadsService {
     if (p) or.push({ phoneNormalized: p });
     if (!or.length) return [];
     const rows = await this.prisma.lead.findMany({
-      where: { OR: or, ...(excludeId ? { id: { not: excludeId } } : {}) },
+      where: { ...ownerScope(), OR: or, ...(excludeId ? { id: { not: excludeId } } : {}) },
       select: {
         id: true,
         name: true,
@@ -264,6 +267,11 @@ export class LeadsService {
   }
 
   async create(actor: RequestUser, input: CreateLeadData, meta: RequestMeta) {
+    assertOwnOperator(input.operatorId);
+    await assertReferences(this.prisma, {
+      accountId: input.sourceAccountId,
+      campaignId: input.sourceCampaignId,
+    });
     await this.assertNoDuplicates(input);
     const contacts = contactColumns(input);
     const blocked = await this.dnc.isBlocked(
@@ -280,6 +288,7 @@ export class LeadsService {
           ...(contacts as Prisma.LeadUncheckedCreateInput),
           name: input.name,
           source: input.source,
+          ownerId: actor.id,
           sourceAccountId: input.sourceAccountId,
           sourceCampaignId: input.sourceCampaignId,
           interestLevel: input.interestLevel,
@@ -321,7 +330,12 @@ export class LeadsService {
   }
 
   async update(actor: RequestUser, id: string, input: UpdateLeadData, meta: RequestMeta) {
-    const existing = await this.prisma.lead.findUnique({ where: { id } });
+    assertOwnOperator(input.operatorId);
+    await assertReferences(this.prisma, {
+      accountId: input.sourceAccountId,
+      campaignId: input.sourceCampaignId,
+    });
+    const existing = await this.prisma.lead.findFirst({ where: { id, ...ownerScope() } });
     if (!existing || existing.deletedAt) throw new NotFoundException('Prospek tidak ditemukan');
     if (input.status === 'DO_NOT_CONTACT') {
       throw new BadRequestException(
@@ -638,7 +652,7 @@ export class LeadsService {
   }
 
   private async assertExists(id: string) {
-    const lead = await this.prisma.lead.findUnique({ where: { id } });
+    const lead = await this.prisma.lead.findFirst({ where: { id, ...ownerScope() } });
     if (!lead || lead.deletedAt) throw new NotFoundException('Prospek tidak ditemukan');
     return lead;
   }

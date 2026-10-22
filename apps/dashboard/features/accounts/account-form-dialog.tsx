@@ -4,7 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createTikTokAccountSchema,
   LANE_LABELS,
-  MARKETING_LANES,
   TIKTOK_ACCOUNT_STATUS_LABELS,
   TIKTOK_ACCOUNT_STATUSES,
   TIKTOK_ACCOUNT_TYPE_LABELS,
@@ -35,6 +34,7 @@ import {
 } from '@/components/ui/overlays';
 import { Input, Label, Textarea } from '@/components/ui/primitives';
 import { applyServerErrors } from '@/lib/api';
+import { HIDE_OFFICIAL_LANE, VISIBLE_MARKETING_LANES } from '@/lib/marketing-scope';
 import { useSaveAccount } from './api';
 
 type FormInput = z.input<typeof createTikTokAccountSchema>;
@@ -140,26 +140,28 @@ function AccountForm({
           />
         </FormField>
 
-        <FormField label="Jalur pemasaran" error={errors.lane?.message}>
-          <Controller
-            control={form.control}
-            name="lane"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger aria-invalid={!!errors.lane}>
-                  <SelectValue placeholder="Pilih jalur" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MARKETING_LANES.map((l) => (
-                    <SelectItem key={l} value={l}>
-                      {LANE_LABELS[l]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-          />
-        </FormField>
+        {!HIDE_OFFICIAL_LANE && (
+          <FormField label="Jalur pemasaran" error={errors.lane?.message}>
+            <Controller
+              control={form.control}
+              name="lane"
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger aria-invalid={!!errors.lane}>
+                    <SelectValue placeholder="Pilih jalur" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {VISIBLE_MARKETING_LANES.map((l) => (
+                      <SelectItem key={l} value={l}>
+                        {LANE_LABELS[l]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </FormField>
+        )}
         <FormField label="Jenis akun" error={errors.accountType?.message}>
           <Controller
             control={form.control}

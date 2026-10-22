@@ -60,7 +60,7 @@ export function StatCard({
     <Card className="p-5">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <div className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-brand-text">
           <Icon className="size-4" />
         </div>
       </div>

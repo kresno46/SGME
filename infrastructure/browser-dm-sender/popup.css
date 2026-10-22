@@ -1,0 +1,32 @@
+body {
+  width: 340px;
+  margin: 16px;
+  font:
+    13px/1.5 system-ui,
+    sans-serif;
+  color: #15213a;
+}
+h1 {
+  font-size: 19px;
+}
+label {
+  display: block;
+  margin: 12px 0;
+}
+button {
+  display: block;
+  margin: 8px 0;
+  padding: 9px;
+  width: 100%;
+  border: 1px solid #bcc4d1;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#start {
+  background: #f0c400;
+}
+#status {
+  background: #f2f4f8;
+  padding: 10px;
+  overflow-wrap: anywhere;
+}

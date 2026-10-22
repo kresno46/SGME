@@ -143,11 +143,13 @@ async function main() {
         accountType: 'PERSONAL',
       },
     ] as const;
+    const seedOwner = await prisma.user.findUniqueOrThrow({ where: { email } });
     for (const a of demo) {
       await prisma.tikTokAccount.upsert({
-        where: { username: a.username },
+        where: { ownerId_username: { ownerId: seedOwner.id, username: a.username } },
         create: {
           ...a,
+          ownerId: seedOwner.id,
           profileUrl: `https://www.tiktok.com/@${a.username}`,
           followersSource: 'SIMULATED',
           notes: 'Data demo dari seed — bukan akun asli.',

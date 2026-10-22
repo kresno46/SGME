@@ -8,6 +8,7 @@ import type {
 } from '@smge/types';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
+import { isVisibleLane } from '@/lib/marketing-scope';
 
 export function useOutboundSummary(accountId: string | null) {
   return useQuery({
@@ -56,7 +57,10 @@ export function useTask(id: string | null) {
 export function useTemplates(activeOnly = false) {
   return useQuery({
     queryKey: ['outbound', 'templates', activeOnly],
-    queryFn: () => api.get<MessageTemplateDto[]>('/message-templates', { activeOnly }),
+    queryFn: () =>
+      api
+        .get<MessageTemplateDto[]>('/message-templates', { activeOnly })
+        .then((rows) => rows.filter((t) => isVisibleLane(t.lane))),
   });
 }
 
