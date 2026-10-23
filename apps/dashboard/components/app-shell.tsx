@@ -16,7 +16,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/overlays';
-import { Badge } from '@/components/ui/primitives';
+import { DataDisclaimer } from '@/components/data-disclaimer';
 import { useAuth } from '@/hooks/use-auth';
 import { CURRENT_PHASE, NAV_ITEMS } from '@/lib/navigation';
 import { cn } from '@/lib/utils';
@@ -160,9 +160,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex-1 overflow-y-auto">
           <SidebarNav />
         </div>
-        <Badge variant="secondary" className="justify-center">
-          Fase {CURRENT_PHASE} — Produksi
-        </Badge>
+        <DataDisclaimer />
       </aside>
 
       {/* Sidebar mobile */}
@@ -182,6 +180,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Button>
             </div>
             <SidebarNav onNavigate={() => setMobileOpen(false)} />
+            <div className="mt-auto">
+              <DataDisclaimer />
+            </div>
           </aside>
         </div>
       )}

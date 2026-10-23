@@ -18,7 +18,12 @@ export function middleware(req: NextRequest) {
     url.search = pathname === '/' ? '' : `?next=${encodeURIComponent(pathname + search)}`;
     return NextResponse.redirect(url);
   }
-  if (hasSession && pathname === '/login') {
+  // A failed/offline logout can leave an httpOnly cookie. Allow explicit reauthentication.
+  if (
+    hasSession &&
+    pathname === '/login' &&
+    req.nextUrl.searchParams.get('reason') !== 'session-ended'
+  ) {
     const url = req.nextUrl.clone();
     url.pathname = '/';
     url.search = '';

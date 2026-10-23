@@ -4,8 +4,11 @@ import { PERMISSIONS, type Permission } from '@smge/shared';
 import type { AuthUser } from '@smge/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { createContext, useCallback, useContext, useEffect, useMemo } from 'react';
-import { api, setSessionExpiredHandler } from '@/lib/api';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
+import { api, apiFetch, setSessionExpiredHandler } from '@/lib/api';
+import { writeSessionActivity } from '@/lib/idle-session';
+import { Button } from '@/components/ui/button';
+import { useIdleSession } from './use-idle-session';
 
 interface AuthContextValue {
   user: AuthUser;
@@ -36,6 +39,22 @@ export function useMe() {
 export function AuthProvider({ user, children }: { user: AuthUser; children: React.ReactNode }) {
   const router = useRouter();
   const qc = useQueryClient();
+  const loggingOut = useRef<Promise<void> | null>(null);
+
+  const logout = useCallback(() => {
+    if (loggingOut.current) return loggingOut.current;
+    writeSessionActivity(user.id, 0);
+    loggingOut.current = (async () => {
+      await apiFetch('/auth/logout', {
+        method: 'POST',
+        signal: AbortSignal.timeout(5000),
+      }).catch(() => undefined);
+      qc.clear();
+      window.location.replace('/login?reason=session-ended');
+    })();
+    return loggingOut.current;
+  }, [qc, user.id]);
+  const idle = useIdleSession(user.id, logout);
 
   const redirectToLogin = useCallback(() => {
     qc.clear();
@@ -54,16 +73,35 @@ export function AuthProvider({ user, children }: { user: AuthUser; children: Rea
       can: (p) =>
         user.permissions.includes(p) &&
         (user.role === 'SUPER_ADMIN' || !SUPER_ADMIN_ONLY.includes(p)),
-      logout: async () => {
-        await api.post('/auth/logout').catch(() => undefined);
-        qc.clear();
-        router.replace('/login');
-      },
+      logout,
     }),
-    [user, qc, router],
+    [user, logout],
   );
 
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider value={value}>
+      {idle.expired ? (
+        <div className="flex min-h-dvh items-center justify-center text-muted-foreground">
+          Sesi berakhir karena tidak ada aktivitas. Mengarahkan ke halaman login…
+        </div>
+      ) : (
+        <>
+          {children}
+          {idle.remainingSeconds !== null && (
+            <div
+              role="alert"
+              className="fixed bottom-4 left-1/2 z-[100] flex w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 items-center justify-between gap-3 rounded-xl border bg-card p-4 shadow-lg"
+            >
+              <p className="text-sm">
+                Tidak ada aktivitas. Anda akan keluar dalam {idle.remainingSeconds} detik.
+              </p>
+              <Button onClick={idle.continueSession}>Tetap masuk</Button>
+            </div>
+          )}
+        </>
+      )}
+    </AuthContext.Provider>
+  );
 }
 
 export function useAuth() {

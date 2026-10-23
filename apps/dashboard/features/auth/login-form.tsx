@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/primitives';
 import { ME_QUERY_KEY } from '@/hooks/use-auth';
 import { api, ApiError } from '@/lib/api';
+import { startIdleSession } from '@/lib/idle-session';
 
 /** Hanya izinkan redirect ke path internal (mencegah open redirect). */
 function safeNext(next: string | null) {
@@ -32,6 +33,7 @@ export function LoginForm() {
       setChallenge(res.challengeToken);
       return;
     }
+    startIdleSession(res.user.id);
     qc.setQueryData(ME_QUERY_KEY, res.user);
     router.replace(safeNext(params.get('next')));
     router.refresh();
@@ -40,7 +42,14 @@ export function LoginForm() {
   return challenge ? (
     <TwoFactorStep challengeToken={challenge} onDone={finish} onBack={() => setChallenge(null)} />
   ) : (
-    <PasswordStep onDone={finish} />
+    <>
+      {params.get('reason') === 'session-ended' && (
+        <p role="status" className="mb-4 rounded-md bg-muted p-3 text-sm">
+          Sesi Anda telah berakhir. Silakan masuk kembali.
+        </p>
+      )}
+      <PasswordStep onDone={finish} />
+    </>
   );
 }
 
