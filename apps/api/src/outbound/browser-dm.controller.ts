@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Query } from '@nestjs/common';
 import {
   browserDmQueueSchema,
   browserDmEnqueueSchema,
@@ -55,6 +55,10 @@ export class BrowserDmController {
     @Body(new ZodValidationPipe(browserDmQueueSchema)) body: z.infer<typeof browserDmQueueSchema>,
   ) {
     return this.service.cancel(user, body.accountId);
+  }
+  @Delete(':id')
+  removeCancelled(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
+    return this.service.removeCancelled(user, id);
   }
   @Post(':id/authorize')
   authorize(

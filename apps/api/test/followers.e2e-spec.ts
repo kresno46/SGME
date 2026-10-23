@@ -60,6 +60,24 @@ describe('Follower browser import (HTTP + database)', () => {
     expect(await prisma.auditLog.count({ where: { action: 'lead.followers_imported' } })).toBe(2);
   });
 
+  it('imports followers of another account with original provenance and sender ownership', async () => {
+    const data = batch();
+    data.accountUsername = 'akun_lain';
+    data.followers.push({ username: 'solid.mini' }, { username: 'akun_lain' });
+    expect((await upload(admin, data).expect(201)).body).toMatchObject({ created: 1, self: 2 });
+    const lead = await prisma.lead.findFirstOrThrow({ include: { activities: true } });
+    expect(lead.sourceAccountId).toBe(accountId);
+    expect(lead.ownerId).toBe(
+      (await prisma.tikTokAccount.findUniqueOrThrow({ where: { id: accountId } })).ownerId,
+    );
+    expect(lead.notes).toContain('followers @akun_lain,');
+    expect(lead.activities[0].metadata).toMatchObject({
+      collectedFromUsername: 'akun_lain',
+      senderUsername: 'solid.mini',
+    });
+    expect((await upload(admin, data).expect(201)).body).toMatchObject({ created: 0, existing: 1 });
+  });
+
   it('deduplicates concurrent uploads at the database boundary', async () => {
     const results = await Promise.all([upload(admin).expect(201), upload(admin).expect(201)]);
     expect(results.reduce((sum, result) => sum + result.body.created, 0)).toBe(1);
@@ -67,10 +85,7 @@ describe('Follower browser import (HTTP + database)', () => {
     expect(await prisma.leadActivity.count({ where: { type: 'IMPORT' } })).toBe(1);
   });
 
-  it('rejects malformed data, another source account, and an inactive source without writes', async () => {
-    const wrong = batch();
-    wrong.accountUsername = 'akun_lain';
-    await upload(admin, wrong).expect(400);
+  it('rejects malformed data and an inactive sender without writes', async () => {
     const invalid = batch();
     invalid.followers[0].username = 'https://evil.test';
     await upload(admin, invalid).expect(400);

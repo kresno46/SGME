@@ -7,7 +7,7 @@ import { LeadsPage } from '@/features/leads/leads-page';
 
 export default function Page() {
   return (
-    <RequirePermission permission={PERMISSIONS.LEADS_READ}>
+    <RequirePermission permission={PERMISSIONS.LEADS_READ} superAdminOnly>
       <Suspense>
         <LeadsPage />
       </Suspense>

@@ -20,13 +20,15 @@ import { useAuth } from '@/hooks/use-auth';
 /** Menampilkan halaman "tidak ada akses" bila permission tidak dimiliki. */
 export function RequirePermission({
   permission,
+  superAdminOnly = false,
   children,
 }: {
   permission: Permission;
+  superAdminOnly?: boolean;
   children: React.ReactNode;
 }) {
-  const { can } = useAuth();
-  if (!can(permission)) {
+  const { can, user } = useAuth();
+  if (!can(permission) || (superAdminOnly && user.role !== 'SUPER_ADMIN')) {
     return (
       <EmptyState
         icon={ShieldX}

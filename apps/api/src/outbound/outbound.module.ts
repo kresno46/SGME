@@ -64,6 +64,12 @@ export class OutboundController {
     return this.outbound.queue(q);
   }
 
+  @Get('template-context/:accountId')
+  @RequirePermissions(PERMISSIONS.OUTREACH_WORK)
+  templateContext(@Param('accountId', ParseUUIDPipe) accountId: string) {
+    return this.outbound.templateContext(accountId);
+  }
+
   @Get('tasks')
   @RequirePermissions(PERMISSIONS.OUTREACH_WORK)
   list(

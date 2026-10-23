@@ -30,15 +30,15 @@ Tidak ada fallback pengiriman kedua ketika hasil percobaan pertama belum jelas.
 
 1. Pilih akun pengirim pada dropdown Outbound, lalu klik **Kirim DM**. Pilih penerima sesuai kuota,
    pilih template atau tulis pesan, dan periksa pesan hasil personalisasi pada langkah **Tinjau**.
-   Admin dengan hak review dapat menekan **Setujui & siapkan**: tugas disetujui dan masuk antrean
-   sekaligus. Operator tanpa hak review memakai **Ajukan semua untuk review**; tugas menunggu Admin.
+   Tekan **Masukkan ke antrean**. Marketing maupun Admin langsung menyiapkan antrean tanpa
+   persetujuan terpisah. Mode API lama `submit` juga masuk antrean setelah konfirmasi pengirim.
 2. Di panel **Status pengiriman → Pasang extension / bantuan pengiriman**, unduh DM Sender, ekstrak ZIP dan pasang folder melalui
    **Load unpacked** pada `chrome://extensions` atau `edge://extensions` dengan Developer mode aktif.
 3. Login TikTok di browser yang sama sebagai akun pengirim. Pastikan tautan Profil akun login tersedia
    di navigasi TikTok; bila tak bisa diverifikasi, extension akan berhenti.
-4. Batch Admin dari **Kirim DM** sudah masuk antrean; tidak perlu membuka tiap tugas atau antrekan lagi.
-   Untuk tugas lama yang disetujui terpisah, gunakan **Siapkan pengiriman browser** pada tugas tersebut,
-   atau **Antrekan tugas lama yang disetujui** di bagian bantuan. Maksimal 30 tugas per batch.
+4. Batch dari **Kirim DM** sudah masuk antrean. Untuk draft atau tugas lama yang masih menunggu
+   review, gunakan **Masukkan pesan ke antrean** pada panel Status pengiriman atau buka pesannya
+   dan tekan **Masukkan ke antrean**. Maksimal 30 tugas per batch; data tetap dibatasi pemilik.
 5. Dari tab Outbound tersebut, buka extension **SMGE DM Sender**, centang persetujuan pengiriman,
    lalu klik **Mulai**. Berikan izin akses ke origin dashboard bila diminta. Biarkan tab dashboard
    tetap terbuka dan login. Extension membuka tab TikTok untuk memproses satu penerima per putaran.
@@ -48,31 +48,32 @@ Tidak ada fallback pengiriman kedua ketika hasil percobaan pertama belum jelas.
 Batch baru disimpan dalam satu transaksi: bila kuota berubah atau salah satu penerima tidak lagi layak,
 seluruh batch dibatalkan. ID permintaan membuat pengulangan request dengan isi yang sama mengembalikan
 hasil sebelumnya, tanpa menggandakan tugas. Batch tidak memasukkan tugas disetujui lain yang tidak dipilih.
-Personalisasi panel ini mendukung `{{nama}}`, `{{username}}`, dan `{{akun}}`; variabel campaign/link perlu
-diganti dengan teks atau URL sebelum disetujui. Menyiapkan antrean belum berarti DM terkirim.
+Personalisasi mengganti `{{nama}}`, `{{username}}`, dan `{{akun}}` sesuai penerima/pengirim.
+`{{link}}` memakai link registrasi yang sudah dikonfigurasi; jika kosong, masukkan URL lengkap.
+URL ditulis langsung seperti `https://example.com/daftar`, tanpa kurung kurawal. Link yang terlanjur
+dibungkus kurung kurawal dibersihkan. Variabel yang tidak dikenal atau belum tersedia ditolak
+sebelum pesan masuk antrean. Follow-up menampilkan pratinjau pesan yang sudah dipersonalisasi. Menyiapkan antrean belum berarti DM terkirim.
 
 **Jangan menekan konfirmasi terkirim manual sebagai cara memulai pengiriman.** Itu hanya pencatatan
 operator. Tugas yang sudah tercatat `MANUALLY_SENT` tidak dikirim ulang. Bila sebelumnya salah
 mengonfirmasi tanpa mengirim, periksa TikTok dan selesaikan pencatatan tugas lama sebelum menyiapkan
 tugas baru; modul ini tidak mengubah atau mengirim ulang catatan lama secara otomatis.
 
-## Follow-up TikTok tanpa balasan
+## Follow-up TikTok
 
-Satu pesan pengingat diperbolehkan walaupun belum ada balasan, setelah minimal 24 jam dari pesan
-terakhir. Maksimal dua pesan total tanpa balasan (pesan awal + satu follow-up). Ini aturan aplikasi;
-pengiriman tetap bergantung pada akses dan pengaturan DM penerima di TikTok. Kanal lain tetap
-membutuhkan izin komunikasi. Larangan kontak dan permintaan berhenti selalu diperiksa kembali.
+Aplikasi tidak menyinkronkan balasan TikTok otomatis. Catatan balasan tidak menjadi syarat follow-up:
+DM TikTok tidak diblokir karena belum ada catatan balasan, jeda 24 jam, atau jumlah pesan tanpa balasan.
+Tidak ada penjadwalan follow-up. Tanggal lama diabaikan oleh antrean dan pengiriman, tidak ditampilkan
+di halaman atau timeline, serta dibersihkan saat tugas masuk antrean. Parameter tanggal dari klien
+lama tetap diterima tetapi tidak digunakan; follow-up baru menyimpan tanggal kosong.
+Kanal selain TikTok tetap memakai aturan izin komunikasi dan batas pesan yang sudah ada.
 
-1. Dari hasil terkirim, klik **Buka tugas / follow-up**, lalu **Follow-up belum dibalas**.
-2. Isi pesan baru dan jadwal. Form menyediakan draft pengingat yang bisa diedit dan jadwal awal
-   setelah jeda minimum. Menjadwalkan tidak langsung mengirim pesan.
-3. Admin meninjau isi pesan lalu memilih **Setujui follow-up**. Operator dapat mengajukan review
-   ke Admin. Persetujuan pesan awal tidak dipakai untuk menyetujui follow-up.
-4. Saat jadwal tiba, buka tugas pada **Perlu tindakan**, klik **Antrekan follow-up via extension**,
-   lalu mulai extension seperti biasa. Pesan belum dapat diantrekan sebelum jadwal tiba. Jadwal
-   bukan pengiriman otomatis di background; extension harus dijalankan saat tugas sudah jatuh tempo.
-5. Jika masih belum ada balasan setelah dua pesan, jangan jadwalkan pesan ketiga. Catat balasan
-   yang benar-benar diterima melalui **Catat balasan** untuk melanjutkan percakapan.
+1. Dari hasil terkirim atau tab **Sudah dikirim**, buka pesan lalu klik **Buat follow-up**.
+2. Isi pesan baru lalu klik **Masukkan follow-up ke antrean**. Tidak perlu tanggal/jam atau persetujuan Admin.
+3. Mulai extension untuk mengirim. Antrean tetap memeriksa kepemilikan, larangan kontak, status prospek,
+   identitas pengirim/penerima, percobaan aktif, dan hasil yang belum pasti sebelum mengirim.
+4. Marketing memakai daftar **Sudah dikirim** tanpa status menunggu balasan. Riwayat dan catatan balasan
+   manual yang sudah ada tetap tersimpan; data tidak diubah menjadi seolah-olah sudah dibalas.
 
 Slot pengiriman browser dipakai kembali untuk follow-up yang sudah disetujui; snapshot hasil sebelumnya
 disimpan dalam audit, dan tiap pesan tercatat sebagai aktivitas prospek. Nomor percobaan baru memastikan

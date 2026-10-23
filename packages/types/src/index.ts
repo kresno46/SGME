@@ -134,7 +134,38 @@ export interface MetricValue {
   source: DataSource | null;
 }
 
+export interface DashboardDeliveryItem {
+  id: string;
+  taskId: string;
+  accountId: string;
+  accountUsername: string;
+  username: string;
+  status: 'QUEUED' | 'PROCESSING' | 'SENT' | 'FAILED' | 'UNVERIFIED' | 'CANCELLED';
+  detail: string | null;
+  updatedAt: string;
+}
+
+export interface DashboardOutreachOverview {
+  activeAccounts: number;
+  followersCollected: number;
+  sentToday: number;
+  sentLast7Days: number;
+  deliveries: Record<DashboardDeliveryItem['status'], number>;
+  accounts: Array<{
+    id: string;
+    username: string;
+    displayName: string;
+    status: TikTokAccountDto['status'];
+    owner: RefDto | null;
+    followersCollected: number;
+    sentToday: number;
+  }>;
+  recent: DashboardDeliveryItem[];
+  issues: DashboardDeliveryItem[];
+}
+
 export interface DashboardOverview {
+  outreach: DashboardOutreachOverview;
   generatedAt: string;
   accounts: {
     total: number;
@@ -438,6 +469,8 @@ export interface OutboundSummaryDto {
   createdToday: number;
   byStatus: Record<OutreachTaskStatus, number>;
   followUpsDue: number;
+  /** Jumlah aktivitas DM TikTok terkirim/dikonfirmasi hari ini, termasuk follow-up. */
+  sentToday: number;
   sentLast7Days: number;
   repliesLast7Days: number;
   /** null bila belum ada pesan terkirim */

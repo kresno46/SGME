@@ -1,14 +1,15 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Download, Send, Square } from 'lucide-react';
+import { Download, Send, Square, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
 import { FormError } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
-import { useInvalidateOutbound } from './api';
+import { useAuth } from '@/hooks/use-auth';
+import { useInvalidateOutbound, useOutboundSummary } from './api';
 
 type Delivery = {
   id: string;
@@ -27,6 +28,13 @@ const labels = {
 };
 
 export function BrowserDmPanel({ accountId }: { accountId: string }) {
+  const { user } = useAuth();
+  const simple = user.role === 'MARKETING_OPERATOR';
+  const summary = useOutboundSummary(accountId);
+  const approved =
+    (summary.data?.byStatus.APPROVED ?? 0) +
+    (summary.data?.byStatus.WAITING_REVIEW ?? 0) +
+    (summary.data?.byStatus.DRAFT ?? 0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
@@ -65,6 +73,27 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
       setBusy(false);
     }
   }
+  async function removeCancelled(row: Delivery) {
+    if (
+      busy ||
+      !window.confirm(
+        `Hapus @${row.username} dari daftar pengiriman yang dibatalkan? Riwayat tugas tetap disimpan.`,
+      )
+    )
+      return;
+    setBusy(true);
+    setError(null);
+    setNotice('');
+    try {
+      await api.delete('/outbound/browser-dm/' + row.id);
+      await invalidate();
+      setNotice('Pengiriman yang dibatalkan sudah dihapus dari daftar.');
+    } catch (cause) {
+      setError((cause as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
   return (
     <Card id="dm-delivery-status" className="mt-4 p-4">
       <h2 className="font-semibold">Status pengiriman</h2>
@@ -75,7 +104,9 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
             ? `${processing} DM sedang diproses. Biarkan tab ini terbuka.`
             : waiting
               ? `${waiting} DM siap. Buka extension SMGE DM Sender, lalu klik Mulai dari tab Outbound ini.`
-              : 'Mulai dari tombol Kirim DM untuk memilih penerima dan menyiapkan pesan.'}
+              : approved > 0
+                ? `${approved} pesan belum masuk antrean. Klik Masukkan pesan ke antrean untuk melanjutkan.`
+                : 'Mulai dari tombol Kirim DM untuk memilih penerima dan menyiapkan pesan.'}
       </p>
       {!!q.data?.length && (
         <div className="mt-3 flex flex-wrap gap-3 text-xs">
@@ -84,6 +115,16 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
           <span>{sent} terkirim / dikonfirmasi</span>
           <span>{failed + uncertain} perlu tindakan</span>
         </div>
+      )}
+      {approved > 0 && !waiting && !processing && !uncertain && (
+        <Button
+          className="mt-3"
+          size="sm"
+          disabled={busy}
+          onClick={() => void perform('queue', { accountId })}
+        >
+          <Send /> Masukkan pesan ke antrean
+        </Button>
       )}
       {!!waiting && (
         <Button
@@ -112,19 +153,23 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
           Pilih akun pada dropdown Outbound, buka extension, lalu Mulai. Tab dashboard harus tetap
           login. Hasil di bawah diperbarui setiap 5 detik.
         </p>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Punya tugas lama yang sudah disetujui? Masukkan ke antrean di sini. Pesan yang gagal harus
-          diperiksa dan dicoba ulang dari baris hasilnya.
-        </p>
-        <Button
-          className="mt-2"
-          size="sm"
-          variant="outline"
-          disabled={busy}
-          onClick={() => void perform('queue', { accountId })}
-        >
-          <Send /> Antrekan tugas lama yang disetujui
-        </Button>
+        {!simple && (
+          <>
+            <p className="mt-3 text-xs text-muted-foreground">
+              Punya pesan yang belum masuk antrean? Masukkan ke antrean di sini. Pesan yang gagal
+              harus diperiksa dan dicoba ulang dari baris hasilnya.
+            </p>
+            <Button
+              className="mt-2"
+              size="sm"
+              variant="outline"
+              disabled={busy}
+              onClick={() => void perform('queue', { accountId })}
+            >
+              <Send /> Masukkan pesan ke antrean
+            </Button>
+          </>
+        )}
       </details>
       <FormError message={error ?? q.error?.message ?? null} />
       {notice && (
@@ -147,6 +192,17 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
                   <Link href={`/outbound?account=${accountId}&tab=tasks&task=${row.taskId}`}>
                     Buka tugas / follow-up
                   </Link>
+                </Button>
+              )}
+              {row.status === 'CANCELLED' && (
+                <Button
+                  className="mt-2"
+                  size="sm"
+                  variant="destructive"
+                  disabled={busy}
+                  onClick={() => void removeCancelled(row)}
+                >
+                  <Trash2 /> Hapus dari daftar
                 </Button>
               )}
               {row.status === 'FAILED' && (

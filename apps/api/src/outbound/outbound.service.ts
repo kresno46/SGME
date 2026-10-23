@@ -13,7 +13,6 @@ import {
   computeLeadPriority,
   CONTACT_CHANNEL_LABELS,
   DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT,
-  MIN_UNANSWERED_FOLLOW_UP_HOURS,
   INTEREST_LEVEL_LABELS,
   NON_CONTACTABLE_LEAD_STATUSES,
   OPEN_OUTREACH_STATUSES,
@@ -32,7 +31,7 @@ import type { RequestUser } from '../common/decorators/auth.decorators';
 import { SettingsService } from '../common/settings.service';
 import { paginate, RequestMeta } from '../common/utils/request';
 import { startOfToday, toAccountRef } from '../common/utils/refs';
-import { env } from '../config/env';
+import { registrationLink, renderOutboundMessage } from './message-template';
 import { DncService } from '../leads/dnc.service';
 import { LeadActivityService } from '../leads/lead-activity.service';
 import { LEAD_INCLUDE, toLeadDto } from '../leads/leads.service';
@@ -81,29 +80,47 @@ export class OutboundService {
     return account;
   }
 
+  async templateContext(accountId: string) {
+    const account = await this.getOutboundAccount(accountId);
+    return { akun: account.username, link: registrationLink() };
+  }
+
   async summary(accountId: string): Promise<OutboundSummaryDto> {
     const account = await this.getOutboundAccount(accountId);
     const since7 = new Date(Date.now() - 7 * 86_400_000);
-    const [groups, createdToday, followUpsDue, sent7, replies7, dailyLimit] = await Promise.all([
-      this.prisma.outreachTask.groupBy({
-        by: ['status'],
-        where: { tiktokAccountId: accountId },
-        _count: { _all: true },
-      }),
-      this.prisma.outreachTask.count({
-        where: { tiktokAccountId: accountId, createdAt: { gte: startOfToday() } },
-      }),
-      this.prisma.outreachTask.count({
-        where: { tiktokAccountId: accountId, status: 'FOLLOW_UP', followUpAt: { lte: new Date() } },
-      }),
-      this.prisma.outreachTask.count({
-        where: { tiktokAccountId: accountId, lastSentAt: { gte: since7 } },
-      }),
-      this.prisma.outreachTask.count({
-        where: { tiktokAccountId: accountId, repliedAt: { gte: since7 } },
-      }),
-      this.settings.getNumber(DAILY_LIMIT_SETTING, DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT),
-    ]);
+    const today = startOfToday();
+    const tomorrow = startOfToday(new Date(Date.now() + 86400000));
+    const [groups, createdToday, followUpsDue, sent7, replies7, dailyLimit, dailySends] =
+      await Promise.all([
+        this.prisma.outreachTask.groupBy({
+          by: ['status'],
+          where: { tiktokAccountId: accountId },
+          _count: { _all: true },
+        }),
+        this.prisma.outreachTask.count({
+          where: { tiktokAccountId: accountId, createdAt: { gte: startOfToday() } },
+        }),
+        this.prisma.outreachTask.count({
+          where: { tiktokAccountId: accountId, status: 'FOLLOW_UP' },
+        }),
+        this.prisma.outreachTask.count({
+          where: { tiktokAccountId: accountId, lastSentAt: { gte: since7 } },
+        }),
+        this.prisma.outreachTask.count({
+          where: { tiktokAccountId: accountId, repliedAt: { gte: since7 } },
+        }),
+        this.settings.getNumber(DAILY_LIMIT_SETTING, DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT),
+        // Count actual send events: each follow-up counts once, idempotent results do not duplicate it.
+        this.prisma.$queryRaw<Array<{ count: number }>>`
+        SELECT COUNT(*)::int AS count
+        FROM lead_activities a
+        JOIN outreach_tasks t ON a.metadata->>'taskId' = t.id::text
+        WHERE t.tiktok_account_id = ${accountId}::uuid
+          AND t.channel = 'TIKTOK_DM'
+          AND a.type = 'MESSAGE_SENT'
+          AND a.created_at >= (${today}::timestamptz AT TIME ZONE 'UTC') AND a.created_at < (${tomorrow}::timestamptz AT TIME ZONE 'UTC')
+      `,
+      ]);
     const byStatus = Object.fromEntries(
       OUTREACH_TASK_STATUSES.map((s) => [s, 0]),
     ) as OutboundSummaryDto['byStatus'];
@@ -113,6 +130,7 @@ export class OutboundService {
       dailyLimit,
       createdToday,
       followUpsDue,
+      sentToday: dailySends[0]?.count ?? 0,
       sentLast7Days: sent7,
       repliesLast7Days: replies7,
       replyRate: sent7 ? Math.round((replies7 / sent7) * 1000) / 10 : null,
@@ -192,7 +210,7 @@ export class OutboundService {
         : q.operatorId
           ? { operatorId: q.operatorId }
           : {}),
-      ...(q.followUpDue ? { status: 'FOLLOW_UP', followUpAt: { lte: new Date() } } : {}),
+      ...(q.followUpDue ? { status: 'FOLLOW_UP' } : {}),
       ...(q.leadId ? { leadId: q.leadId } : {}),
       ...(q.search
         ? {
@@ -211,11 +229,7 @@ export class OutboundService {
       this.prisma.outreachTask.findMany({
         where,
         include: OutreachMapper.include,
-        orderBy: [
-          { followUpAt: { sort: 'asc', nulls: 'last' } },
-          { priority: 'desc' },
-          { updatedAt: 'desc' },
-        ],
+        orderBy: [{ priority: 'desc' }, { updatedAt: 'desc' }],
         skip: (q.page - 1) * q.pageSize,
         take: q.pageSize,
       }),
@@ -293,15 +307,20 @@ export class OutboundService {
       if (!tpl || !tpl.isActive)
         throw new BadRequestException('Template tidak ditemukan atau nonaktif');
       templateId = tpl.id;
-      draft ??= renderTemplate(tpl.content, {
-        nama: lead.name,
+      draft ??= tpl.content;
+    }
+
+    if (draft) {
+      const vars = {
+        nama: lead.name || lead.tiktokUsername,
         username: lead.tiktokUsername,
         akun: account.username,
         campaign: campaign?.name,
         link: registrationLink(campaign?.trackingCode),
-      });
+      };
+      draft =
+        channel === 'TIKTOK_DM' ? renderOutboundMessage(draft, vars) : renderTemplate(draft, vars);
     }
-
     const priority = computeLeadPriority({
       status: lead.status,
       interestLevel: lead.interestLevel,
@@ -340,6 +359,14 @@ export class OutboundService {
   async updateDraft(user: RequestUser, id: string, draftMessage: string, aiGenerated?: boolean) {
     const task = await this.findTask(id);
     this.assertAction(task.status, 'edit_draft', user);
+    if (task.channel === 'TIKTOK_DM')
+      draftMessage = renderOutboundMessage(draftMessage, {
+        nama: task.lead.name || task.lead.tiktokUsername,
+        username: task.lead.tiktokUsername,
+        akun: task.tiktokAccount.username,
+        campaign: task.campaign?.name,
+        link: registrationLink(),
+      });
     const updated = await this.prisma.outreachTask.update({
       where: { id },
       data: { draftMessage, ...(aiGenerated !== undefined ? { aiGenerated } : {}) },
@@ -417,18 +444,6 @@ export class OutboundService {
               sentCount: task.sentCount,
             });
             if (!allowed.eligible) throw new ConflictException(allowed.reason);
-            if (!task.followUpAt || task.followUpAt > now)
-              throw new ConflictException('Jadwal follow-up belum tiba.');
-            if (
-              task.channel === 'TIKTOK_DM' &&
-              !task.repliedAt &&
-              (!task.lastSentAt ||
-                now.getTime() - task.lastSentAt.getTime() <
-                  MIN_UNANSWERED_FOLLOW_UP_HOURS * 3600000)
-            )
-              throw new ConflictException(
-                'Follow-up tanpa balasan menunggu minimal 24 jam sejak pesan terakhir.',
-              );
           }
           // Pemeriksaan ulang saat pengiriman: larangan kontak bisa muncul setelah tugas dibuat.
           if (lead.doNotContact || lead.deletedAt) {
@@ -514,8 +529,6 @@ export class OutboundService {
           break;
         }
         case 'schedule_follow_up': {
-          const at = action.followUpAt as Date;
-          if (at <= now) throw new BadRequestException('Jadwal follow-up harus di masa depan');
           const allowed = checkFollowUpAllowed({
             channel: task.channel,
             replied: !!task.repliedAt,
@@ -530,31 +543,34 @@ export class OutboundService {
             (await this.dnc.isBlocked(DncService.identitiesOf(lead), tx))
           )
             throw new ConflictException('Prospek tidak lagi dapat dihubungi.');
-          if (
-            task.channel === 'TIKTOK_DM' &&
-            !task.repliedAt &&
-            (!task.lastSentAt ||
-              at.getTime() - task.lastSentAt.getTime() < MIN_UNANSWERED_FOLLOW_UP_HOURS * 3600000)
-          )
-            throw new ConflictException('Jadwalkan minimal 24 jam setelah pesan terakhir.');
           if (task.channel === 'TIKTOK_DM' && !action.draftMessage?.trim())
             throw new BadRequestException('Tulis pesan baru untuk follow-up.');
+          const followUpMessage =
+            task.channel === 'TIKTOK_DM'
+              ? renderOutboundMessage(action.draftMessage!, {
+                  nama: lead.name || lead.tiktokUsername,
+                  username: lead.tiktokUsername,
+                  akun: task.tiktokAccount.username,
+                  campaign: task.campaign?.name,
+                  link: registrationLink(),
+                })
+              : action.draftMessage;
           await set({
             status: 'FOLLOW_UP',
-            followUpAt: at,
+            followUpAt: null,
             finalMessage: null,
             approvedAt: null,
             reviewerId: null,
             submittedAt: null,
-            ...(action.draftMessage ? { draftMessage: action.draftMessage } : {}),
+            ...(followUpMessage ? { draftMessage: followUpMessage } : {}),
           });
-          await tx.lead.update({ where: { id: lead.id }, data: { nextFollowUpAt: at } });
+          await tx.lead.update({ where: { id: lead.id }, data: { nextFollowUpAt: null } });
           await this.activities.log(
             lead.id,
             'FOLLOW_UP_SCHEDULED',
-            `Follow-up dijadwalkan via ${via}`,
+            `Follow-up disiapkan via ${via}`,
             user.id,
-            { taskId: id, at: at.toISOString() },
+            { taskId: id, immediate: true },
             tx,
           );
           break;
@@ -649,15 +665,4 @@ export class OutboundService {
     if (!task) throw new NotFoundException('Tugas tidak ditemukan');
     return task;
   }
-}
-
-/** Link registrasi dengan UTM. Kosong bila SOLID_MINI_REGISTRATION_URL belum diatur. */
-export function registrationLink(trackingCode?: string | null): string | null {
-  const base = env().SOLID_MINI_REGISTRATION_URL;
-  if (!base) return null;
-  const url = new URL(base);
-  url.searchParams.set('utm_source', 'tiktok');
-  url.searchParams.set('utm_medium', 'outbound');
-  if (trackingCode) url.searchParams.set('utm_campaign', trackingCode);
-  return url.toString();
 }

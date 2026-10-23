@@ -42,10 +42,12 @@ function Brand() {
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const { can } = useAuth();
+  const { can, user } = useAuth();
   return (
     <nav className="flex flex-col gap-0.5" aria-label="Navigasi utama">
-      {NAV_ITEMS.filter((i) => can(i.permission)).map((item) => {
+      {NAV_ITEMS.filter(
+        (i) => can(i.permission) && (!i.superAdminOnly || user.role === 'SUPER_ADMIN'),
+      ).map((item) => {
         const active = item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
         return (
           <Link

@@ -91,14 +91,21 @@ describe('FollowerImportService', () => {
     expect(tx.lead.findMany.mock.calls[0][0].where).not.toHaveProperty('deletedAt');
   });
 
-  it('menolak akun sumber berbeda sebelum mengubah data', async () => {
-    const { service, prisma } = setup();
+  it('menerima sumber berbeda, mencatat asal asli, dan melewati akun sumber serta pengirim', async () => {
+    const { service, tx } = setup();
     const request = input();
     request.batch.accountUsername = 'akun.lain';
-    await expect(
-      service.import(actor, request, { ipAddress: null, userAgent: null }),
-    ).rejects.toThrow('berbeda');
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    request.batch.followers.push({ username: 'akun.lain' });
+    const result = await service.import(actor, request, { ipAddress: null, userAgent: null });
+    expect(result.created).toBe(1);
+    expect(result.self).toBe(2);
+    const row = tx.lead.createMany.mock.calls[0][0].data[0];
+    expect(row.sourceAccountId).toBe(request.accountId);
+    expect(row.notes).toContain('followers @akun.lain,');
+    expect(tx.leadActivity.createMany.mock.calls[0][0].data[0].metadata).toMatchObject({
+      collectedFromUsername: 'akun.lain',
+      senderUsername: 'solid.mini',
+    });
   });
 
   it('menolak akun hilang, tidak aktif, atau bukan Outbound', async () => {

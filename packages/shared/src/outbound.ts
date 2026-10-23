@@ -47,9 +47,8 @@ export const NON_CONTACTABLE_LEAD_STATUSES: LeadStatus[] = [
   'ACTIVE',
 ];
 
-/** Maksimum pesan tanpa balasan dalam satu tugas (pesan awal + 1 follow-up). */
+/** Batas pesan tanpa balasan untuk kanal selain TikTok. */
 export const MAX_UNANSWERED_MESSAGES = 2;
-export const MIN_UNANSWERED_FOLLOW_UP_HOURS = 24;
 
 /** Batas default tugas baru per akun per hari — menjaga penjangkauan tetap personal. */
 export const DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT = 30;
@@ -92,8 +91,8 @@ export function checkOutreachEligibility(i: EligibilityInput): EligibilityResult
 }
 
 /**
- * TikTok membolehkan satu pengingat tanpa balasan; kanal lain tetap membutuhkan izin.
- * Tanpa balasan, jumlah pesan dibatasi MAX_UNANSWERED_MESSAGES.
+ * Balasan TikTok tidak disinkronkan otomatis, sehingga bukan syarat follow-up.
+ * Kanal lain tetap mengikuti aturan izin dan jumlah pesan tanpa balasan.
  */
 export function checkFollowUpAllowed(i: {
   channel?: ContactChannel;
@@ -101,8 +100,8 @@ export function checkFollowUpAllowed(i: {
   hasConsentForChannel: boolean;
   sentCount: number;
 }): EligibilityResult {
-  if (i.replied) return { eligible: true };
-  if (i.channel !== 'TIKTOK_DM' && !i.hasConsentForChannel) {
+  if (i.channel === 'TIKTOK_DM' || i.replied) return { eligible: true };
+  if (!i.hasConsentForChannel) {
     return {
       eligible: false,
       reason:
@@ -206,17 +205,26 @@ export const TEMPLATE_PLACEHOLDERS = {
 
 export type TemplateVariables = Partial<Record<keyof typeof TEMPLATE_PLACEHOLDERS, string | null>>;
 
-/** Mengganti {{placeholder}}; placeholder yang tidak dikenal dibiarkan apa adanya agar terlihat saat review. */
+/** A URL is literal text, never a placeholder, even if pasted inside braces. */
+export function normalizeTemplateUrls(content: string): string {
+  return content.replace(/\{+\s*(https?:\/\/[^\s{}]+)\s*\}+/gi, (_, url: string) => url);
+}
+
+/** Mengganti variabel yang dikenal; nilai tidak dikenal tetap terlihat saat pratinjau. */
 export function renderTemplate(content: string, vars: TemplateVariables): string {
-  return content.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key: string) => {
-    if (!(key in TEMPLATE_PLACEHOLDERS)) return match;
-    const v = vars[key as keyof TemplateVariables];
-    if (key === 'nama') return v?.trim() || 'Kak';
-    return v?.trim() || '';
-  });
+  return normalizeTemplateUrls(
+    content.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key: string) => {
+      if (!Object.hasOwn(TEMPLATE_PLACEHOLDERS, key)) return match;
+      const v = vars[key as keyof TemplateVariables];
+      if (key === 'nama') return v?.trim() || 'Kak';
+      return v?.trim() || '';
+    }),
+  );
 }
 
 export function findUnknownPlaceholders(content: string): string[] {
-  const found = [...content.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].map((m) => m[1]);
-  return [...new Set(found.filter((k) => !(k in TEMPLATE_PLACEHOLDERS)))];
+  const found = [...normalizeTemplateUrls(content).matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)].map((m) =>
+    m[1].trim(),
+  );
+  return [...new Set(found.filter((k) => !Object.hasOwn(TEMPLATE_PLACEHOLDERS, k)))];
 }

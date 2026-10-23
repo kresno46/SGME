@@ -53,3 +53,26 @@ serta membuat template pribadi. Izin persetujuan pesan tetap mengikuti role/revi
 database test terpisah. Cakupan mencakup ID/filter palsu, akses detail dan mutasi, ekspor,
 duplikat per user, impor followers/CSV, template bersama dan privat, konteks AI, dashboard,
 request paralel, review Super Admin, dan antrean pengiriman tanpa DM TikTok sungguhan.
+
+## Template pribadi dan rekomendasi
+
+Tab Template menampilkan **Template saya** dan **Rekomendasi admin**. User membuat template pribadi
+melalui **Template baru**, atau memilih **Salin ke template saya** pada rekomendasi. Salinan membuka
+form yang sudah terisi; setelah disimpan, server membuat ID baru dengan pemilik dari sesi login.
+Mengedit atau menghapus salinan tidak mengubah rekomendasi aslinya. Super Admin juga mempunyai
+bagian **Template user lain** untuk melihat dan mengelola template pribadi semua user.
+
+## Dashboard per role
+
+Dashboard menampilkan akun Outbound aktif, jumlah followers yang tersimpan dari import, jumlah
+aktivitas DM terkirim/dikonfirmasi hari ini dan tujuh hari terakhir, antrean, hasil yang perlu
+diperiksa, akun pengirim, dan pengiriman terbaru. Angka pengiriman dihitung per aktivitas, sehingga
+follow-up dihitung sebagai pesan tersendiri tanpa menghitung ulang laporan hasil yang sama.
+Batas hari mengikuti Asia/Jakarta; perbandingan timestamp SQL memakai UTC secara eksplisit agar
+tidak bergantung pada zona waktu PostgreSQL.
+
+Marketing dan Admin hanya mendapat agregat serta daftar data miliknya. Super Admin mendapat
+ringkasan seluruh tim dan label pemilik akun. Viewer memakai cakupan datanya sendiri dan tampilan
+baca saja, tanpa pintasan pengiriman atau pengelolaan user. Detail Dashboard sebelumnya tetap
+tersedia di **Detail akun & prospek**: tertutup awal untuk Marketing dan terbuka untuk role lain.
+Ringkasan diperbarui setiap 15 detik; tautan per akun/pengiriman membuka akun yang bersangkutan.

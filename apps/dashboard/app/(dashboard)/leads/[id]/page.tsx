@@ -8,7 +8,7 @@ import { LeadDetail } from '@/features/leads/lead-detail';
 export default function Page({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   return (
-    <RequirePermission permission={PERMISSIONS.LEADS_READ}>
+    <RequirePermission permission={PERMISSIONS.LEADS_READ} superAdminOnly>
       <LeadDetail id={id} />
     </RequirePermission>
   );

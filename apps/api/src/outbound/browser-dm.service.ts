@@ -14,8 +14,6 @@ import {
   DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT,
   checkOutreachEligibility,
   checkFollowUpAllowed,
-  MIN_UNANSWERED_FOLLOW_UP_HOURS,
-  renderTemplate,
   browserDmPrepareSchema,
 } from '@smge/shared';
 import type { z } from 'zod';
@@ -24,6 +22,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../common/settings.service';
 import { startOfToday } from '../common/utils/refs';
 import { DncService } from '../leads/dnc.service';
+import { registrationLink, renderOutboundMessage } from './message-template';
 
 @Injectable()
 export class BrowserDmService {
@@ -34,9 +33,9 @@ export class BrowserDmService {
 
   /** One reviewed batch: no intermediate drafts or partially queued recipients. */
   async prepare(actor: RequestUser, input: z.infer<typeof browserDmPrepareSchema>) {
-    const approve = input.mode === 'approve';
-    if (approve && !actor.permissions.includes(PERMISSIONS.OUTREACH_REVIEW))
-      throw new ForbiddenException('Persetujuan membutuhkan hak review.');
+    // Legacy submit/approve modes both queue after the sender confirms the preview.
+    if (!actor.permissions.includes(PERMISSIONS.OUTREACH_WORK))
+      throw new ForbiddenException('Pengiriman membutuhkan izin outreach.');
     const limit = await this.settings.getNumber(
       'outbound.daily_task_limit_per_account',
       DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT,
@@ -112,10 +111,11 @@ export class BrowserDmService {
             );
           if (lead.tiktokUsernameNormalized === account.username.replace(/^@/, '').toLowerCase())
             throw new ConflictException('Akun pengirim tidak boleh menjadi penerima.');
-          const message = renderTemplate(input.message, {
-            nama: lead.name,
+          const message = renderOutboundMessage(input.message, {
+            nama: lead.name || lead.tiktokUsername,
             username: lead.tiktokUsername,
             akun: account.username,
+            link: registrationLink(),
           });
           if (message.trim().length < 5 || message.length > 2000)
             throw new ConflictException(
@@ -127,32 +127,31 @@ export class BrowserDmService {
               ownerId: lead.ownerId ?? actor.id,
               tiktokAccountId: account.id,
               channel: 'TIKTOK_DM',
-              status: approve ? 'APPROVED' : 'WAITING_REVIEW',
+              status: 'APPROVED',
               draftMessage: message,
-              finalMessage: approve ? message : null,
+              finalMessage: message,
               operatorId: actor.id,
-              reviewerId: approve ? actor.id : null,
+              reviewerId: actor.id,
               submittedAt: now,
-              approvedAt: approve ? now : null,
+              approvedAt: now,
             },
           });
           taskIds.push(task.id);
-          if (approve)
-            await tx.browserDmDelivery.create({
-              data: {
-                taskId: task.id,
-                accountId: account.id,
-                requestedById: actor.id,
-                username: lead.tiktokUsernameNormalized!,
-                senderUsername: account.username,
-                message,
-              },
-            });
+          await tx.browserDmDelivery.create({
+            data: {
+              taskId: task.id,
+              accountId: account.id,
+              requestedById: actor.id,
+              username: lead.tiktokUsernameNormalized!,
+              senderUsername: account.username,
+              message,
+            },
+          });
         }
         const result = {
           taskIds,
-          queued: approve ? taskIds.length : 0,
-          submitted: approve ? 0 : taskIds.length,
+          queued: taskIds.length,
+          submitted: 0,
         };
         await tx.auditLog.create({
           data: {
@@ -182,21 +181,35 @@ export class BrowserDmService {
     });
   }
 
-  private async eligible(tx: Prisma.TransactionClient, taskId: string) {
+  private async eligible(tx: Prisma.TransactionClient, taskId: string, allowUnqueuedDraft = false) {
     const task = await tx.outreachTask.findFirst({
       where: { id: taskId, ...ownerScope() },
       include: {
         lead: { include: { consents: { where: { status: 'GRANTED' } } } },
         tiktokAccount: true,
+        campaign: true,
       },
     });
+    const direct =
+      allowUnqueuedDraft && task && ['DRAFT', 'WAITING_REVIEW', 'FOLLOW_UP'].includes(task.status);
+    if (task && direct) task.finalMessage = task.draftMessage;
+    if (task?.finalMessage)
+      task.finalMessage = renderOutboundMessage(task.finalMessage, {
+        nama: task.lead.name || task.lead.tiktokUsername,
+        username: task.lead.tiktokUsername,
+        akun: task.tiktokAccount.username,
+        campaign: task.campaign?.name,
+        link: registrationLink(),
+      });
     if (
       !task ||
-      task.status !== 'APPROVED' ||
+      (task.status !== 'APPROVED' && !direct) ||
       task.ownerId !== task.lead.ownerId ||
       task.ownerId !== task.tiktokAccount.ownerId ||
       task.channel !== 'TIKTOK_DM' ||
       !task.finalMessage?.trim() ||
+      task.finalMessage.trim().length < 5 ||
+      task.finalMessage.length > 2000 ||
       !task.lead.tiktokUsernameNormalized ||
       task.lead.deletedAt ||
       task.lead.doNotContact ||
@@ -218,16 +231,6 @@ export class BrowserDmService {
         sentCount: task.sentCount,
       });
       if (!allowed.eligible) throw new ConflictException(allowed.reason);
-      if (!task.followUpAt || task.followUpAt > new Date())
-        throw new ConflictException('Jadwal follow-up belum tiba.');
-      if (
-        !task.repliedAt &&
-        (!task.lastSentAt ||
-          Date.now() - task.lastSentAt.getTime() < MIN_UNANSWERED_FOLLOW_UP_HOURS * 3600000)
-      )
-        throw new ConflictException(
-          'Follow-up tanpa balasan menunggu minimal 24 jam sejak pesan terakhir.',
-        );
     }
     return task;
   }
@@ -241,7 +244,7 @@ export class BrowserDmService {
           ...ownerScope(),
           ...(taskIds ? { id: { in: taskIds } } : {}),
           tiktokAccountId: accountId,
-          status: 'APPROVED',
+          status: { in: ['APPROVED', 'DRAFT', 'WAITING_REVIEW', 'FOLLOW_UP'] },
           channel: 'TIKTOK_DM',
           OR: [
             { browserDelivery: null },
@@ -261,7 +264,7 @@ export class BrowserDmService {
       for (const row of tasks) {
         let task;
         try {
-          task = await this.eligible(tx, row.id);
+          task = await this.eligible(tx, row.id, true);
         } catch (error) {
           if (error instanceof ConflictException) {
             if (taskIds?.length === 1) throw error;
@@ -269,6 +272,25 @@ export class BrowserDmService {
           }
           throw error;
         }
+        if (task.status !== 'APPROVED' || task.finalMessage !== row.finalMessage) {
+          await tx.outreachTask.update({
+            where: { id: task.id },
+            data: {
+              status: 'APPROVED',
+              followUpAt: null,
+              finalMessage: task.finalMessage,
+              submittedAt: new Date(),
+              approvedAt: new Date(),
+              reviewerId: actor.id,
+              reviewNote: null,
+            },
+          });
+        }
+        // Legacy dates never delay a follow-up; clear them when preparing its delivery.
+        if (task.followUpAt)
+          await tx.outreachTask.update({ where: { id: task.id }, data: { followUpAt: null } });
+        if (task.sentCount > 0)
+          await tx.lead.update({ where: { id: task.leadId }, data: { nextFollowUpAt: null } });
         const previous = await tx.browserDmDelivery.findUnique({ where: { taskId: task.id } });
         const data = {
           accountId,
@@ -364,8 +386,18 @@ export class BrowserDmService {
         orderBy: { createdAt: 'asc' },
       });
       if (!delivery) return null;
+      let task;
       try {
-        await this.eligible(tx, delivery.taskId);
+        task = await this.eligible(tx, delivery.taskId);
+        const original = renderOutboundMessage(delivery.message, {
+          nama: task.lead.name || task.lead.tiktokUsername,
+          username: task.lead.tiktokUsername,
+          akun: task.tiktokAccount.username,
+          campaign: task.campaign?.name,
+          link: registrationLink(),
+        });
+        if (original !== task.finalMessage)
+          throw new ConflictException('Pesan antrean berubah. Periksa kembali sebelum mengirim.');
       } catch {
         await tx.browserDmDelivery.update({
           where: { id: delivery.id },
@@ -377,9 +409,21 @@ export class BrowserDmService {
         });
         return { skipped: true };
       }
+      if (task.finalMessage !== delivery.message) {
+        await tx.outreachTask.update({
+          where: { id: task.id },
+          data: { finalMessage: task.finalMessage },
+        });
+      }
       return tx.browserDmDelivery.update({
         where: { id: delivery.id },
-        data: { status: 'PROCESSING', clientId, attemptId: randomUUID(), startedAt: new Date() },
+        data: {
+          status: 'PROCESSING',
+          message: task.finalMessage!,
+          clientId,
+          attemptId: randomUUID(),
+          startedAt: new Date(),
+        },
       });
     });
   }
@@ -498,6 +542,51 @@ export class BrowserDmService {
           completedAt: new Date(),
         },
       });
+    });
+  }
+
+  async removeCancelled(actor: RequestUser, id: string) {
+    const row = await this.prisma.browserDmDelivery.findUnique({ where: { id } });
+    if (!row || (row.requestedById !== actor.id && actor.role !== 'SUPER_ADMIN'))
+      throw new NotFoundException('Pengiriman tidak ditemukan.');
+    await assertReferences(this.prisma, { accountId: row.accountId });
+    return this.prisma.$transaction(async (tx) => {
+      await this.lock(tx, row.accountId);
+      const current = await tx.browserDmDelivery.findUnique({ where: { id } });
+      if (!current) throw new NotFoundException('Pengiriman tidak ditemukan.');
+      if (current.status !== 'CANCELLED')
+        throw new ConflictException('Hanya pengiriman yang dibatalkan dapat dihapus dari daftar.');
+      // Keep the task and sent-message history, but prevent accidental requeueing after removal.
+      await tx.outreachTask.updateMany({
+        where: {
+          id: current.taskId,
+          status: { in: ['DRAFT', 'WAITING_REVIEW', 'APPROVED', 'FOLLOW_UP'] },
+        },
+        data: {
+          status: 'CANCELLED',
+          cancelReason: 'Antrean dibatalkan dan dihapus dari daftar.',
+          followUpAt: null,
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          action: 'browser_dm.cancelled_removed',
+          actorId: actor.id,
+          actorEmail: actor.email,
+          entityType: 'browser_dm_delivery',
+          entityId: id,
+          metadata: {
+            taskId: current.taskId,
+            accountId: current.accountId,
+            username: current.username,
+            status: current.status,
+            detail: current.detail,
+            requestedById: current.requestedById,
+          },
+        },
+      });
+      await tx.browserDmDelivery.delete({ where: { id } });
+      return { deleted: true };
     });
   }
 

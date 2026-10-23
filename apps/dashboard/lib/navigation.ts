@@ -19,6 +19,7 @@ export interface NavItem {
   href: string;
   icon: LucideIcon;
   permission: Permission;
+  superAdminOnly?: boolean;
   /** Fase pengembangan saat modul tersedia penuh */
   phase: number;
 }
@@ -47,6 +48,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   },
   {
     title: 'CRM / Prospek',
+    superAdminOnly: true,
     href: '/leads',
     icon: Users,
     permission: PERMISSIONS.LEADS_READ,
@@ -61,6 +63,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   },
   {
     title: 'AI Sales Agent',
+    superAdminOnly: true,
     href: '/ai-sales',
     icon: Bot,
     permission: PERMISSIONS.AI_USE,

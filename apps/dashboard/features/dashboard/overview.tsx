@@ -40,6 +40,7 @@ import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
 import { HIDE_OFFICIAL_LANE, VISIBLE_MARKETING_LANES, isVisibleLane } from '@/lib/marketing-scope';
 import { formatCompact, formatDateTime, formatNumber } from '@/lib/utils';
+import { OutreachOverview } from './outreach-overview';
 
 export const LANE_COLOR: Record<MarketingLane, string> = {
   OFFICIAL: 'var(--lane-official)',
@@ -58,8 +59,9 @@ export function LaneDot({ lane }: { lane: MarketingLane }) {
 export function DashboardOverviewPage() {
   const { user } = useAuth();
   const q = useQuery({
-    queryKey: ['analytics', 'overview'],
+    queryKey: ['analytics', 'overview', user.id],
     queryFn: () => api.get<DashboardOverview>('/analytics/overview'),
+    refetchInterval: 15000,
   });
   const d = q.data;
   const loading = q.isPending;
@@ -76,173 +78,194 @@ export function DashboardOverviewPage() {
     <>
       <PageHeader
         title={`Halo, ${user.name.split(' ')[0]}`}
-        description="Pantau akun TikTok, followers, prospek, dan aktivitas outreach DM."
+        description={
+          user.role === 'SUPER_ADMIN'
+            ? 'Ringkasan followers dan pengiriman DM seluruh tim.'
+            : user.role === 'VIEWER'
+              ? 'Ringkasan data yang dapat Anda akses.'
+              : 'Pantau followers tersimpan dan hasil pengiriman DM milik Anda.'
+        }
       />
 
       {q.isError && (
         <Card className="mb-6 border-destructive/40 p-4 text-sm text-destructive">
-          Gagal memuat ringkasan: {q.error.message}
+          <p>Gagal memuat ringkasan: {q.error.message}</p>
+          <Button className="mt-2" size="sm" variant="outline" onClick={() => void q.refetch()}>
+            Coba lagi
+          </Button>
         </Card>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard
-          label="Akun TikTok"
-          icon={Smartphone}
-          loading={loading}
-          value={formatNumber(accountTotal ?? 0)}
-          hint={!HIDE_OFFICIAL_LANE && d && <span>{formatNumber(d.accounts.active)} aktif</span>}
-        />
-        <StatCard
-          label="Total followers"
-          icon={Users}
-          loading={loading}
-          value={formatNumber(followerTotal ?? 0)}
-          source={
-            !HIDE_OFFICIAL_LANE &&
-            d &&
-            d.accounts.followersBySource.ACTUAL === 0 &&
-            d.accounts.totalFollowers > 0
-              ? 'MANUAL'
-              : null
-          }
-          hint={
-            d && d.accounts.followersBySource.SIMULATED > 0 ? (
-              <span className="inline-flex items-center gap-1">
-                <FlaskConical className="size-3" />{' '}
-                {formatCompact(d.accounts.followersBySource.SIMULATED)} simulasi tidak dihitung
-              </span>
-            ) : (
-              d && <span>Aktual + input manual</span>
-            )
-          }
-        />
-        {!HIDE_OFFICIAL_LANE && (
+      <OutreachOverview data={d?.outreach} loading={loading} />
+      <details className="mt-6 rounded-xl border p-4" open={user.role !== 'MARKETING_OPERATOR'}>
+        <summary className="cursor-pointer font-semibold">Detail akun & prospek</summary>
+        <p className="my-3 text-sm text-muted-foreground">
+          Followers di profil adalah angka aktual atau input manual, terpisah dari data followers
+          yang sudah diimpor.
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="Campaign aktif"
-            icon={Megaphone}
+            label="Akun TikTok"
+            icon={Smartphone}
             loading={loading}
-            value={formatNumber(m?.activeCampaigns.value ?? 0)}
+            value={formatNumber(accountTotal ?? 0)}
+            hint={!HIDE_OFFICIAL_LANE && d && <span>{formatNumber(d.accounts.active)} aktif</span>}
           />
-        )}
-        <StatCard
-          label="Total prospek"
-          icon={UserPlus}
-          loading={loading}
-          value={formatNumber(m?.totalLeads.value ?? 0)}
-        />
-        <StatCard
-          label="Prospek tertarik"
-          icon={Sparkles}
-          loading={loading}
-          value={formatNumber(m?.interestedLeads.value ?? 0)}
-        />
-        {!HIDE_OFFICIAL_LANE && (
           <StatCard
-            label="Percakapan"
-            icon={MessagesSquare}
+            label="Followers di profil"
+            icon={Users}
             loading={loading}
-            value={formatNumber(m?.conversations.value ?? 0)}
-          />
-        )}
-        <StatCard
-          label="Tugas outbound terbuka"
-          icon={Send}
-          loading={loading}
-          value={formatNumber(m?.outreachTasks.value ?? 0)}
-        />
-        {!HIDE_OFFICIAL_LANE && (
-          <StatCard
-            label="Registrasi terverifikasi"
-            icon={UserCheck}
-            loading={loading}
-            value={formatNumber(m?.registrations.value ?? 0)}
+            value={formatNumber(followerTotal ?? 0)}
+            source={
+              !HIDE_OFFICIAL_LANE &&
+              d &&
+              d.accounts.followersBySource.ACTUAL === 0 &&
+              d.accounts.totalFollowers > 0
+                ? 'MANUAL'
+                : null
+            }
             hint={
-              m && (
-                <span>
-                  {formatNumber(m.activeUsers.value ?? 0)} aktif ·{' '}
-                  {formatNumber(m.registrationsOperator.value ?? 0)} dikonfirmasi operator
+              d && d.accounts.followersBySource.SIMULATED > 0 ? (
+                <span className="inline-flex items-center gap-1">
+                  <FlaskConical className="size-3" />{' '}
+                  {formatCompact(d.accounts.followersBySource.SIMULATED)} simulasi tidak dihitung
                 </span>
+              ) : (
+                d && <span>Aktual + input manual</span>
               )
             }
           />
-        )}
-      </div>
+          {!HIDE_OFFICIAL_LANE && (
+            <StatCard
+              label="Campaign aktif"
+              icon={Megaphone}
+              loading={loading}
+              value={formatNumber(m?.activeCampaigns.value ?? 0)}
+            />
+          )}
+          <StatCard
+            label="Total prospek"
+            icon={UserPlus}
+            loading={loading}
+            value={formatNumber(m?.totalLeads.value ?? 0)}
+          />
+          <StatCard
+            label="Prospek tertarik"
+            icon={Sparkles}
+            loading={loading}
+            value={formatNumber(m?.interestedLeads.value ?? 0)}
+          />
+          {!HIDE_OFFICIAL_LANE && (
+            <StatCard
+              label="Percakapan"
+              icon={MessagesSquare}
+              loading={loading}
+              value={formatNumber(m?.conversations.value ?? 0)}
+            />
+          )}
+          <StatCard
+            label="Tugas outbound terbuka"
+            icon={Send}
+            loading={loading}
+            value={formatNumber(m?.outreachTasks.value ?? 0)}
+          />
+          {!HIDE_OFFICIAL_LANE && (
+            <StatCard
+              label="Registrasi terverifikasi"
+              icon={UserCheck}
+              loading={loading}
+              value={formatNumber(m?.registrations.value ?? 0)}
+              hint={
+                m && (
+                  <span>
+                    {formatNumber(m.activeUsers.value ?? 0)} aktif ·{' '}
+                    {formatNumber(m.registrationsOperator.value ?? 0)} dikonfirmasi operator
+                  </span>
+                )
+              }
+            />
+          )}
+        </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Followers per akun</CardTitle>
-            <CardDescription>
-              10 akun teratas. Batang bergaris putus-putus = data simulasi.
-            </CardDescription>
-            <LaneLegend />
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-72 w-full" />
-            ) : !d?.accounts.top.filter((a) => isVisibleLane(a.lane)).length ? (
-              <EmptyState
-                icon={Smartphone}
-                title="Belum ada akun TikTok"
-                description="Tambahkan akun TikTok untuk mulai memantau performa."
-                action={
-                  <Button asChild size="sm">
-                    <Link href="/accounts">Kelola akun</Link>
-                  </Button>
-                }
-              />
-            ) : (
-              <FollowersChart data={d.accounts.top.filter((a) => isVisibleLane(a.lane))} />
-            )}
-          </CardContent>
-        </Card>
+        <div className="mt-6 grid gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle>Followers per akun</CardTitle>
+              <CardDescription>
+                10 akun teratas. Batang bergaris putus-putus = data simulasi.
+              </CardDescription>
+              <LaneLegend />
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <Skeleton className="h-72 w-full" />
+              ) : !d?.accounts.top.filter((a) => isVisibleLane(a.lane)).length ? (
+                <EmptyState
+                  icon={Smartphone}
+                  title="Belum ada akun TikTok"
+                  description="Tambahkan akun TikTok untuk mulai memantau performa."
+                  action={
+                    <Button asChild size="sm">
+                      <Link href="/accounts">Kelola akun</Link>
+                    </Button>
+                  }
+                />
+              ) : (
+                <FollowersChart data={d.accounts.top.filter((a) => isVisibleLane(a.lane))} />
+              )}
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>
-              {HIDE_OFFICIAL_LANE ? 'Ringkasan akun outreach' : 'Jalur A vs Jalur B'}
-            </CardTitle>
-            <CardDescription>Jumlah akun dan followers</CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-3">
-            {loading
-              ? [0, 1].map((i) => <Skeleton key={i} className="h-24 w-full" />)
-              : d?.accounts.byLane
-                  .filter((l) => isVisibleLane(l.lane))
-                  .map((l) => {
-                    const share = d.accounts.totalFollowers
-                      ? (l.followers / d.accounts.totalFollowers) * 100
-                      : 0;
-                    return (
-                      <div key={l.lane} className="rounded-lg border p-4">
-                        <div className="flex items-center gap-2 text-sm font-medium">
-                          <LaneDot lane={l.lane} /> {LANE_LABELS[l.lane]}
-                        </div>
-                        <p className="mt-2 text-2xl font-semibold tabular-nums">
-                          {formatNumber(l.followers)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          followers dari {formatNumber(l.accounts)} akun
-                          {l.simulatedFollowers > 0 &&
-                            ` · ${formatCompact(l.simulatedFollowers)} simulasi tidak dihitung`}
-                        </p>
-                        <div
-                          className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
-                          aria-hidden
-                        >
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {HIDE_OFFICIAL_LANE ? 'Ringkasan akun outreach' : 'Jalur A vs Jalur B'}
+              </CardTitle>
+              <CardDescription>Jumlah akun dan followers</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-3">
+              {loading
+                ? [0, 1].map((i) => <Skeleton key={i} className="h-24 w-full" />)
+                : d?.accounts.byLane
+                    .filter((l) => isVisibleLane(l.lane))
+                    .map((l) => {
+                      const share = d.accounts.totalFollowers
+                        ? (l.followers / d.accounts.totalFollowers) * 100
+                        : 0;
+                      return (
+                        <div key={l.lane} className="rounded-lg border p-4">
+                          <div className="flex items-center gap-2 text-sm font-medium">
+                            <LaneDot lane={l.lane} /> {LANE_LABELS[l.lane]}
+                          </div>
+                          <p className="mt-2 text-2xl font-semibold tabular-nums">
+                            {formatNumber(l.followers)}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            followers dari {formatNumber(l.accounts)} akun
+                            {l.simulatedFollowers > 0 &&
+                              ` · ${formatCompact(l.simulatedFollowers)} simulasi tidak dihitung`}
+                          </p>
                           <div
-                            className="h-full rounded-full"
-                            style={{ width: `${share}%`, background: LANE_COLOR[l.lane] }}
-                          />
+                            className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
+                            aria-hidden
+                          >
+                            <div
+                              className="h-full rounded-full"
+                              style={{ width: `${share}%`, background: LANE_COLOR[l.lane] }}
+                            />
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
-          </CardContent>
-        </Card>
-      </div>
-
+                      );
+                    })}
+            </CardContent>
+          </Card>
+        </div>
+      </details>
+      {d && (
+        <p className="mt-4 text-xs text-muted-foreground">
+          Diperbarui {formatDateTime(d.generatedAt)}. Ringkasan diperbarui otomatis.
+        </p>
+      )}
       {d && !HIDE_OFFICIAL_LANE && (
         <p className="mt-6 text-xs text-muted-foreground">
           Diperbarui {formatDateTime(d.generatedAt)}. Metrik registrasi, aktivasi, dan biaya per

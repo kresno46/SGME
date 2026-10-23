@@ -82,18 +82,24 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
       draftMessage: 'Halo lagi, apakah ingin menerima info singkatnya?',
     }).expect(200);
   }
-  it('reviews and sends one unanswered follow-up after its due date, preserves history and rejects old attempts', async () => {
+  it('ignores legacy future schedules, queues immediately and preserves history and attempt isolation', async () => {
     const { row, item: initial } = await sentInitial();
     await scheduledFollowUp(row.id);
-    expect((await post('queue', { accountId, taskIds: [row.id] }).expect(201)).body.queued).toBe(0);
     const operator = await loginAs(app, 'MARKETING_OPERATOR');
     await actTask(row.id, { action: 'approve' }, operator).expect(404);
-    await actTask(row.id, { action: 'approve' }).expect(200);
-    await post('queue', { accountId, taskIds: [row.id] }).expect(409);
     await prisma.outreachTask.update({
       where: { id: row.id },
-      data: { followUpAt: new Date(Date.now() - 1000) },
+      data: { followUpAt: new Date(Date.now() + 7 * 86400000) },
     });
+    const summary = await admin.agent.get('/api/outbound/summary/' + accountId).expect(200);
+    expect(summary.body.followUpsDue).toBe(1);
+    const due = await admin.agent
+      .get('/api/outbound/tasks?followUpDue=true&accountId=' + accountId)
+      .expect(200);
+    expect(due.body.items.map((t: { id: string }) => t.id)).toContain(row.id);
+    expect(
+      (await admin.agent.get('/api/outbound/tasks/' + row.id).expect(200)).body.followUpAt,
+    ).toBeNull();
     const queued = await Promise.all([
       post('queue', { accountId, taskIds: [row.id] }),
       post('queue', { accountId, taskIds: [row.id] }),
@@ -101,6 +107,9 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
     expect(queued.map((r) => r.body.queued).sort()).toEqual([0, 1]);
     const next = (await post('claim', { accountId, clientId }).expect(201)).body;
     expect(next.attemptId).not.toBe(initial.attemptId);
+    expect(
+      (await prisma.outreachTask.findUniqueOrThrow({ where: { id: row.id } })).followUpAt,
+    ).toBeNull();
     expect(next.message).toBe('Halo lagi, apakah ingin menerima info singkatnya?');
     await post(`${next.id}/authorize`, { clientId, attemptId: next.attemptId }).expect(201);
     await post(`${initial.id}/result`, {
@@ -129,9 +138,138 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
     await actTask(row.id, {
       action: 'schedule_follow_up',
       followUpAt: new Date(Date.now() + 48 * 3600000).toISOString(),
-      draftMessage: 'A third unanswered message.',
-    }).expect(409);
+      draftMessage: 'A third message without a recorded reply.',
+    }).expect(200);
   });
+  it('queues another follow-up immediately without a recorded reply, even after multiple sent messages', async () => {
+    const { row } = await sentInitial();
+    const body = {
+      action: 'schedule_follow_up',
+      draftMessage: 'Halo lagi, apakah ingin menerima informasi?',
+    };
+
+    await prisma.outreachTask.update({
+      where: { id: row.id },
+      data: { lastSentAt: new Date(), sentCount: 4, repliedAt: null },
+    });
+    const ready = await actTask(row.id, body).expect(200);
+    expect(ready.body.status).toBe('FOLLOW_UP');
+    expect(ready.body.followUpAt).toBeNull();
+    expect((await post('queue', { accountId, taskIds: [row.id] }).expect(201)).body.queued).toBe(1);
+    expect((await post('queue', { accountId, taskIds: [row.id] }).expect(201)).body.queued).toBe(0);
+    const delivery = await prisma.browserDmDelivery.findUniqueOrThrow({
+      where: { taskId: row.id },
+    });
+    expect(delivery.status).toBe('QUEUED');
+    expect(delivery.message).toBe(body.draftMessage);
+    const claimed = (await post('claim', { accountId, clientId }).expect(201)).body;
+    await post(claimed.id + '/authorize', { clientId, attemptId: claimed.attemptId }).expect(201);
+    await post(claimed.id + '/result', {
+      clientId,
+      attemptId: claimed.attemptId,
+      status: 'SENT',
+      detail: 'Observed fixture message; no live TikTok send.',
+    }).expect(201);
+    expect((await prisma.outreachTask.findUniqueOrThrow({ where: { id: row.id } })).sentCount).toBe(
+      5,
+    );
+  });
+
+  it('personalizes follow-up text and repairs legacy queued markers before claim without changing the link', async () => {
+    const { row } = await sentInitial();
+    await prisma.lead.update({ where: { id: row.leadId }, data: { name: 'Sarah' } });
+    const raw = 'Hai {{nama}}, lihat {{https://www.sg-berjangka.com/id}}';
+    const expected = 'Hai Sarah, lihat https://www.sg-berjangka.com/id';
+    const ready = await actTask(row.id, { action: 'schedule_follow_up', draftMessage: raw }).expect(
+      200,
+    );
+    expect(ready.body.draftMessage).toBe(expected);
+    await post('queue', { accountId, taskIds: [row.id] }).expect(201);
+    let delivery = await prisma.browserDmDelivery.findUniqueOrThrow({ where: { taskId: row.id } });
+    expect(delivery.message).toBe(expected);
+    // A queue prepared by the previous version is normalized before the worker receives it.
+    await prisma.outreachTask.update({ where: { id: row.id }, data: { finalMessage: raw } });
+    await prisma.browserDmDelivery.update({ where: { id: delivery.id }, data: { message: raw } });
+    delivery = (await post('claim', { accountId, clientId }).expect(201)).body;
+    expect(delivery.message).toBe(expected);
+    await post(delivery.id + '/authorize', { clientId, attemptId: delivery.attemptId }).expect(201);
+    expect(
+      (await prisma.outreachTask.findUniqueOrThrow({ where: { id: row.id } })).finalMessage,
+    ).toBe(expected);
+  });
+
+  it('counts sent DM events for the selected account and business day, including follow-ups without duplicate results', async () => {
+    const { row, item } = await sentInitial();
+    const summary = async () =>
+      (await admin.agent.get('/api/outbound/summary/' + accountId).expect(200)).body;
+    expect((await summary()).sentToday).toBe(1);
+    await post(item.id + '/result', {
+      clientId,
+      attemptId: item.attemptId,
+      status: 'SENT',
+      detail: 'Repeated result.',
+    }).expect(201);
+    expect((await summary()).sentToday).toBe(1);
+    await actTask(row.id, {
+      action: 'schedule_follow_up',
+      draftMessage: 'Pesan follow-up yang dikirim hari ini.',
+    }).expect(200);
+    await post('queue', { accountId, taskIds: [row.id] }).expect(201);
+    const next = (await post('claim', { accountId, clientId }).expect(201)).body;
+    expect((await summary()).sentToday).toBe(1);
+    await post(next.id + '/result', {
+      clientId,
+      attemptId: next.attemptId,
+      status: 'SENT',
+      detail: 'Follow-up observed in local fixture.',
+    }).expect(201);
+    expect((await summary()).sentToday).toBe(2);
+    await prisma.leadActivity.createMany({
+      data: [
+        {
+          leadId: row.leadId,
+          type: 'MESSAGE_SENT',
+          summary: 'Earlier day',
+          metadata: { taskId: row.id },
+          createdAt: new Date(Date.now() - 2 * 86400000),
+        },
+        {
+          leadId: row.leadId,
+          type: 'MESSAGE_SENT',
+          summary: 'Future day',
+          metadata: { taskId: row.id },
+          createdAt: new Date(Date.now() + 2 * 86400000),
+        },
+        {
+          leadId: row.leadId,
+          type: 'MESSAGE_RECEIVED',
+          summary: 'Reply',
+          metadata: { taskId: row.id },
+        },
+      ],
+    });
+    const other = await prisma.tikTokAccount.create({
+      data: { ownerId, username: 'other_sender', displayName: 'Other', lane: 'OUTBOUND' },
+    });
+    const otherTask = await task('other_recipient');
+    await prisma.outreachTask.update({
+      where: { id: otherTask.id },
+      data: { tiktokAccountId: other.id },
+    });
+    await prisma.leadActivity.create({
+      data: {
+        leadId: otherTask.leadId,
+        type: 'MESSAGE_SENT',
+        summary: 'Other account send',
+        metadata: { taskId: otherTask.id },
+      },
+    });
+    expect((await summary()).sentToday).toBe(2);
+    expect(
+      (await admin.agent.get('/api/outbound/summary/' + other.id).expect(200)).body.sentToday,
+    ).toBe(1);
+  });
+
   it('rechecks follow-up eligibility at send time and keeps a failed retry from incrementing counts', async () => {
     const { row } = await sentInitial();
     await scheduledFollowUp(row.id);
@@ -219,7 +357,7 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
     await post('prepare', batchBody(leads.map((l) => l.id))).expect(409);
     expect(await prisma.browserDmDelivery.count()).toBe(0);
   });
-  it('lets operators submit a whole batch but requires review permission to approve and queue', async () => {
+  it('lets marketing queue its own batch without review permission, including legacy submit mode', async () => {
     const operator = await loginAs(app, 'MARKETING_OPERATOR');
     const leads = await batchLeads();
     const opId = (await prisma.user.findUniqueOrThrow({ where: { email: 'operator@test.local' } }))
@@ -230,14 +368,47 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
       data: { ownerId: opId },
     });
     const body = batchBody(leads.map((l) => l.id));
-    await post('prepare', body, operator).expect(403);
-    expect(await prisma.outreachTask.count()).toBe(0);
+    const response = await post('prepare', { ...body, mode: 'submit' }, operator).expect(201);
+    expect(response.body).toMatchObject({ queued: 2, submitted: 0 });
     expect(
-      (await post('prepare', { ...body, mode: 'submit' }, operator).expect(201)).body.submitted,
+      (await post('prepare', { ...body, mode: 'submit' }, operator).expect(201)).body.queued,
     ).toBe(2);
-    expect(await prisma.outreachTask.count({ where: { status: 'WAITING_REVIEW' } })).toBe(2);
-    expect(await prisma.browserDmDelivery.count()).toBe(0);
+    expect(await prisma.outreachTask.count({ where: { status: 'APPROVED' } })).toBe(2);
+    expect(await prisma.browserDmDelivery.count()).toBe(2);
   });
+  it('queues marketing legacy drafts and pending messages without review, skips blocked recipients and never queues twice', async () => {
+    const draft = await task('draft_recipient', 'DRAFT');
+    const pending = await task('pending_recipient');
+    const blocked = await task('blocked_recipient');
+    const operator = await loginAs(app, 'MARKETING_OPERATOR');
+    const opId = (await prisma.user.findUniqueOrThrow({ where: { email: 'operator@test.local' } }))
+      .id;
+    await prisma.tikTokAccount.update({ where: { id: accountId }, data: { ownerId: opId } });
+    await prisma.lead.updateMany({ data: { ownerId: opId } });
+    await prisma.outreachTask.updateMany({
+      data: { ownerId: opId, draftMessage: 'Pesan baru untuk penerima.', finalMessage: null },
+    });
+    await prisma.outreachTask.updateMany({
+      where: { id: { in: [pending.id, blocked.id] } },
+      data: { status: 'WAITING_REVIEW' },
+    });
+    await prisma.doNotContactEntry.create({
+      data: { channel: 'TIKTOK_DM', valueNormalized: 'blocked_recipient' },
+    });
+    expect((await post('queue', { accountId }, operator).expect(201)).body.queued).toBe(2);
+    expect((await post('queue', { accountId }, operator).expect(201)).body.queued).toBe(0);
+    const deliveries = await prisma.browserDmDelivery.findMany();
+    expect(deliveries.map((d) => d.taskId).sort()).toEqual([draft.id, pending.id].sort());
+    expect(
+      deliveries.every(
+        (d) => d.requestedById === opId && d.message === 'Pesan baru untuk penerima.',
+      ),
+    ).toBe(true);
+    expect(
+      (await prisma.outreachTask.findUniqueOrThrow({ where: { id: blocked.id } })).status,
+    ).toBe('WAITING_REVIEW');
+  });
+
   it('queues a single approved task without adding unrelated approved tasks', async () => {
     const chosen = await task('chosen_test');
     const other = await task('other_test');
@@ -251,7 +422,7 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
     const body = batchBody([lead.id]);
     await post('prepare', { ...body, leadIds: [lead.id, lead.id] }).expect(400);
     await post('prepare', { ...body, confirmed: false }).expect(400);
-    await post('prepare', { ...body, message: 'Klik {{link}} untuk daftar.' }).expect(400);
+    await post('prepare', { ...body, message: 'Klik {{tidak_dikenal}} untuk daftar.' }).expect(400);
     expect(await prisma.outreachTask.count()).toBe(0);
   });
   it('serializes competing batches so a recipient gets only one open task', async () => {
@@ -351,6 +522,67 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
     );
     expect(await prisma.browserDmDelivery.count({ where: { status: 'CANCELLED' } })).toBe(1);
   });
+  it('removes only cancelled entries, keeps a closed task and audit, and prevents automatic requeue', async () => {
+    const row = await task();
+    await post('queue', { accountId }).expect(201);
+    const delivery = await prisma.browserDmDelivery.findUniqueOrThrow({
+      where: { taskId: row.id },
+    });
+    const remove = (session = admin) =>
+      session.agent
+        .delete('/api/outbound/browser-dm/' + delivery.id)
+        .set('x-csrf-token', session.csrf);
+    await remove().expect(409);
+    const operator = await loginAs(app, 'MARKETING_OPERATOR');
+    await remove(operator).expect(404);
+    const viewer = await loginAs(app, 'VIEWER');
+    await remove(viewer).expect(403);
+    await post('cancel', { accountId }).expect(201);
+    expect((await remove().expect(200)).body).toEqual({ deleted: true });
+    expect(await prisma.browserDmDelivery.findUnique({ where: { id: delivery.id } })).toBeNull();
+    expect((await prisma.outreachTask.findUniqueOrThrow({ where: { id: row.id } })).status).toBe(
+      'CANCELLED',
+    );
+    expect(
+      await prisma.auditLog.count({
+        where: { action: 'browser_dm.cancelled_removed', entityId: delivery.id },
+      }),
+    ).toBe(1);
+    expect((await post('queue', { accountId }).expect(201)).body.queued).toBe(0);
+    await remove().expect(404);
+  });
+
+  it('lets marketing remove its cancelled follow-up without deleting earlier sent-message history', async () => {
+    const { row } = await sentInitial();
+    const operator = await loginAs(app, 'MARKETING_OPERATOR');
+    const opId = (await prisma.user.findUniqueOrThrow({ where: { email: 'operator@test.local' } }))
+      .id;
+    await prisma.tikTokAccount.update({ where: { id: accountId }, data: { ownerId: opId } });
+    await prisma.lead.update({ where: { id: row.leadId }, data: { ownerId: opId } });
+    await prisma.outreachTask.update({ where: { id: row.id }, data: { ownerId: opId } });
+    await actTask(
+      row.id,
+      { action: 'schedule_follow_up', draftMessage: 'Pesan follow-up yang dibatalkan.' },
+      operator,
+    ).expect(200);
+    await post('queue', { accountId, taskIds: [row.id] }, operator).expect(201);
+    const delivery = await prisma.browserDmDelivery.findUniqueOrThrow({
+      where: { taskId: row.id },
+    });
+    await post('cancel', { accountId }, operator).expect(201);
+    await operator.agent
+      .delete('/api/outbound/browser-dm/' + delivery.id)
+      .set('x-csrf-token', operator.csrf)
+      .expect(200);
+    const saved = await prisma.outreachTask.findUniqueOrThrow({ where: { id: row.id } });
+    expect(saved.status).toBe('CANCELLED');
+    expect(saved.sentCount).toBe(1);
+    expect(
+      await prisma.leadActivity.count({ where: { leadId: row.leadId, type: 'MESSAGE_SENT' } }),
+    ).toBe(1);
+    expect(await prisma.lead.count({ where: { id: row.leadId } })).toBe(1);
+  });
+
   it('retries only failed deliveries after explicit confirmation and invalidates the previous attempt', async () => {
     await task();
     const item = await claimed();

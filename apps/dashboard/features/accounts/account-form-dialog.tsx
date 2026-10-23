@@ -32,7 +32,7 @@ import {
   SelectValue,
   Switch,
 } from '@/components/ui/overlays';
-import { Input, Label, Textarea } from '@/components/ui/primitives';
+import { Input, Label } from '@/components/ui/primitives';
 import { applyServerErrors } from '@/lib/api';
 import { HIDE_OFFICIAL_LANE, VISIBLE_MARKETING_LANES } from '@/lib/marketing-scope';
 import { useSaveAccount } from './api';
@@ -219,15 +219,16 @@ function AccountForm({
           />
         </FormField>
 
-        <FormField label="URL profil" htmlFor="profileUrl" error={errors.profileUrl?.message}>
+        <FormField label="URL profil (wajib)" htmlFor="profileUrl" error={errors.profileUrl?.message}>
           <Input
             id="profileUrl"
+            type="url"
+            required
+            aria-required="true"
+            aria-invalid={!!errors.profileUrl}
             placeholder="https://www.tiktok.com/@…"
             {...form.register('profileUrl')}
           />
-        </FormField>
-        <FormField label="URL foto profil" htmlFor="avatarUrl" error={errors.avatarUrl?.message}>
-          <Input id="avatarUrl" placeholder="https://…" {...form.register('avatarUrl')} />
         </FormField>
       </div>
 
@@ -243,10 +244,6 @@ function AccountForm({
           Akun terverifikasi (centang biru)
         </Label>
       </div>
-
-      <FormField label="Catatan" htmlFor="notes" error={errors.notes?.message}>
-        <Textarea id="notes" rows={3} {...form.register('notes')} />
-      </FormField>
 
       <DialogFooter>
         <Button type="button" variant="outline" onClick={onDone}>

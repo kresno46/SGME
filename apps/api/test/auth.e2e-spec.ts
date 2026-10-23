@@ -127,7 +127,12 @@ describe('Autentikasi (integration)', () => {
     await request(app.getHttpServer())
       .post('/api/tiktok-accounts')
       .set('Authorization', `Bearer ${token}`)
-      .send({ username: 'akun_bearer', displayName: 'Akun Bearer', lane: 'OUTBOUND' })
+      .send({
+        username: 'akun_bearer',
+        displayName: 'Akun Bearer',
+        lane: 'OUTBOUND',
+        profileUrl: 'https://www.tiktok.com/@akun_bearer',
+      })
       .expect(201);
   });
 

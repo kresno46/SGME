@@ -80,11 +80,11 @@ describe('skema akun TikTok', () => {
       displayName: 'Solid Mini',
       lane: 'OFFICIAL',
       followersCount: '1500',
-      profileUrl: '',
+      profileUrl: 'https://www.tiktok.com/@solid.mini',
     });
     expect(r.username).toBe('solid.mini');
     expect(r.followersCount).toBe(1500);
-    expect(r.profileUrl).toBeNull();
+    expect(r.profileUrl).toBe('https://www.tiktok.com/@solid.mini');
     expect(r.status).toBe('ACTIVE');
   });
 
@@ -104,6 +104,15 @@ describe('skema akun TikTok', () => {
         profileUrl: 'http://tiktok.com/@valid_user',
       }).success,
     ).toBe(false);
+  });
+
+  it('mewajibkan URL profil dan menolak pengosongan saat update', () => {
+    const base = { username: 'valid_user', displayName: 'Akun', lane: 'OUTBOUND' };
+    for (const profileUrl of [undefined, null, '', '   ']) {
+      expect(createTikTokAccountSchema.safeParse({ ...base, profileUrl }).success).toBe(false);
+    }
+    expect(updateTikTokAccountSchema.safeParse({ profileUrl: '' }).success).toBe(false);
+    expect(updateTikTokAccountSchema.safeParse({ displayName: 'Baru' }).success).toBe(true);
   });
 
   it('update kosong ditolak', () => {

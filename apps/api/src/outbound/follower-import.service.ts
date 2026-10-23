@@ -27,11 +27,7 @@ export class FollowerImportService {
     if (account.status !== 'ACTIVE' || account.lane !== 'OUTBOUND') {
       throw new BadRequestException('Pilih akun Outbound yang aktif');
     }
-    if (account.username.toLowerCase() !== input.batch.accountUsername) {
-      throw new BadRequestException(
-        'Akun dalam file berbeda dari akun yang dipilih. Pilih akun sumber yang sesuai.',
-      );
-    }
+
     const unique = [...new Map(input.batch.followers.map((row) => [row.username, row])).values()];
     const result = await this.prisma.$transaction(async (tx) => {
       const usernames = unique.map((row) => row.username);
@@ -58,7 +54,10 @@ export class FollowerImportService {
         created: 0,
       };
       const rows = unique.flatMap((row) => {
-        if (row.username === input.batch.accountUsername) {
+        if (
+          row.username === input.batch.accountUsername ||
+          row.username === account.username.toLowerCase()
+        ) {
           counts.self++;
           return [];
         }
@@ -81,7 +80,7 @@ export class FollowerImportService {
             operatorId: actor.id,
             sourceAccountId: account.id,
             tags: ['tiktok-followers', 'browser-collected'],
-            notes: `Daftar followers @${account.username}, dikumpulkan melalui browser pada ${input.batch.collectedAt}. Sumber dilaporkan operator; bukan hasil verifikasi API TikTok.`,
+            notes: `Daftar followers @${input.batch.accountUsername}, dikumpulkan melalui browser pada ${input.batch.collectedAt}. Sumber dilaporkan operator; bukan hasil verifikasi API TikTok.`,
           },
         ];
       });
@@ -100,10 +99,12 @@ export class FollowerImportService {
               leadId: lead.id,
               actorId: actor.id,
               type: 'IMPORT' as const,
-              summary: `Diimpor dari daftar followers @${account.username} (browser)`,
+              summary: `Diimpor dari daftar followers @${input.batch.accountUsername} (browser)`,
               metadata: {
                 collectedAt: input.batch.collectedAt,
                 sourceAccountId: account.id,
+                collectedFromUsername: input.batch.accountUsername,
+                senderUsername: account.username,
                 collector: input.batch.format,
               },
             })),
@@ -117,7 +118,12 @@ export class FollowerImportService {
       actor,
       entityType: 'tiktok_account',
       entityId: account.id,
-      metadata: { ...result, collectedAt: input.batch.collectedAt },
+      metadata: {
+        ...result,
+        collectedAt: input.batch.collectedAt,
+        collectedFromUsername: input.batch.accountUsername,
+        senderUsername: account.username,
+      },
       meta,
     });
     return result;

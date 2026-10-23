@@ -12,7 +12,7 @@ describe('RBAC & manajemen pengguna (integration)', () => {
   beforeEach(() => resetDatabase(prisma));
   afterAll(() => app.close());
 
-  const account = { username: 'akun_rbac', displayName: 'Akun RBAC', lane: 'OUTBOUND' };
+  const account = { profileUrl: 'https://www.tiktok.com/@akun_rbac', username: 'akun_rbac', displayName: 'Akun RBAC', lane: 'OUTBOUND' };
 
   it('Viewer hanya dapat membaca', async () => {
     const { agent, csrf } = await loginAs(app, 'VIEWER');

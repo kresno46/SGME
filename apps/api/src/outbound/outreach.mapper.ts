@@ -122,7 +122,8 @@ export const OutreachMapper = {
       sentCount: t.sentCount,
       repliedAt: iso(t.repliedAt),
       responseSummary: t.responseSummary,
-      followUpAt: iso(t.followUpAt),
+      // Legacy stored schedules are no longer part of the follow-up flow.
+      followUpAt: null,
       completedAt: iso(t.completedAt),
       outcome: t.outcome,
       cancelReason: t.cancelReason,

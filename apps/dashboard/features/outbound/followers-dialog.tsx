@@ -50,11 +50,7 @@ export function FollowersDialog({
       const parsed = followerBatchSchema.safeParse(JSON.parse(await file.text()));
       if (!parsed.success)
         throw new Error(`Format file SMGE tidak valid: ${parsed.error.issues[0]?.message}`);
-      if (parsed.data.accountUsername !== account.username.toLowerCase()) {
-        throw new Error(
-          `File berasal dari @${parsed.data.accountUsername}. Pilih akun tersebut di Outbound terlebih dahulu.`,
-        );
-      }
+
       if (current === revision.current) setBatch(parsed.data);
     } catch (cause) {
       if (current === revision.current)
@@ -93,7 +89,7 @@ export function FollowersDialog({
           <DialogTitle>Ambil followers · @{account.username}</DialogTitle>
           <DialogDescription>
             Pengambilan melalui browser yang Anda login sendiri. Hasil masuk ke CRM dan antrean
-            prospek.
+            prospek untuk akun pengirim yang dipilih. File boleh berasal dari akun TikTok lain.
           </DialogDescription>
         </DialogHeader>
         <ol className="list-decimal space-y-2 pl-5 text-sm">
@@ -150,6 +146,10 @@ export function FollowersDialog({
         )}
         {batch && !result && (
           <div className="grid gap-2 text-sm">
+            <p className="rounded-md bg-muted/30 p-3">
+              Followers dari <strong>@{batch.accountUsername}</strong> akan masuk ke antrean akun
+              pengirim <strong>@{account.username}</strong>.
+            </p>
             <p>
               <strong>{batch.followers.length} baris</strong> dari @{batch.accountUsername}. Diambil{' '}
               {new Date(batch.collectedAt).toLocaleString('id-ID')}.

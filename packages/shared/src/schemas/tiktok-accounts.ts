@@ -13,7 +13,13 @@ const usernameSchema = z
 export const tiktokAccountBaseSchema = z.object({
   username: usernameSchema,
   displayName: z.string().trim().min(1, 'Nama tampilan wajib diisi').max(100),
-  profileUrl: optionalUrl,
+  profileUrl: z
+    .string({ required_error: 'URL profil wajib diisi', invalid_type_error: 'URL profil wajib diisi' })
+    .trim()
+    .min(1, 'URL profil wajib diisi')
+    .max(500)
+    .url('URL profil tidak valid')
+    .refine((v) => v.toLowerCase().startsWith('https://'), 'URL harus diawali https://'),
   avatarUrl: optionalUrl,
   accountType: z.enum(TIKTOK_ACCOUNT_TYPES).default('PERSONAL'),
   isVerified: z.boolean().default(false),

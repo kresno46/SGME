@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { findUnknownPlaceholders } from '../outbound';
 
 export const browserDmQueueSchema = z.object({ accountId: z.string().uuid() });
 export const browserDmEnqueueSchema = browserDmQueueSchema.extend({
@@ -17,11 +18,8 @@ export const browserDmPrepareSchema = browserDmQueueSchema.extend({
     .min(5)
     .max(2000)
     .refine(
-      (value) =>
-        [...value.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].every((match) =>
-          ['nama', 'username', 'akun'].includes(match[1]),
-        ),
-      'Gunakan variabel nama, username, atau akun; ganti variabel lain dengan teks.',
+      (value) => findUnknownPlaceholders(value).length === 0,
+      'Variabel tidak dikenal. Gunakan nama, username, akun, campaign, atau link.',
     ),
   mode: z.enum(['approve', 'submit']),
   confirmed: z.literal(true),

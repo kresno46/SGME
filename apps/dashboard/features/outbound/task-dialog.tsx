@@ -5,8 +5,9 @@ import {
   INTEREST_LEVEL_LABELS,
   INTEREST_LEVELS,
   MAX_UNANSWERED_MESSAGES,
-  MIN_UNANSWERED_FOLLOW_UP_HOURS,
   OUTCOME_LABELS,
+  renderTemplate,
+  findUnknownPlaceholders,
   type InterestLevel,
   type TaskActionInput,
 } from '@smge/shared';
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { useState } from 'react';
+import { useAuth } from '@/hooks/use-auth';
 import { toast } from 'sonner';
 import { FormError, FormField } from '@/components/common';
 import { InterestBadge, LeadStatusBadge, TaskStatusBadge } from '@/components/status-badges';
@@ -51,11 +53,17 @@ import {
   Skeleton,
   Textarea,
 } from '@/components/ui/primitives';
-import { formatDateTime, fromDateTimeLocal, toDateTimeLocal } from '@/lib/utils';
+import { formatDateTime } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { ClaimWarning } from '../ai/ai-common';
 import { AiDraftHelper, AiReplyHelper } from '../ai/task-ai';
-import { useTask, useTaskAction, useUpdateDraft, useInvalidateOutbound } from './api';
+import {
+  useTask,
+  useTaskAction,
+  useUpdateDraft,
+  useInvalidateOutbound,
+  useMessageContext,
+} from './api';
 
 type Panel =
   'reject' | 'mark_sent' | 'log_reply' | 'schedule_follow_up' | 'complete' | 'cancel' | null;
@@ -71,6 +79,8 @@ export function TaskDialog({ taskId, onClose }: { taskId: string | null; onClose
 }
 
 function TaskBody({ taskId }: { taskId: string }) {
+  const { user } = useAuth();
+  const simple = user.role === 'MARKETING_OPERATOR';
   const q = useTask(taskId);
   const act = useTaskAction(taskId);
   const saveDraft = useUpdateDraft(taskId);
@@ -111,6 +121,17 @@ function TaskBody({ taskId }: { taskId: string }) {
     try {
       if (dirty) await saveDraft.mutateAsync(currentDraft);
       await act.mutateAsync(body);
+      if (body.action === 'schedule_follow_up' && t.channel === 'TIKTOK_DM') {
+        const queued = await api.post<{ queued: number }>('/outbound/browser-dm/queue', {
+          accountId: t.account.id,
+          taskIds: [t.id],
+        });
+        if (!queued.queued)
+          throw new Error(
+            'Follow-up sudah disiapkan. Gunakan Masukkan ke antrean pada pesan ini untuk melanjutkan.',
+          );
+        await invalidate();
+      }
       setDraft(null);
       setPanel(null);
       toast.success(success);
@@ -145,7 +166,14 @@ function TaskBody({ taskId }: { taskId: string }) {
     <>
       <DialogHeader>
         <DialogTitle className="flex flex-wrap items-center gap-2">
-          {t.lead.name ?? 'Prospek tanpa nama'} <TaskStatusBadge status={t.status} />
+          {t.lead.name ?? 'Prospek tanpa nama'}{' '}
+          {t.channel === 'TIKTOK_DM' && ['APPROVED', 'WAITING_REVIEW'].includes(t.status) ? (
+            <Badge variant="secondary">
+              {t.status === 'APPROVED' ? 'Siap dikirim' : 'Belum diantrekan'}
+            </Badge>
+          ) : (
+            <TaskStatusBadge status={t.status} />
+          )}
         </DialogTitle>
         <DialogDescription>
           via @{t.account.username} · {CONTACT_CHANNEL_LABELS[t.channel]}
@@ -162,9 +190,11 @@ function TaskBody({ taskId }: { taskId: string }) {
             {t.lead.consentChannels.map((c) => CONTACT_CHANNEL_LABELS[c]).join(', ')}
           </Badge>
         )}
-        <Link href={`/leads/${t.lead.id}`} className="ml-auto text-brand-text hover:underline">
-          Profil prospek →
-        </Link>
+        {user.role === 'SUPER_ADMIN' && (
+          <Link href={`/leads/${t.lead.id}`} className="ml-auto text-brand-text hover:underline">
+            Profil prospek →
+          </Link>
+        )}
       </div>
 
       <FormError message={error} />
@@ -210,15 +240,17 @@ function TaskBody({ taskId }: { taskId: string }) {
                 </Button>
               )}
             </div>
-            <AiDraftHelper
-              taskId={t.id}
-              onApply={(message) =>
-                saveDraft.mutate(
-                  { draftMessage: message, aiGenerated: true },
-                  { onSuccess: () => setDraft(null), onError: (e) => setError(e.message) },
-                )
-              }
-            />
+            {!simple && (
+              <AiDraftHelper
+                taskId={t.id}
+                onApply={(message) =>
+                  saveDraft.mutate(
+                    { draftMessage: message, aiGenerated: true },
+                    { onSuccess: () => setDraft(null), onError: (e) => setError(e.message) },
+                  )
+                }
+              />
+            )}
           </>
         ) : (
           <p className="rounded-md border bg-muted/40 p-3 text-sm whitespace-pre-wrap">
@@ -236,29 +268,23 @@ function TaskBody({ taskId }: { taskId: string }) {
         </div>
       )}
 
-      <Timeline t={t} />
-      {t.sentCount > 0 && t.followUpAt && (
-        <p className="rounded-md bg-muted p-3 text-sm">
-          Follow-up: {formatDateTime(t.followUpAt)}.{' '}
-          {t.status === 'APPROVED'
-            ? 'Pesan sudah disetujui. Antrekan melalui extension saat jadwal tiba.'
-            : 'Tinjau dan setujui pesan baru sebelum mengantrekan ke extension.'}
-        </p>
-      )}
+      {!simple && <Timeline t={t} />}
       <Separator />
 
       {/* Aksi utama */}
       {panel === null && (
         <div className="flex flex-wrap gap-2">
-          {can('submit') && !(t.status === 'FOLLOW_UP' && can('approve')) && (
-            <Button
-              disabled={busy || !currentDraft.trim()}
-              onClick={() => void run({ action: 'submit' }, 'Diajukan untuk review')}
-            >
-              <Send /> Ajukan review
-            </Button>
-          )}
-          {can('approve') && (
+          {t.channel !== 'TIKTOK_DM' &&
+            can('submit') &&
+            !(t.status === 'FOLLOW_UP' && can('approve')) && (
+              <Button
+                disabled={busy || !currentDraft.trim()}
+                onClick={() => void run({ action: 'submit' }, 'Diajukan untuk review')}
+              >
+                <Send /> Ajukan review
+              </Button>
+            )}
+          {t.channel !== 'TIKTOK_DM' && can('approve') && (
             <Button
               disabled={busy}
               onClick={() => void run({ action: 'approve' }, 'Pesan disetujui')}
@@ -266,11 +292,20 @@ function TaskBody({ taskId }: { taskId: string }) {
               <ThumbsUp /> {t.sentCount > 0 ? 'Setujui follow-up' : 'Setujui'}
             </Button>
           )}
-          {can('reject') && (
+          {t.channel !== 'TIKTOK_DM' && can('reject') && (
             <Button variant="outline" onClick={() => setPanel('reject')}>
               <ThumbsDown /> Kembalikan ke draft
             </Button>
           )}
+          {t.channel === 'TIKTOK_DM' &&
+            ['DRAFT', 'WAITING_REVIEW', 'FOLLOW_UP'].includes(t.status) && (
+              <Button
+                disabled={busy || dirty || !currentDraft.trim()}
+                onClick={() => void queueBrowser()}
+              >
+                <Send /> Masukkan ke antrean
+              </Button>
+            )}
           {can('mark_sent') && (
             <>
               {t.channel === 'TIKTOK_DM' && t.status === 'APPROVED' && (
@@ -281,19 +316,21 @@ function TaskBody({ taskId }: { taskId: string }) {
                     : 'Siapkan pengiriman browser'}
                 </Button>
               )}
-              <Button variant="outline" disabled={busy} onClick={() => setPanel('mark_sent')}>
-                <CheckCircle2 /> Catat sudah dikirim manual
-              </Button>
+              {!simple && (
+                <Button variant="outline" disabled={busy} onClick={() => setPanel('mark_sent')}>
+                  <CheckCircle2 /> Catat sudah dikirim manual
+                </Button>
+              )}
             </>
           )}
-          {can('log_reply') && (
+          {can('log_reply') && !simple && (
             <Button variant="outline" onClick={() => setPanel('log_reply')}>
               <MessageSquareReply /> Catat balasan
             </Button>
           )}
           {can('schedule_follow_up') && (
             <Button variant="outline" onClick={() => setPanel('schedule_follow_up')}>
-              {t.repliedAt ? 'Jadwalkan follow-up' : 'Follow-up belum dibalas'}
+              Buat follow-up
             </Button>
           )}
           {can('complete') && (
@@ -315,7 +352,7 @@ function TaskBody({ taskId }: { taskId: string }) {
               <XCircle /> Batalkan
             </Button>
           )}
-          {t.allowedActions.length === 0 && (
+          {t.allowedActions.length === 0 && t.channel !== 'TIKTOK_DM' && (
             <p className="text-sm text-muted-foreground">
               {t.status === 'WAITING_REVIEW'
                 ? 'Menunggu review oleh Admin.'
@@ -372,7 +409,14 @@ function TaskBody({ taskId }: { taskId: string }) {
           t={t}
           busy={busy}
           onCancel={() => setPanel(null)}
-          onSubmit={(b) => run(b, 'Follow-up dijadwalkan')}
+          onSubmit={(b) =>
+            run(
+              b,
+              t.channel === 'TIKTOK_DM'
+                ? 'Follow-up masuk antrean. Mulai lewat extension.'
+                : 'Follow-up disiapkan',
+            )
+          }
         />
       )}
       {panel === 'complete' && (
@@ -394,7 +438,6 @@ function Timeline({ t }: { t: OutreachTaskDto }) {
     ['Terkirim pertama', t.sentConfirmedAt],
     ['Terkirim terakhir', t.sentCount > 1 ? t.lastSentAt : null],
     ['Dibalas', t.repliedAt],
-    ['Follow-up', t.followUpAt],
     ['Selesai', t.completedAt],
   ].filter(([, v]) => v) as [string, string, string | undefined][];
   return (
@@ -612,48 +655,39 @@ function FollowUpPanel({
   onCancel: () => void;
   onSubmit: (b: TaskActionInput) => void;
 }) {
-  const [earliest] = useState(
-    () =>
-      new Date(
-        Math.max(
-          Date.now() + 60000,
-          !t.repliedAt && t.channel === 'TIKTOK_DM' && t.lastSentAt
-            ? new Date(t.lastSentAt).getTime() + MIN_UNANSWERED_FOLLOW_UP_HOURS * 3600000 + 60000
-            : 0,
-        ),
-      ),
-  );
-  const [at, setAt] = useState(toDateTimeLocal(earliest.toISOString()));
   const [message, setMessage] = useState(
     t.repliedAt
       ? ''
       : `Halo ${t.lead.name || 'Kak'}, aku mau menanyakan kembali apakah ingin menerima info singkat tentang Solid Mini? Kalau belum berminat, tidak apa-apa. Balas "stop" kalau tidak ingin dihubungi lagi ya.`,
   );
+  const context = useMessageContext(t.account.id);
+  const missingLink = /\{\{\s*link\s*\}\}/.test(message) && !context.data?.link;
+  const invalidVariables =
+    findUnknownPlaceholders(message).length > 0 ||
+    missingLink ||
+    (/\{\{\s*campaign\s*\}\}/.test(message) && !t.campaign?.name);
+  const preview = renderTemplate(message, {
+    nama: t.lead.name || t.lead.tiktokUsername,
+    username: t.lead.tiktokUsername,
+    akun: t.account.username,
+    campaign: t.campaign?.name,
+    link: context.data?.link,
+  });
   const replied = !!t.repliedAt;
   const consent = t.lead.consentChannels.includes(t.channel);
   return (
     <PanelShell onCancel={onCancel}>
-      {!replied && (
+      {t.channel !== 'TIKTOK_DM' && !replied && (
         <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-          {t.channel === 'TIKTOK_DM'
-            ? `Prospek belum membalas. Boleh satu follow-up setelah minimal ${MIN_UNANSWERED_FOLLOW_UP_HOURS} jam. Batas ${MAX_UNANSWERED_MESSAGES} pesan total tanpa balasan; setelah itu tunggu respons.`
-            : `Follow-up kanal ini memerlukan izin komunikasi (${consent ? 'tersedia' : 'belum ada'}), maksimal ${MAX_UNANSWERED_MESSAGES} pesan tanpa balasan.`}
+          {`Follow-up kanal ini memerlukan izin komunikasi (${consent ? 'tersedia' : 'belum ada'}), maksimal ${MAX_UNANSWERED_MESSAGES} pesan tanpa balasan.`}
         </p>
       )}
-      <FormField label="Jadwal follow-up" htmlFor="fu-at">
-        <Input
-          id="fu-at"
-          type="datetime-local"
-          min={toDateTimeLocal(earliest.toISOString())}
-          value={at}
-          onChange={(e) => setAt(e.target.value)}
-        />
-      </FormField>
       <FormField
         label={
           t.channel === 'TIKTOK_DM' ? 'Pesan follow-up baru' : 'Draft pesan follow-up (opsional)'
         }
         htmlFor="fu-msg"
+        hint="Nama otomatis mengikuti penerima. Untuk link sendiri, tempel URL langsung tanpa {{ }}."
       >
         <Textarea
           id="fu-msg"
@@ -662,23 +696,38 @@ function FollowUpPanel({
           onChange={(e) => setMessage(e.target.value)}
         />
       </FormField>
+      {invalidVariables && (
+        <p className="text-sm text-destructive">
+          {missingLink
+            ? 'Link otomatis belum diatur. Ganti {{link}} dengan URL lengkap.'
+            : 'Ada variabel yang tidak tersedia. Periksa isi pesan.'}
+        </p>
+      )}
+      {!!message.trim() && !invalidVariables && (
+        <div className="rounded-md bg-muted/40 p-3 text-sm">
+          <p className="mb-1 text-xs text-muted-foreground">
+            Pesan yang akan diterima @{t.lead.tiktokUsername}
+          </p>
+          <p className="whitespace-pre-wrap">{preview}</p>
+        </div>
+      )}
       <Button
         disabled={
           busy ||
-          !at ||
-          (!replied && t.sentCount >= MAX_UNANSWERED_MESSAGES) ||
+          invalidVariables ||
+          preview.length > 2000 ||
+          (t.channel !== 'TIKTOK_DM' && !replied && t.sentCount >= MAX_UNANSWERED_MESSAGES) ||
           (t.channel === 'TIKTOK_DM' && message.trim().length < 5)
         }
         onClick={() =>
           onSubmit({
             action: 'schedule_follow_up',
-            followUpAt: fromDateTimeLocal(at),
             ...(message.trim() ? { draftMessage: message.trim() } : {}),
           })
         }
       >
         {busy && <Loader2 className="animate-spin" />}
-        Jadwalkan
+        {t.channel === 'TIKTOK_DM' ? 'Masukkan follow-up ke antrean' : 'Siapkan follow-up'}
       </Button>
     </PanelShell>
   );

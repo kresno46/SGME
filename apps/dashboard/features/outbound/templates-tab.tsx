@@ -11,7 +11,7 @@ import {
 } from '@smge/shared';
 import type { MessageTemplateDto } from '@smge/types';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { FileText, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
+import { Copy, FileText, Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 import { toast } from 'sonner';
@@ -53,6 +53,34 @@ export function TemplatesTab() {
   const invalidate = useInvalidateOutbound();
   const [editing, setEditing] = useState<MessageTemplateDto | null | 'new'>(null);
   const [deleting, setDeleting] = useState<MessageTemplateDto | null>(null);
+  const [copying, setCopying] = useState<MessageTemplateDto | null>(null);
+  const groups = [
+    {
+      title: 'Template saya',
+      description: 'Template pribadi Anda. Bisa dibuat, diubah, dinonaktifkan, atau dihapus.',
+      rows: (q.data ?? []).filter((t) => t.createdBy?.id === user.id),
+    },
+    {
+      title: 'Rekomendasi admin',
+      description:
+        'Bisa langsung dipakai. Salin ke template saya untuk membuat versi Anda sendiri.',
+      rows: (q.data ?? []).filter((t) => !t.createdBy),
+    },
+    ...(user.role === 'SUPER_ADMIN'
+      ? [
+          {
+            title: 'Template user lain',
+            description:
+              'Template pribadi milik user lain. Hanya Super Admin yang dapat melihat dan mengelolanya.',
+            rows: (q.data ?? []).filter((t) => t.createdBy && t.createdBy.id !== user.id),
+          },
+        ]
+      : []),
+  ];
+  const closeEditor = () => {
+    setEditing(null);
+    setCopying(null);
+  };
 
   return (
     <div className="grid gap-4">
@@ -69,87 +97,141 @@ export function TemplatesTab() {
           </Button>
         )}
       </div>
+      <FormError message={q.error?.message ?? null} />
       {q.isPending ? (
         <TableSkeleton rows={3} cols={2} />
-      ) : !q.data?.length ? (
-        <Card>
-          <EmptyState
-            icon={FileText}
-            title="Belum ada template"
-            description="Template mempercepat penulisan draft pesan yang konsisten."
-          />
-        </Card>
-      ) : (
-        <div className="grid gap-3 md:grid-cols-2">
-          {q.data.map((t) => (
-            <Card key={t.id} className={t.isActive ? '' : 'opacity-60'}>
-              <CardContent className="grid gap-2 pt-5">
-                <div className="flex items-start gap-2">
-                  <div className="flex-1">
-                    <p className="font-medium">{t.name}</p>
-                    <div className="mt-1 flex flex-wrap gap-1">
-                      <Badge variant="secondary">
-                        {TEMPLATE_PURPOSE_LABELS[
-                          t.purpose as keyof typeof TEMPLATE_PURPOSE_LABELS
-                        ] ?? t.purpose}
-                      </Badge>
-                      <Badge variant="outline">
-                        {t.lane ? LANE_LABELS[t.lane] : 'Semua jalur'}
-                      </Badge>
-                      {!t.isActive && <Badge variant="secondary">Nonaktif</Badge>}
-                      <Badge variant="outline">
-                        {t.createdBy ? 'Template pribadi' : 'Template bawaan'}
-                      </Badge>
-                      {user.role === 'SUPER_ADMIN' && t.createdBy && (
-                        <span className="text-xs text-muted-foreground">
-                          Pemilik: {t.createdBy.name}
-                        </span>
+      ) : q.isError ? null : (
+        groups.map((group) => (
+          <section key={group.title} className="grid gap-3" aria-label={group.title}>
+            <div>
+              <h2 className="font-semibold">
+                {group.title}{' '}
+                <span className="text-sm font-normal text-muted-foreground">
+                  ({group.rows.length})
+                </span>
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">{group.description}</p>
+            </div>
+            {!group.rows.length ? (
+              <Card>
+                <EmptyState
+                  icon={FileText}
+                  title={
+                    group.title === 'Template saya'
+                      ? 'Belum punya template pribadi'
+                      : 'Belum ada template'
+                  }
+                  description={
+                    group.title === 'Template saya'
+                      ? 'Klik Template baru atau salin salah satu rekomendasi admin.'
+                      : undefined
+                  }
+                />
+              </Card>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-2">
+                {group.rows.map((t) => (
+                  <Card key={t.id} className={t.isActive ? '' : 'opacity-60'}>
+                    <CardContent className="grid gap-2 pt-5">
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1">
+                          <p className="font-medium">{t.name}</p>
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            <Badge variant="secondary">
+                              {TEMPLATE_PURPOSE_LABELS[
+                                t.purpose as keyof typeof TEMPLATE_PURPOSE_LABELS
+                              ] ?? t.purpose}
+                            </Badge>
+                            {!HIDE_OFFICIAL_LANE && (
+                              <Badge variant="outline">
+                                {t.lane ? LANE_LABELS[t.lane] : 'Semua jalur'}
+                              </Badge>
+                            )}
+                            {!t.isActive && <Badge variant="secondary">Nonaktif</Badge>}
+                            <Badge variant="outline">
+                              {t.createdBy
+                                ? t.createdBy.id === user.id
+                                  ? 'Template saya'
+                                  : 'Template pribadi'
+                                : 'Rekomendasi admin'}
+                            </Badge>
+                            {user.role === 'SUPER_ADMIN' && t.createdBy && (
+                              <span className="text-xs text-muted-foreground">
+                                Pemilik: {t.createdBy.name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {canManage &&
+                          (user.role === 'SUPER_ADMIN' || t.createdBy?.id === user.id) && (
+                            <>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={`Edit template ${t.name}`}
+                                onClick={() => setEditing(t)}
+                              >
+                                <Pencil />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="text-destructive hover:text-destructive"
+                                aria-label={`Hapus template ${t.name}`}
+                                onClick={() => setDeleting(t)}
+                              >
+                                <Trash2 />
+                              </Button>
+                            </>
+                          )}
+                      </div>
+                      <p className="rounded-md bg-muted/40 p-3 text-sm whitespace-pre-wrap">
+                        {t.content}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Dipakai di {t.usageCount} tugas
+                      </p>
+                      {!t.createdBy && canManage && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="justify-self-start"
+                          onClick={() => setCopying(t)}
+                        >
+                          <Copy /> Salin ke template saya
+                        </Button>
                       )}
-                    </div>
-                  </div>
-                  {canManage && (user.role === 'SUPER_ADMIN' || t.createdBy?.id === user.id) && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Edit template"
-                        onClick={() => setEditing(t)}
-                      >
-                        <Pencil />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Hapus template"
-                        onClick={() => setDeleting(t)}
-                      >
-                        <Trash2 />
-                      </Button>
-                    </>
-                  )}
-                </div>
-                <p className="rounded-md bg-muted/40 p-3 text-sm whitespace-pre-wrap">
-                  {t.content}
-                </p>
-                <p className="text-xs text-muted-foreground">Dipakai di {t.usageCount} tugas</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </section>
+        ))
       )}
-      <Dialog open={editing !== null} onOpenChange={(o) => !o && setEditing(null)}>
+      <Dialog open={editing !== null || copying !== null} onOpenChange={(o) => !o && closeEditor()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing === 'new' ? 'Template baru' : 'Edit template'}</DialogTitle>
+            <DialogTitle>
+              {copying
+                ? 'Salin ke template saya'
+                : editing === 'new'
+                  ? 'Template baru'
+                  : 'Edit template'}
+            </DialogTitle>
             <DialogDescription>
-              Tulis dengan bahasa natural dan ramah. Jangan menjanjikan keuntungan atau klaim yang
-              tidak ada di informasi resmi Solid Mini.
+              {copying
+                ? 'Ubah nama atau isi salinan ini sesuai kebutuhan. Rekomendasi admin tetap tersimpan tanpa perubahan.'
+                : editing && editing !== 'new' && !editing.createdBy
+                  ? 'Rekomendasi ini tersedia untuk semua user. Perubahan di sini memperbarui rekomendasi aslinya.'
+                  : 'Template pribadi hanya terlihat oleh pemiliknya dan Super Admin. Tulis pesan dengan bahasa natural dan ramah.'}
             </DialogDescription>
           </DialogHeader>
-          {editing !== null && (
+          {(editing !== null || copying !== null) && (
             <TemplateForm
               template={editing === 'new' ? null : editing}
-              onDone={() => setEditing(null)}
+              copyFrom={copying}
+              onDone={closeEditor}
             />
           )}
         </DialogContent>
@@ -175,21 +257,24 @@ type FormInput = z.input<typeof templateSchema>;
 
 function TemplateForm({
   template,
+  copyFrom,
   onDone,
 }: {
   template: MessageTemplateDto | null;
+  copyFrom?: MessageTemplateDto | null;
   onDone: () => void;
 }) {
   const invalidate = useInvalidateOutbound();
   const [error, setError] = useState<string | null>(null);
+  const initial = template ?? copyFrom;
   const form = useForm<FormInput, unknown, z.output<typeof templateSchema>>({
     resolver: zodResolver(templateSchema),
     defaultValues: {
-      name: template?.name ?? '',
-      lane: template?.lane ?? 'OUTBOUND',
-      purpose: (template?.purpose as TemplateInput['purpose']) ?? 'INTRODUCTION',
-      content: template?.content ?? '',
-      isActive: template?.isActive ?? true,
+      name: copyFrom ? `${copyFrom.name.slice(0, 90)} (salinan)` : (template?.name ?? ''),
+      lane: initial?.lane ?? 'OUTBOUND',
+      purpose: (initial?.purpose as TemplateInput['purpose']) ?? 'INTRODUCTION',
+      content: initial?.content ?? '',
+      isActive: copyFrom ? true : (template?.isActive ?? true),
     },
   });
   const { errors, isSubmitting } = form.formState;
@@ -198,7 +283,7 @@ function TemplateForm({
     try {
       if (template) await api.patch(`/message-templates/${template.id}`, values);
       else await api.post('/message-templates', values);
-      toast.success('Template disimpan');
+      toast.success(copyFrom ? 'Salinan tersimpan sebagai template pribadi' : 'Template disimpan');
       await invalidate();
       onDone();
     } catch (e) {
@@ -283,7 +368,7 @@ function TemplateForm({
         </Button>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="animate-spin" />}
-          Simpan
+          {copyFrom ? 'Simpan sebagai template saya' : 'Simpan'}
         </Button>
       </DialogFooter>
     </form>

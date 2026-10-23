@@ -12,12 +12,16 @@ import { RequirePermissions } from '../common/decorators/auth.decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
 import { PrismaService } from '../prisma/prisma.service';
 import { AnalyticsReportService } from './analytics-report.service';
+import { OutreachDashboardService } from './outreach-dashboard.service';
 
 const NOT_SIMULATED = { not: 'SIMULATED' as const };
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly outreach: OutreachDashboardService,
+  ) {}
 
   async overview(): Promise<DashboardOverview> {
     const p = this.prisma;
@@ -39,6 +43,7 @@ export class AnalyticsService {
       verifiedRegs,
       verifiedActs,
       operatorRegs,
+      outreach,
     ] = await Promise.all([
       p.tikTokAccount.count({ where: scope }),
       p.tikTokAccount.count({ where: { ...scope, status: 'ACTIVE' } }),
@@ -86,16 +91,20 @@ export class AnalyticsService {
         : p.$queryRaw<
             [{ n: bigint }]
           >`SELECT count(DISTINCT external_user_id) AS n FROM conversion_events WHERE type = 'REGISTRATION' AND is_verified = true AND data_source <> 'SIMULATED'`,
-      p.$queryRaw<
-        [{ n: bigint }]
-      >`SELECT count(DISTINCT external_user_id) AS n FROM conversion_events WHERE type = 'ACTIVATION' AND is_verified = true AND data_source <> 'SIMULATED'`,
+      scoped
+        ? Promise.resolve([{ n: 0n }])
+        : p.$queryRaw<
+            [{ n: bigint }]
+          >`SELECT count(DISTINCT external_user_id) AS n FROM conversion_events WHERE type = 'ACTIVATION' AND is_verified = true AND data_source <> 'SIMULATED'`,
       p.lead.count({
         where: {
+          ...scope,
           registeredAt: { not: null },
           registrationVerifiedAt: null,
           dataSource: NOT_SIMULATED,
         },
       }),
+      this.outreach.overview(),
     ]);
 
     const followersBySource: Record<DataSource, number> = { ACTUAL: 0, MANUAL: 0, SIMULATED: 0 };
@@ -106,6 +115,7 @@ export class AnalyticsService {
 
     return {
       generatedAt: new Date().toISOString(),
+      outreach,
       accounts: {
         total: accountTotal,
         active: accountActive,
@@ -164,6 +174,6 @@ export class AnalyticsController {
 
 @Module({
   controllers: [AnalyticsController],
-  providers: [AnalyticsService, AnalyticsReportService],
+  providers: [AnalyticsService, AnalyticsReportService, OutreachDashboardService],
 })
 export class AnalyticsModule {}

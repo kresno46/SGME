@@ -1,6 +1,6 @@
 'use client';
 
-import { PERMISSIONS, renderTemplate } from '@smge/shared';
+import { findUnknownPlaceholders, renderTemplate } from '@smge/shared';
 import type { OutboundQueueItemDto, Paginated, TikTokAccountDto } from '@smge/types';
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Send } from 'lucide-react';
@@ -18,23 +18,31 @@ import {
 import { Textarea } from '@/components/ui/primitives';
 import { useAuth } from '@/hooks/use-auth';
 import { api } from '@/lib/api';
-import { useInvalidateOutbound, useOutboundSummary, useTemplates } from './api';
+import { useInvalidateOutbound, useOutboundSummary, useTemplates, useMessageContext } from './api';
 
 type QueuePage = Paginated<OutboundQueueItemDto> & { truncated: boolean };
 const STEPS = ['Penerima', 'Pesan', 'Tinjau', 'Mulai kirim'];
 
 export function BulkDmDialog({
   account,
+  initialLeadIds,
+  compact = false,
   onClose,
 }: {
   account: TikTokAccountDto;
+  initialLeadIds?: string[];
+  compact?: boolean;
   onClose: () => void;
 }) {
-  const { can } = useAuth();
-  const canApprove = can(PERMISSIONS.OUTREACH_REVIEW);
+  const { user } = useAuth();
+  const simple = user.role === 'MARKETING_OPERATOR' || compact;
+  const steps = simple ? ['Penerima & pesan', 'Tinjau', 'Selesai'] : STEPS;
   const [step, setStep] = useState(0);
+  const displayedStep = simple ? Math.max(0, step - 1) : step;
   const [message, setMessage] = useState('');
-  const [selected, setSelected] = useState<Set<string> | null>(null);
+  const [selected, setSelected] = useState<Set<string> | null>(() =>
+    initialLeadIds ? new Set(initialLeadIds) : null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ queued: number; submitted: number } | null>(null);
@@ -42,6 +50,7 @@ export function BulkDmDialog({
   const running = useRef(false);
   const invalidate = useInvalidateOutbound();
   const summary = useOutboundSummary(account.id);
+  const context = useMessageContext(account.id);
   const templates = useTemplates(true);
   const queue = useQuery({
     queryKey: ['outbound', 'bulk-preview', account.id],
@@ -72,16 +81,19 @@ export function BulkDmDialog({
   const recipients = items.filter(({ lead }) => ids.has(lead.id));
   const preview = ({ lead }: OutboundQueueItemDto) =>
     renderTemplate(message.trim(), {
-      nama: lead.name,
+      nama: lead.name || lead.tiktokUsername,
       username: lead.tiktokUsername,
       akun: account.username,
+      link: context.data?.link,
     });
   const invalidMessage =
     message.trim().length < 5 ||
     recipients.some((item) => preview(item).length < 5 || preview(item).length > 2000);
-  const unsupported = [...message.matchAll(/\{\{\s*(\w+)\s*\}\}/g)].some(
-    (m) => !['nama', 'username', 'akun'].includes(m[1]),
-  );
+  const missingLink = /\{\{\s*link\s*\}\}/.test(message) && !context.data?.link;
+  const unsupported =
+    findUnknownPlaceholders(message).length > 0 ||
+    missingLink ||
+    /\{\{\s*campaign\s*\}\}/.test(message);
   const loadError = queue.error ?? summary.error;
   const loading = queue.isPending || summary.isPending;
 
@@ -94,7 +106,7 @@ export function BulkDmDialog({
       accountId: account.id,
       leadIds: recipients.map(({ lead }) => lead.id),
       message: message.trim(),
-      mode: canApprove ? 'approve' : 'submit',
+      mode: 'approve',
       confirmed: true,
     };
     const signature = JSON.stringify(body);
@@ -133,12 +145,15 @@ export function BulkDmDialog({
             Pilih penerima, tulis pesan, lalu tinjau sebelum pengiriman.
           </DialogDescription>
         </DialogHeader>
-        <ol className="grid grid-cols-4 gap-2 text-xs" aria-label="Langkah pengiriman">
-          {STEPS.map((label, index) => (
+        <ol
+          className={`grid gap-2 text-xs ${simple ? 'grid-cols-3' : 'grid-cols-4'}`}
+          aria-label="Langkah pengiriman"
+        >
+          {steps.map((label, index) => (
             <li
               key={label}
-              aria-current={step === index ? 'step' : undefined}
-              className={`rounded-md p-2 ${step === index ? 'bg-primary text-primary-foreground font-semibold' : 'bg-muted text-muted-foreground'}`}
+              aria-current={displayedStep === index ? 'step' : undefined}
+              className={`rounded-md p-2 ${displayedStep === index ? 'bg-primary text-primary-foreground font-semibold' : 'bg-muted text-muted-foreground'}`}
             >
               {index + 1}. {label}
             </li>
@@ -231,7 +246,7 @@ export function BulkDmDialog({
             )}
           </div>
         )}
-        {step === 1 && (
+        {(step === 1 || (simple && step === 0)) && (
           <div className="grid gap-4">
             <FormField label="Pakai template" htmlFor="bulk-template">
               <select
@@ -271,13 +286,14 @@ export function BulkDmDialog({
                 onChange={(event) => setMessage(event.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                {message.length}/2000 karakter · Personalisasi: {'{{nama}}, {{username}}, {{akun}}'}
-                .
+                {message.length}/2000 karakter · Personalisasi:{' '}
+                {'{{nama}}, {{username}}, {{akun}}, {{link}}'}.
               </p>
               {unsupported && (
                 <p className="text-sm text-destructive">
-                  Panel ini mendukung nama, username, dan akun. Ganti variabel lain dengan teks atau
-                  link yang ingin dikirim.
+                  {missingLink
+                    ? 'Link otomatis belum diatur. Ganti {{link}} dengan URL lengkap, tanpa kurung kurawal.'
+                    : 'Ganti variabel yang tidak tersedia dengan teks yang ingin dikirim.'}
                 </p>
               )}
             </FormField>
@@ -309,9 +325,8 @@ export function BulkDmDialog({
               ))}
             </div>
             <p className="rounded-md bg-muted p-3">
-              {canApprove
-                ? 'Dengan Setujui & siapkan, seluruh pesan ini disetujui dan langsung masuk antrean. Pengiriman dimulai saat kamu menekan Mulai di extension.'
-                : 'Pesan akan diajukan sekaligus untuk review Admin. Pengiriman menunggu persetujuan.'}
+              Pesan langsung masuk antrean setelah kamu menekan Masukkan ke antrean. Buka extension
+              lalu tekan Mulai untuk mengirim.
             </p>
           </div>
         )}
@@ -359,7 +374,7 @@ export function BulkDmDialog({
               disabled={busy}
               onClick={() => {
                 setError(null);
-                setStep(step - 1);
+                setStep(simple && step === 2 ? 0 : step - 1);
               }}
             >
               <ChevronLeft /> Kembali
@@ -378,11 +393,11 @@ export function BulkDmDialog({
                 !recipients.length ||
                 recipients.length > remaining ||
                 account.status !== 'ACTIVE' ||
-                (step === 1 && (invalidMessage || unsupported))
+                ((step === 1 || simple) && (invalidMessage || unsupported))
               }
-              onClick={() => setStep(step + 1)}
+              onClick={() => setStep(simple ? 2 : step + 1)}
             >
-              {step === 0 ? 'Lanjut ke pesan' : 'Tinjau pengiriman'}
+              {step === 0 && !simple ? 'Lanjut ke pesan' : 'Tinjau pengiriman'}
               <ChevronRight />
             </Button>
           )}
@@ -398,7 +413,7 @@ export function BulkDmDialog({
               onClick={() => void prepare()}
             >
               {busy ? <Loader2 className="animate-spin" /> : <Send />}
-              {canApprove ? 'Setujui & siapkan' : 'Ajukan semua untuk review'}
+              Masukkan ke antrean
             </Button>
           )}
           {step === 3 && (

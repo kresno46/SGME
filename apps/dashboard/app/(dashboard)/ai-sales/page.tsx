@@ -7,7 +7,7 @@ import { AiSalesPage } from '@/features/ai/ai-sales-page';
 
 export default function Page() {
   return (
-    <RequirePermission permission={PERMISSIONS.AI_USE}>
+    <RequirePermission permission={PERMISSIONS.AI_USE} superAdminOnly>
       <Suspense>
         <AiSalesPage />
       </Suspense>

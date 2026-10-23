@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import type { PrismaService } from '../src/prisma/prisma.service';
+import { startOfToday } from '../src/common/utils/refs';
 import { createTestApp, loginAs, resetDatabase, TEST_PASSWORD, type Session } from './utils';
 
 describe('Marketing data ownership (real HTTP, no live TikTok sends)', () => {
@@ -47,6 +48,7 @@ describe('Marketing data ownership (real HTTP, no live TikTok sends)', () => {
     accountA = (
       await post(a, '/tiktok-accounts', {
         username: 'sender_a',
+        profileUrl: 'https://www.tiktok.com/@sender_a',
         displayName: 'A',
         lane: 'OUTBOUND',
         ownerId: randomUUID(),
@@ -55,6 +57,7 @@ describe('Marketing data ownership (real HTTP, no live TikTok sends)', () => {
     accountB = (
       await post(b, '/tiktok-accounts', {
         username: 'sender_b',
+        profileUrl: 'https://www.tiktok.com/@sender_b',
         displayName: 'B',
         lane: 'OUTBOUND',
       }).expect(201)
@@ -128,6 +131,7 @@ describe('Marketing data ownership (real HTTP, no live TikTok sends)', () => {
     }).expect(404);
     await b.agent.get(`/api/outbound/queue?accountId=${accountA}`).expect(404);
     await b.agent.get(`/api/outbound/summary/${accountA}`).expect(404);
+    await b.agent.get(`/api/outbound/template-context/${accountA}`).expect(404);
     await b.agent.get(`/api/outbound/browser-dm?accountId=${accountA}`).expect(404);
     await post(b, '/outbound/browser-dm/queue', { accountId: accountA }).expect(404);
     await post(b, '/outbound/browser-dm/claim', {
@@ -211,6 +215,44 @@ describe('Marketing data ownership (real HTTP, no live TikTok sends)', () => {
       channel: 'TIKTOK_DM',
     }).expect(404);
   });
+  it('copies a shared recommendation into a private template that can be edited and deleted independently', async () => {
+    const shared = await db.messageTemplate.create({
+      data: {
+        name: 'Recommended greeting',
+        purpose: 'INTRODUCTION',
+        content: 'Halo {{nama}}, boleh kami kirim informasi?',
+        createdById: null,
+      },
+    });
+    const copied = (
+      await post(a, '/message-templates', {
+        name: shared.name + ' (salinan)',
+        purpose: shared.purpose,
+        content: shared.content,
+        lane: 'OUTBOUND',
+        isActive: true,
+      }).expect(201)
+    ).body;
+    expect(copied.id).not.toBe(shared.id);
+    expect(copied.createdBy.id).toBe((await a.agent.get('/api/auth/me')).body.id);
+    const otherRows = (await b.agent.get('/api/message-templates').expect(200)).body;
+    expect(otherRows.some((t: { id: string }) => t.id === copied.id)).toBe(false);
+    expect(otherRows.some((t: { id: string }) => t.id === shared.id)).toBe(true);
+    await patch(a, '/message-templates/' + copied.id, {
+      content: 'Pesan pribadi yang sudah disesuaikan.',
+    }).expect(200);
+    await patch(b, '/message-templates/' + copied.id, { content: 'Cannot overwrite.' }).expect(404);
+    expect((await db.messageTemplate.findUniqueOrThrow({ where: { id: shared.id } })).content).toBe(
+      shared.content,
+    );
+    await a.agent
+      .delete('/api/message-templates/' + copied.id)
+      .set('x-csrf-token', a.csrf)
+      .expect(200);
+    expect(await db.messageTemplate.findUnique({ where: { id: copied.id } })).toBeNull();
+    expect(await db.messageTemplate.findUnique({ where: { id: shared.id } })).not.toBeNull();
+  });
+
   it('isolates concurrent request contexts and dashboard totals', async () => {
     await Promise.all(
       Array.from({ length: 10 }, async () => {
@@ -229,6 +271,160 @@ describe('Marketing data ownership (real HTTP, no live TikTok sends)', () => {
     await a.agent.get('/api/analytics/report').expect(403);
     await a.agent.get('/api/ANALYTICS/report/').expect(403);
   });
+  it('scopes dashboard followers, send events, accounts and attention items for every role', async () => {
+    const ownerA = (await a.agent.get('/api/auth/me')).body.id;
+    const ownerB = (await b.agent.get('/api/auth/me')).body.id;
+    await db.lead.updateMany({
+      where: { id: { in: [leadA, leadB] } },
+      data: { tags: ['tiktok-followers'] },
+    });
+    await db.lead.update({ where: { id: leadB }, data: { registeredAt: new Date() } });
+    const taskA = await db.outreachTask.create({
+      data: {
+        ownerId: ownerA,
+        leadId: leadA,
+        tiktokAccountId: accountA,
+        channel: 'TIKTOK_DM',
+        status: 'APPROVED',
+        sentCount: 2,
+      },
+    });
+    const taskB = await db.outreachTask.create({
+      data: {
+        ownerId: ownerB,
+        leadId: leadB,
+        tiktokAccountId: accountB,
+        channel: 'TIKTOK_DM',
+        status: 'APPROVED',
+        sentCount: 1,
+      },
+    });
+    await db.browserDmDelivery.create({
+      data: {
+        taskId: taskA.id,
+        accountId: accountA,
+        requestedById: ownerA,
+        username: 'recipient_a',
+        senderUsername: 'sender_a',
+        message: 'Fixture A',
+        status: 'UNVERIFIED',
+      },
+    });
+    await db.browserDmDelivery.create({
+      data: {
+        taskId: taskB.id,
+        accountId: accountB,
+        requestedById: ownerB,
+        username: 'recipient_b',
+        senderUsername: 'sender_b',
+        message: 'Fixture B',
+        status: 'FAILED',
+      },
+    });
+    const today = startOfToday();
+    await db.leadActivity.createMany({
+      data: [
+        {
+          leadId: leadA,
+          type: 'MESSAGE_SENT',
+          summary: 'Start of business day',
+          metadata: { taskId: taskA.id },
+          createdAt: today,
+        },
+        {
+          leadId: leadA,
+          type: 'MESSAGE_SENT',
+          summary: 'Follow-up today',
+          metadata: { taskId: taskA.id },
+        },
+        {
+          leadId: leadA,
+          type: 'MESSAGE_SENT',
+          summary: 'Before today',
+          metadata: { taskId: taskA.id },
+          createdAt: new Date(today.getTime() - 1),
+        },
+        {
+          leadId: leadA,
+          type: 'MESSAGE_SENT',
+          summary: 'Future fixture',
+          metadata: { taskId: taskA.id },
+          createdAt: new Date(today.getTime() + 2 * 86400000),
+        },
+        {
+          leadId: leadB,
+          type: 'MESSAGE_SENT',
+          summary: 'Other owner today',
+          metadata: { taskId: taskB.id },
+        },
+      ],
+    });
+    await db.conversionEvent.create({
+      data: {
+        type: 'ACTIVATION',
+        occurredAt: new Date(),
+        externalUserId: 'foreign-activated',
+        leadId: leadB,
+        tiktokAccountId: accountB,
+        isVerified: true,
+      },
+    });
+    const overview = async (session: Session) =>
+      (await session.agent.get('/api/analytics/overview').expect(200)).body;
+    const one = await overview(a),
+      two = await overview(b),
+      all = await overview(root);
+    expect(one.outreach).toMatchObject({
+      activeAccounts: 1,
+      followersCollected: 1,
+      sentToday: 2,
+      sentLast7Days: 3,
+      deliveries: { UNVERIFIED: 1, FAILED: 0 },
+    });
+    expect(two.outreach).toMatchObject({
+      activeAccounts: 1,
+      followersCollected: 1,
+      sentToday: 1,
+      sentLast7Days: 1,
+      deliveries: { UNVERIFIED: 0, FAILED: 1 },
+    });
+    expect(all.outreach).toMatchObject({
+      activeAccounts: 2,
+      followersCollected: 2,
+      sentToday: 3,
+      sentLast7Days: 4,
+      deliveries: { UNVERIFIED: 1, FAILED: 1 },
+    });
+    expect(one.outreach.accounts.map((x: { id: string }) => x.id)).toEqual([accountA]);
+    expect(
+      (await a.agent.get('/api/outbound/summary/' + accountA).expect(200)).body.sentToday,
+    ).toBe(one.outreach.sentToday);
+    expect(one.outreach.accounts[0]).toMatchObject({
+      followersCollected: 1,
+      sentToday: 2,
+      owner: { id: ownerA },
+    });
+    expect(one.outreach.recent.map((x: { accountId: string }) => x.accountId)).toEqual([accountA]);
+    expect(one.outreach.issues.map((x: { accountId: string }) => x.accountId)).toEqual([accountA]);
+    expect(one.metrics.registrationsOperator.value).toBe(0);
+    expect(two.metrics.registrationsOperator.value).toBe(1);
+    expect(one.metrics.activeUsers.value).toBe(0);
+    expect(all.metrics.activeUsers.value).toBe(1);
+    for (const role of ['ADMIN', 'VIEWER'] as const) {
+      const empty = await overview(await loginAs(app, role));
+      expect(empty.outreach).toMatchObject({
+        activeAccounts: 0,
+        followersCollected: 0,
+        sentToday: 0,
+        recent: [],
+        issues: [],
+        accounts: [],
+      });
+      expect(empty.metrics.activeUsers.value).toBe(0);
+      expect(empty.metrics.registrationsOperator.value).toBe(0);
+    }
+  });
+
   it('applies the same ownership boundary to Admin and refuses forged source references', async () => {
     const admin = await loginAs(app, 'ADMIN');
     expect((await admin.agent.get('/api/leads').expect(200)).body.total).toBe(0);
@@ -252,6 +448,7 @@ describe('Marketing data ownership (real HTTP, no live TikTok sends)', () => {
     const separate = (
       await post(b, '/tiktok-accounts', {
         username: 'sender_a',
+        profileUrl: 'https://www.tiktok.com/@sender_a',
         displayName: 'Private copy B',
         lane: 'OUTBOUND',
       }).expect(201)
@@ -260,6 +457,7 @@ describe('Marketing data ownership (real HTTP, no live TikTok sends)', () => {
     await a.agent.get(`/api/tiktok-accounts/${separate.id}`).expect(404);
     await post(b, '/tiktok-accounts', {
       username: 'sender_a',
+      profileUrl: 'https://www.tiktok.com/@sender_a',
       displayName: 'Duplicate B',
       lane: 'OUTBOUND',
     }).expect(409);

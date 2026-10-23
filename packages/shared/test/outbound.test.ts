@@ -73,7 +73,7 @@ describe('kelayakan penjangkauan', () => {
       checkFollowUpAllowed({ replied: false, hasConsentForChannel: true, sentCount: 2 }).eligible,
     ).toBe(false);
   });
-  it('allows one unanswered TikTok reminder while other channels still require consent', () => {
+  it('allows TikTok follow-ups without recorded replies while other channels require consent', () => {
     expect(
       checkFollowUpAllowed({
         channel: 'TIKTOK_DM',
@@ -87,9 +87,9 @@ describe('kelayakan penjangkauan', () => {
         channel: 'TIKTOK_DM',
         replied: false,
         hasConsentForChannel: false,
-        sentCount: 2,
+        sentCount: 10,
       }).eligible,
-    ).toBe(false);
+    ).toBe(true);
     expect(
       checkFollowUpAllowed({
         channel: 'EMAIL',
@@ -159,6 +159,17 @@ describe('template pesan', () => {
     expect(renderTemplate('Hai {{ nama }}!', { nama: 'Budi' })).toBe('Hai Budi!');
   });
 
+  it('menampilkan URL literal tanpa kurung kurawal dan tetap mengganti nama', () => {
+    expect(
+      renderTemplate('Hai {{nama}}, lihat {{https://www.sg-berjangka.com/id}}', { nama: 'Sarah' }),
+    ).toBe('Hai Sarah, lihat https://www.sg-berjangka.com/id');
+    expect(renderTemplate('Link {https://example.com/path?a=1&b=2}', {})).toBe(
+      'Link https://example.com/path?a=1&b=2',
+    );
+    expect(findUnknownPlaceholders('Hai {{nama}} {{https://example.com/id}}')).toEqual([]);
+    expect(findUnknownPlaceholders('Halo {{nama salah}}')).toEqual(['nama salah']);
+  });
+
   it('mendeteksi placeholder tidak dikenal', () => {
     expect(findUnknownPlaceholders('Halo {{nama}} {{diskon}}')).toEqual(['diskon']);
     expect(
@@ -212,6 +223,15 @@ describe('skema Fase 2', () => {
       'INTERESTED',
     ]);
     expect(listLeadsQuerySchema.safeParse({ status: 'NGAWUR' }).success).toBe(false);
+  });
+
+  it('follow-up bisa disiapkan tanpa tanggal', () => {
+    const result = taskActionSchema.parse({
+      action: 'schedule_follow_up',
+      draftMessage: 'Halo lagi, boleh kirim info?',
+    });
+    expect(result.action).toBe('schedule_follow_up');
+    if (result.action === 'schedule_follow_up') expect(result.followUpAt).toBeNull();
   });
 
   it('tandai terkirim wajib dengan konfirmasi eksplisit', () => {

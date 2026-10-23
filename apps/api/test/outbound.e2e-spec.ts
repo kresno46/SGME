@@ -189,16 +189,10 @@ describe('Outbound Workstation (integration)', () => {
   }
   const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString();
 
-  it('follow-up TikTok tanpa balasan boleh dijadwalkan sekali setelah 24 jam tanpa izin tambahan', async () => {
+  it('follow-up TikTok bisa langsung disiapkan tanpa catatan balasan atau jadwal', async () => {
     const { taskId } = await sentTask();
-    await act(op, taskId, {
-      action: 'schedule_follow_up',
-      followUpAt: new Date(Date.now() + 3600000).toISOString(),
-      draftMessage: 'Halo lagi, apakah ingin info singkatnya?',
-    }).expect(409);
     const res = await act(op, taskId, {
       action: 'schedule_follow_up',
-      followUpAt: tomorrow(),
       draftMessage: 'Halo lagi, apakah ingin info singkatnya?',
     }).expect(200);
     expect(res.body.status).toBe('FOLLOW_UP');
@@ -206,7 +200,7 @@ describe('Outbound Workstation (integration)', () => {
     expect(res.body.finalMessage).toBeNull();
   });
 
-  it('follow-up dengan izin dibatasi maksimal 2 pesan tanpa balasan', async () => {
+  it('follow-up TikTok bisa dilanjutkan setelah dua pesan tanpa catatan balasan', async () => {
     const { lead: l, taskId } = await sentTask();
     await prisma.leadConsent.create({
       data: {
@@ -225,13 +219,13 @@ describe('Outbound Workstation (integration)', () => {
     expect(fu.body.status).toBe('FOLLOW_UP');
     expect(
       (await prisma.lead.findUniqueOrThrow({ where: { id: l.id } })).nextFollowUpAt,
-    ).not.toBeNull();
+    ).toBeNull();
 
-    // Muncul di daftar follow-up setelah jatuh tempo
+    // Legacy future dates do not delay follow-ups.
     await prisma.outreachTask.update({
       where: { id: taskId },
       data: {
-        followUpAt: new Date(Date.now() - 1000),
+        followUpAt: new Date(Date.now() + 7 * 86400000),
         lastSentAt: new Date(Date.now() - 25 * 3600000),
       },
     });
@@ -241,11 +235,11 @@ describe('Outbound Workstation (integration)', () => {
     const second = await act(op, taskId, { action: 'mark_sent', confirmed: true }).expect(200);
     expect(second.body.sentCount).toBe(2);
     expect(second.body.finalMessage).toBe('Hai lagi, cuma mau follow-up 🙂');
-    const limited = await act(op, taskId, {
+    const continued = await act(op, taskId, {
       action: 'schedule_follow_up',
-      followUpAt: tomorrow(),
-    }).expect(409);
-    expect(limited.body.message).toMatch(/tanpa balasan/);
+      draftMessage: 'Halo, ini informasi lanjutan yang ingin kami sampaikan.',
+    }).expect(200);
+    expect(continued.body.status).toBe('FOLLOW_UP');
   });
 
   it('pemeriksaan ulang saat kirim: prospek yang masuk DNC setelah disetujui tidak boleh dikirimi', async () => {

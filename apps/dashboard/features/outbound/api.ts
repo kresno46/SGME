@@ -10,11 +10,21 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api } from '@/lib/api';
 import { isVisibleLane } from '@/lib/marketing-scope';
 
+export function useMessageContext(accountId: string) {
+  return useQuery({
+    queryKey: ['outbound', 'template-context', accountId],
+    queryFn: () =>
+      api.get<{ akun: string; link: string | null }>(`/outbound/template-context/${accountId}`),
+    staleTime: 60_000,
+  });
+}
+
 export function useOutboundSummary(accountId: string | null) {
   return useQuery({
     queryKey: ['outbound', 'summary', accountId],
     queryFn: () => api.get<OutboundSummaryDto>(`/outbound/summary/${accountId}`),
     enabled: !!accountId,
+    refetchInterval: 5000,
   });
 }
 

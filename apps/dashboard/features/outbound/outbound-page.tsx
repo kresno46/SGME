@@ -12,6 +12,7 @@ import {
   CalendarClock,
   ClipboardCheck,
   FileText,
+  ExternalLink,
   Info,
   ListTodo,
   Loader2,
@@ -69,7 +70,7 @@ import {
 import { useAuth } from '@/hooks/use-auth';
 import { useDebounce } from '@/hooks/use-debounce';
 import { useAccountOptions, useCampaignOptions } from '@/hooks/use-lookups';
-import { formatNumber, formatRelative } from '@/lib/utils';
+import { formatDateTime, formatNumber, formatRelative } from '@/lib/utils';
 import { HIDE_OFFICIAL_LANE } from '@/lib/marketing-scope';
 import { leadContact } from '../leads/leads-page';
 import { useCreateTask, useOutboundSummary, useQueue, useTasks, useTemplates } from './api';
@@ -81,7 +82,7 @@ import { TemplatesTab } from './templates-tab';
 
 const TASK_GROUPS: { value: string; label: string; statuses: OutreachTaskStatus[] }[] = [
   { value: 'action', label: 'Perlu tindakan', statuses: ['DRAFT', 'APPROVED', 'FOLLOW_UP'] },
-  { value: 'review', label: 'Menunggu review', statuses: ['WAITING_REVIEW'] },
+  { value: 'review', label: 'Belum diantrekan', statuses: ['WAITING_REVIEW'] },
   { value: 'sent', label: 'Menunggu balasan', statuses: ['MANUALLY_SENT', 'BROWSER_SENT'] },
   { value: 'replied', label: 'Dibalas', statuses: ['REPLIED'] },
   { value: 'closed', label: 'Ditutup', statuses: ['COMPLETED', 'CANCELLED'] },
@@ -89,7 +90,9 @@ const TASK_GROUPS: { value: string; label: string; statuses: OutreachTaskStatus[
 
 export function OutboundPage() {
   const { can, user } = useAuth();
+  const simple = user.role === 'MARKETING_OPERATOR';
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [initialLeadIds, setInitialLeadIds] = useState<string[] | undefined>();
   const [followersOpen, setFollowersOpen] = useState(false);
   const router = useRouter();
   const params = useSearchParams();
@@ -99,7 +102,8 @@ export function OutboundPage() {
     accounts.data?.find((a) => a.status === 'ACTIVE')?.id ??
     accounts.data?.[0]?.id ??
     null;
-  const tab = params.get('tab') ?? 'queue';
+  const requestedTab = params.get('tab');
+  const tab = requestedTab ?? 'queue';
   const taskId = params.get('task');
 
   const setParam = (key: string, value: string | null) => {
@@ -115,8 +119,12 @@ export function OutboundPage() {
   return (
     <>
       <PageHeader
-        title="Outbound Workstation"
-        description="Pilih penerima dan pesan, tinjau, lalu mulai pengiriman melalui browser."
+        title={simple ? 'Kirim DM TikTok' : 'Outbound Workstation'}
+        description={
+          simple
+            ? 'Ambil followers, pilih pesan, lalu kirim DM.'
+            : 'Pilih penerima dan pesan, tinjau, lalu mulai pengiriman melalui browser.'
+        }
         actions={
           accounts.data && accounts.data.length > 0 ? (
             <Select value={accountId ?? undefined} onValueChange={(v) => setParam('account', v)}>
@@ -160,12 +168,13 @@ export function OutboundPage() {
               statusnya Aktif.
             </div>
           )}
-          <Summary accountId={accountId} />
+          <Summary accountId={accountId} simple={simple} />
           {can(PERMISSIONS.OUTREACH_WORK) && account && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <Button
                 onClick={() => {
                   if (!params.get('account')) setParam('account', account.id);
+                  setInitialLeadIds(undefined);
                   setBulkOpen(true);
                 }}
               >
@@ -182,7 +191,13 @@ export function OutboundPage() {
             </div>
           )}
           {bulkOpen && account && (
-            <BulkDmDialog key={accountId} account={account} onClose={() => setBulkOpen(false)} />
+            <BulkDmDialog
+              key={accountId}
+              account={account}
+              initialLeadIds={initialLeadIds}
+              compact={!!initialLeadIds?.length}
+              onClose={() => setBulkOpen(false)}
+            />
           )}
           {followersOpen && account && can(PERMISSIONS.LEADS_IMPORT) && (
             <FollowersDialog
@@ -200,7 +215,7 @@ export function OutboundPage() {
                 <Users /> Antrean prospek
               </TabsTrigger>
               <TabsTrigger value="tasks">
-                <ListTodo /> Tugas
+                <ListTodo /> {simple ? 'Pesan & follow-up' : 'Tugas'}
               </TabsTrigger>
               <TabsTrigger value="templates">
                 <FileText /> Template
@@ -209,6 +224,11 @@ export function OutboundPage() {
             <TabsContent value="queue">
               <Queue
                 accountId={accountId}
+                onSend={(leadId) => {
+                  if (!params.get('account')) setParam('account', accountId);
+                  setInitialLeadIds([leadId]);
+                  setBulkOpen(true);
+                }}
                 onTaskCreated={(id) => {
                   const next = new URLSearchParams(params.toString());
                   next.set('tab', 'tasks');
@@ -231,56 +251,103 @@ export function OutboundPage() {
   );
 }
 
-function Summary({ accountId }: { accountId: string }) {
+function Summary({ accountId, simple = false }: { accountId: string; simple?: boolean }) {
   const q = useOutboundSummary(accountId);
   const s = q.data;
   const loading = q.isPending;
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <StatCard
-        label="Tugas baru hari ini"
+        label={simple ? 'Kuota tugas hari ini' : 'Tugas baru hari ini'}
         icon={Plus}
         loading={loading}
         value={s ? `${formatNumber(s.createdToday)} / ${formatNumber(s.dailyLimit)}` : '—'}
         hint="Batas harian menjaga penjangkauan tetap personal"
       />
+      <>
+        <AvailableRecipients accountId={accountId} />
+        <StatCard
+          label="DM terkirim hari ini"
+          icon={Send}
+          loading={loading}
+          value={formatNumber(s?.sentToday ?? 0)}
+          hint="Termasuk follow-up; terkirim atau dikonfirmasi."
+        />
+      </>
+      {!simple && (
+        <>
+          <StatCard
+            label="Follow-up siap"
+            icon={CalendarClock}
+            loading={loading}
+            value={formatNumber(s?.followUpsDue ?? 0)}
+          />
+          <StatCard
+            label="Pesan disiapkan"
+            icon={ClipboardCheck}
+            loading={loading}
+            value={formatNumber(
+              (s?.byStatus.WAITING_REVIEW ?? 0) +
+                (s?.byStatus.DRAFT ?? 0) +
+                (s?.byStatus.APPROVED ?? 0),
+            )}
+          />
+        </>
+      )}
+      {!simple && (
+        <StatCard
+          label="Tingkat balasan (7 hari)"
+          icon={MessageSquareReply}
+          loading={loading}
+          value={s?.replyRate == null ? '—' : `${s.replyRate.toLocaleString('id-ID')}%`}
+          hint={
+            s && (
+              <span>
+                {formatNumber(s.repliesLast7Days)} balasan dari {formatNumber(s.sentLast7Days)}{' '}
+                pesan
+              </span>
+            )
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function AvailableRecipients({ accountId }: { accountId: string }) {
+  const q = useQueue({ accountId, page: 1, channel: 'TIKTOK_DM' });
+  return (
+    <Link
+      href={`/outbound?account=${accountId}&tab=queue`}
+      className="block rounded-xl focus-visible:outline-2 focus-visible:outline-primary"
+      aria-label="Lihat penerima tersedia"
+    >
       <StatCard
-        label="Follow-up jatuh tempo"
-        icon={CalendarClock}
-        loading={loading}
-        value={formatNumber(s?.followUpsDue ?? 0)}
-      />
-      <StatCard
-        label="Menunggu review"
-        icon={ClipboardCheck}
-        loading={loading}
-        value={formatNumber(s?.byStatus.WAITING_REVIEW ?? 0)}
-      />
-      <StatCard
-        label="Tingkat balasan (7 hari)"
-        icon={MessageSquareReply}
-        loading={loading}
-        value={s?.replyRate == null ? '—' : `${s.replyRate.toLocaleString('id-ID')}%`}
+        label="Penerima tersedia"
+        icon={Users}
+        loading={q.isPending}
+        value={
+          q.isError ? '-' : `${formatNumber(q.data?.total ?? 0)}${q.data?.truncated ? '+' : ''}`
+        }
         hint={
-          s && (
-            <span>
-              {formatNumber(s.repliesLast7Days)} balasan dari {formatNumber(s.sentLast7Days)} pesan
-            </span>
-          )
+          q.isError ? 'Belum dapat memuat daftar penerima.' : 'Klik untuk melihat calon penerima.'
         }
       />
-    </div>
+    </Link>
   );
 }
 
 function Queue({
   accountId,
+  onSend,
   onTaskCreated,
 }: {
   accountId: string;
   onTaskCreated: (id: string) => void;
+  onSend: (leadId: string) => void;
 }) {
-  const { can } = useAuth();
+  const { can, user } = useAuth();
+  const simple = user.role === 'MARKETING_OPERATOR';
   const [search, setSearch] = useState('');
   const [channel, setChannel] = useState<ContactChannel>('TIKTOK_DM');
   const [page, setPage] = useState(1);
@@ -303,31 +370,39 @@ function Queue({
             aria-label="Cari antrean"
           />
         </div>
-        <Select
-          value={channel}
-          onValueChange={(v) => {
-            setChannel(v as ContactChannel);
-            setPage(1);
-          }}
-        >
-          <SelectTrigger className="sm:w-48" aria-label="Kanal">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {CONTACT_CHANNELS.map((c) => (
-              <SelectItem key={c} value={c}>
-                {CONTACT_CHANNEL_LABELS[c]}
-                {c !== 'TIKTOK_DM' && ' (perlu izin)'}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        {!simple && (
+          <Select
+            value={channel}
+            onValueChange={(v) => {
+              setChannel(v as ContactChannel);
+              setPage(1);
+            }}
+          >
+            <SelectTrigger className="sm:w-48" aria-label="Kanal">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CONTACT_CHANNELS.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {CONTACT_CHANNEL_LABELS[c]}
+                  {c !== 'TIKTOK_DM' && ' (perlu izin)'}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
       </div>
       <p className="flex items-start gap-2 border-b bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
         <Info className="mt-0.5 size-3.5 shrink-0" />
-        Hanya prospek yang memenuhi syarat: bukan daftar larangan, belum terdaftar, tanpa tugas
-        berjalan, memiliki kontak untuk kanal ini
-        {channel !== 'TIKTOK_DM' && ', dan sudah memberi izin komunikasi'}.
+        {simple ? (
+          'Klik Kirim DM pada penerima, atau gunakan tombol Kirim DM di atas untuk memilih beberapa orang sekaligus.'
+        ) : (
+          <>
+            Hanya prospek yang memenuhi syarat: bukan daftar larangan, belum terdaftar, tanpa tugas
+            berjalan, memiliki kontak untuk kanal ini
+            {channel !== 'TIKTOK_DM' && ', dan sudah memberi izin komunikasi'}.
+          </>
+        )}
       </p>
       {q.isPending ? (
         <TableSkeleton cols={5} />
@@ -345,63 +420,100 @@ function Queue({
             <TableHeader>
               <TableRow className="hover:bg-transparent">
                 <TableHead>Prospek</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Ketertarikan</TableHead>
-                <TableHead>Prioritas</TableHead>
-                <TableHead>Kontak terakhir</TableHead>
-                <TableHead className="w-32">
-                  <span className="sr-only">Aksi</span>
-                </TableHead>
+                {!simple && <TableHead>Status</TableHead>}
+                {!simple && <TableHead>Ketertarikan</TableHead>}
+                {!simple && <TableHead>Prioritas</TableHead>}
+                <TableHead>Ditambahkan</TableHead>
+                {!simple && <TableHead>Kontak terakhir</TableHead>}
+                <TableHead className="text-right">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {q.data.items.map((item) => (
                 <TableRow key={item.lead.id}>
                   <TableCell>
-                    <Link href={`/leads/${item.lead.id}`} className="font-medium hover:underline">
-                      {item.lead.name ?? 'Tanpa nama'}
-                    </Link>
+                    {user.role === 'SUPER_ADMIN' ? (
+                      <Link href={`/leads/${item.lead.id}`} className="font-medium hover:underline">
+                        {item.lead.name ?? 'Tanpa nama'}
+                      </Link>
+                    ) : (
+                      <span className="font-medium">{item.lead.name ?? 'Tanpa nama'}</span>
+                    )}
                     <p className="max-w-60 truncate text-xs text-muted-foreground">
                       {leadContact(item.lead)}
                     </p>
                   </TableCell>
-                  <TableCell>
-                    <LeadStatusBadge status={item.lead.status} />
-                  </TableCell>
-                  <TableCell>
-                    <InterestBadge level={item.lead.interestLevel} />
-                  </TableCell>
-                  <TableCell>
-                    <Tooltip
-                      content={
-                        item.priority.reasons.length
-                          ? item.priority.reasons.join(' · ')
-                          : 'Tidak ada sinyal khusus'
-                      }
-                    >
-                      <span className="inline-flex items-center gap-2">
-                        <span
-                          className="h-1.5 w-16 overflow-hidden rounded-full bg-muted"
-                          aria-hidden
-                        >
+                  {!simple && (
+                    <TableCell>
+                      <LeadStatusBadge status={item.lead.status} />
+                    </TableCell>
+                  )}
+                  {!simple && (
+                    <TableCell>
+                      <InterestBadge level={item.lead.interestLevel} />
+                    </TableCell>
+                  )}
+                  {!simple && (
+                    <TableCell>
+                      <Tooltip
+                        content={
+                          item.priority.reasons.length
+                            ? item.priority.reasons.join(' · ')
+                            : 'Tidak ada sinyal khusus'
+                        }
+                      >
+                        <span className="inline-flex items-center gap-2">
                           <span
-                            className="block h-full rounded-full bg-primary"
-                            style={{ width: `${item.priority.score}%` }}
-                          />
+                            className="h-1.5 w-16 overflow-hidden rounded-full bg-muted"
+                            aria-hidden
+                          >
+                            <span
+                              className="block h-full rounded-full bg-primary"
+                              style={{ width: `${item.priority.score}%` }}
+                            />
+                          </span>
+                          <span className="text-sm tabular-nums">{item.priority.score}</span>
                         </span>
-                        <span className="text-sm tabular-nums">{item.priority.score}</span>
-                      </span>
-                    </Tooltip>
-                  </TableCell>
+                      </Tooltip>
+                    </TableCell>
+                  )}
                   <TableCell className="text-sm text-muted-foreground">
-                    {formatRelative(item.lead.lastContactedAt)}
+                    {formatDateTime(item.lead.createdAt)}
                   </TableCell>
+                  {!simple && (
+                    <TableCell className="text-sm text-muted-foreground">
+                      {formatRelative(item.lead.lastContactedAt)}
+                    </TableCell>
+                  )}
                   <TableCell>
-                    {can(PERMISSIONS.OUTREACH_WORK) && (
-                      <Button size="sm" onClick={() => setCreating(item)}>
-                        <Plus /> Buat tugas
-                      </Button>
-                    )}
+                    <div className="flex justify-end gap-2">
+                      {item.lead.tiktokUsername && (
+                        <Button size="sm" variant="outline" asChild>
+                          <a
+                            href={`https://www.tiktok.com/@${encodeURIComponent(item.lead.tiktokUsername.replace(/^@/, ''))}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            aria-label={`Lihat profil @${item.lead.tiktokUsername}`}
+                          >
+                            <ExternalLink /> Lihat profil
+                          </a>
+                        </Button>
+                      )}
+                      {channel === 'TIKTOK_DM' && can(PERMISSIONS.OUTREACH_WORK) && (
+                        <Button
+                          size="sm"
+                          onClick={() => onSend(item.lead.id)}
+                          aria-label={`Kirim DM ke @${item.lead.tiktokUsername}`}
+                        >
+                          <Send /> Kirim DM
+                        </Button>
+                      )}
+                      {!simple && can(PERMISSIONS.OUTREACH_WORK) && (
+                        <Button size="sm" variant="outline" onClick={() => setCreating(item)}>
+                          <Plus /> Buat tugas
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -456,7 +568,7 @@ function CreateTaskDialog({
         <DialogHeader>
           <DialogTitle>Buat tugas untuk {item?.lead.name ?? 'prospek'}</DialogTitle>
           <DialogDescription>
-            Draft pesan dibuat dari template dan masih bisa diubah sebelum diajukan untuk review.
+            Pesan dibuat dari template dan bisa diubah sebelum dimasukkan ke antrean.
           </DialogDescription>
         </DialogHeader>
         {item && (
@@ -576,10 +688,21 @@ function CreateTaskForm({
 }
 
 function Tasks({ accountId, onOpen }: { accountId: string; onOpen: (id: string) => void }) {
+  const { user } = useAuth();
+  const simple = user.role === 'MARKETING_OPERATOR';
   const [group, setGroup] = useState('action');
   const [mine, setMine] = useState(false);
   const [page, setPage] = useState(1);
-  const statuses = TASK_GROUPS.find((g) => g.value === group)!.statuses;
+  const groups = simple
+    ? TASK_GROUPS.filter((g) => g.value !== 'review' && g.value !== 'replied').map((g) =>
+        g.value === 'action'
+          ? { ...g, statuses: [...g.statuses, 'WAITING_REVIEW' as OutreachTaskStatus] }
+          : g.value === 'sent'
+            ? { ...g, statuses: [...g.statuses, 'REPLIED' as OutreachTaskStatus] }
+            : g,
+      )
+    : TASK_GROUPS;
+  const statuses = groups.find((g) => g.value === group)!.statuses;
   const q = useTasks({
     accountId,
     status: statuses.join(','),
@@ -590,7 +713,7 @@ function Tasks({ accountId, onOpen }: { accountId: string; onOpen: (id: string) 
   return (
     <Card>
       <div className="flex flex-wrap items-center gap-2 border-b p-3">
-        {TASK_GROUPS.map((g) => (
+        {groups.map((g) => (
           <Button
             key={g.value}
             size="sm"
@@ -600,25 +723,35 @@ function Tasks({ accountId, onOpen }: { accountId: string; onOpen: (id: string) 
               setPage(1);
             }}
           >
-            {g.label}
+            {simple && g.value === 'action'
+              ? 'Pesan & follow-up'
+              : simple && g.value === 'sent'
+                ? 'Sudah dikirim'
+                : g.label}
           </Button>
         ))}
-        <Button
-          size="sm"
-          variant={mine ? 'secondary' : 'ghost'}
-          className="ml-auto"
-          onClick={() => setMine((m) => !m)}
-        >
-          Tugas saya
-        </Button>
+        {!simple && (
+          <Button
+            size="sm"
+            variant={mine ? 'secondary' : 'ghost'}
+            className="ml-auto"
+            onClick={() => setMine((m) => !m)}
+          >
+            Tugas saya
+          </Button>
+        )}
       </div>
       {q.isPending ? (
         <TableSkeleton cols={5} />
       ) : !q.data?.items.length ? (
         <EmptyState
           icon={ListTodo}
-          title="Tidak ada tugas"
-          description="Buat tugas dari tab Antrean prospek."
+          title={simple ? 'Tidak ada pesan di bagian ini' : 'Tidak ada tugas'}
+          description={
+            simple
+              ? 'Gunakan tombol Kirim DM untuk memilih penerima dan menyiapkan pesan.'
+              : 'Buat tugas dari tab Antrean prospek.'
+          }
         />
       ) : (
         <>
@@ -628,14 +761,12 @@ function Tasks({ accountId, onOpen }: { accountId: string; onOpen: (id: string) 
                 <TableHead>Prospek</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Pesan</TableHead>
-                <TableHead>Operator</TableHead>
-                <TableHead>Jadwal / update</TableHead>
+                {!simple && <TableHead>Operator</TableHead>}
+                <TableHead>Update terakhir</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {q.data.items.map((t) => {
-                const due =
-                  t.status === 'FOLLOW_UP' && t.followUpAt && new Date(t.followUpAt) <= new Date();
                 return (
                   <TableRow key={t.id} className="cursor-pointer" onClick={() => onOpen(t.id)}>
                     <TableCell>
@@ -643,7 +774,14 @@ function Tasks({ accountId, onOpen }: { accountId: string; onOpen: (id: string) 
                       <p className="text-xs text-muted-foreground">{leadContact(t.lead)}</p>
                     </TableCell>
                     <TableCell>
-                      <TaskStatusBadge status={t.status} />
+                      {t.channel === 'TIKTOK_DM' &&
+                      ['APPROVED', 'WAITING_REVIEW'].includes(t.status) ? (
+                        <Badge variant="secondary">
+                          {t.status === 'APPROVED' ? 'Siap dikirim' : 'Belum diantrekan'}
+                        </Badge>
+                      ) : (
+                        <TaskStatusBadge status={t.status} />
+                      )}
                       {t.sentCount > 0 && (
                         <p className="mt-1 text-xs text-muted-foreground">
                           {t.sentCount}× terkirim
@@ -657,14 +795,7 @@ function Tasks({ accountId, onOpen }: { accountId: string; onOpen: (id: string) 
                     </TableCell>
                     <TableCell className="text-sm">{t.operator?.name ?? '—'}</TableCell>
                     <TableCell className="text-sm whitespace-nowrap">
-                      {t.status === 'FOLLOW_UP' && t.followUpAt ? (
-                        <span className={due ? 'font-medium text-destructive' : ''}>
-                          <CalendarClock className="mr-1 inline size-3.5" />
-                          {formatRelative(t.followUpAt)}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground">{formatRelative(t.updatedAt)}</span>
-                      )}
+                      <span className="text-muted-foreground">{formatRelative(t.updatedAt)}</span>
                     </TableCell>
                   </TableRow>
                 );

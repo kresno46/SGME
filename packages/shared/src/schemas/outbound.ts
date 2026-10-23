@@ -115,7 +115,8 @@ export const taskActionSchema = z.discriminatedUnion('action', [
   }),
   z.object({
     action: z.literal('schedule_follow_up'),
-    followUpAt: optionalDate.refine((d) => d !== null, 'Tentukan jadwal follow-up'),
+    // Accepted for legacy clients only; follow-ups are immediate and this date is ignored.
+    followUpAt: optionalDate,
     draftMessage: message.optional(),
   }),
   z.object({

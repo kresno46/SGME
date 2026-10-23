@@ -6,8 +6,8 @@ Sumber daftar dilaporkan operator dan tidak diverifikasi sebagai relasi follower
 
 ## Pemakaian
 
-1. Login SMGE sebagai Admin/Super Admin, pilih akun Outbound aktif, lalu buka **Ambil followers**.
-   Akses memerlukan `outreach:work` dan `leads:import`; role operator bawaan belum punya izin import.
+1. Login, pilih akun pengirim Outbound aktif milik Anda, lalu buka **Ambil followers**.
+   Akses memerlukan `outreach:work` dan `leads:import`, termasuk role Marketing Operator bawaan.
 2. Unduh ZIP, ekstrak, buka `chrome://extensions` atau `edge://extensions`, aktifkan Developer mode,
    pilih **Load unpacked**, lalu pilih folder berisi `manifest.json`.
 3. Di browser yang sama, buka `https://www.tiktok.com/@username` akun sumber yang Anda kelola.
@@ -17,7 +17,10 @@ Sumber daftar dilaporkan operator dan tidak diverifikasi sebagai relasi follower
    disimpan sementara dalam memori tab.
 5. Klik **Hentikan** bila diperlukan lalu **Ekspor JSON**. Pilih file di dialog SMGE, periksa akun
    sumber dan daftar username, kemudian **Simpan ke database**.
-6. Hasil masuk CRM dengan sumber `IMPORT`, akun sumber, tag `tiktok-followers` dan `browser-collected`,
+6. File boleh berasal dari akun TikTok lain. Prospek menjadi milik pemilik akun pengirim yang dipilih;
+   `sourceAccountId` menghubungkan prospek ke akun pengirim tersebut. Username sumber asli dari file
+   disimpan pada catatan, aktivitas (`collectedFromUsername`), dan audit, bukan diganti menjadi pengirim.
+   Hasil masuk CRM dengan sumber `IMPORT`, tag `tiktok-followers` dan `browser-collected`,
    catatan asal, aktivitas import, serta audit ringkasan. Prospek yang memenuhi syarat muncul di antrean Outbound.
 
 ## Batas dan perilaku

@@ -19,7 +19,7 @@ describe('Akun TikTok, analitik & health (integration)', () => {
   afterAll(() => app.close());
 
   const create = (body: Record<string, unknown>) =>
-    admin.agent.post('/api/tiktok-accounts').set('x-csrf-token', admin.csrf).send(body);
+    admin.agent.post('/api/tiktok-accounts').set('x-csrf-token', admin.csrf).send({ profileUrl: `https://www.tiktok.com/@${String(body.username).replace(/^@/, '').toLowerCase()}`, ...body });
 
   it('CRUD akun TikTok lengkap dengan audit log', async () => {
     const created = await create({
