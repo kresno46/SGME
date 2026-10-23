@@ -5,11 +5,11 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <div className="flex min-h-dvh flex-col items-center justify-center bg-muted/40 px-4 py-10">
       <div className="mb-6 flex items-center gap-3">
         <Image
-          src="/logo.svg"
+          src="/logo.png"
           alt="Logo Marketing Bias Growth"
           width={64}
           height={64}
-          className="size-12 shrink-0"
+          className="size-12 shrink-0 object-contain"
           priority
         />
         <div className="leading-tight">
