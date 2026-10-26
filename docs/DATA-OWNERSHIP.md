@@ -8,9 +8,11 @@ operator yang ditugaskan menangani prospek. Mengubah operator tidak memindahkan 
   ditampilkan pada daftar akun dan prospek.
 - Pemilik akun TikTok baru selalu ditetapkan server dari user login. `ownerId` yang dikirim klien
   tidak dapat dipakai untuk mengambil alih data.
-- Followers yang diimpor mengikuti pemilik akun sumber. Data prospek manual/CSV mengikuti pembuatnya.
+- Followers yang diimpor mengikuti pemilik akun pengirim yang dipilih saat impor; akun sumber pada
+  file boleh berbeda dan tetap dicatat sebagai asal pengambilan. Data prospek manual/CSV mengikuti pembuatnya.
 - Tugas DM memerlukan akun pengirim dan prospek dengan pemilik yang sama. Persetujuan/review tidak
-  mengubah pemilik. Marketing Operator membuat/mengajukan draft; Super Admin dapat mereviewnya.
+  mengubah pemilik. Pada alur Kirim DM TikTok, Marketing Operator langsung memasukkan pesan ke antrean
+  setelah meninjau isi dan penerima, tanpa persetujuan Admin terpisah. Mekanisme review lama tetap tersimpan.
 - Username akun TikTok, username prospek, email, dan nomor telepon unik per pemilik, sehingga dua
   marketing dapat mencatat akun sumber dan kontak yang sama secara terpisah. Setiap record tetap
   memiliki satu pemilik; mendaftarkan username yang sama tidak memberikan akses ke record user lain.

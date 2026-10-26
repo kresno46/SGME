@@ -89,8 +89,10 @@ saat antrean belum ada dan dapat menampilkan pesan login yang keliru. Unduh ulan
 ekstrak, lalu ganti/reload extension melalui halaman Extensions. Memuat ulang dashboard saja tidak
 memperbarui kode extension.
 
-Jika panel mengatakan belum ada antrean, setujui tugas lalu klik **Antrekan tugas disetujui** sebelum
-klik Mulai di extension. Tugas **Dikonfirmasi operator** tidak diantrekan ulang. Sesi yang kedaluwarsa
+Jika panel mengatakan belum ada antrean, pilih akun pengirim yang benar dan gunakan **Kirim DM**,
+lalu **Masukkan ke antrean**. Untuk pesan lama yang belum diantrekan, klik **Masukkan pesan ke antrean**
+bila tersedia sebelum klik Mulai di extension. Alur TikTok tidak memerlukan persetujuan Admin terpisah.
+Tugas **Dikonfirmasi operator** tidak diantrekan ulang sebagai pesan pertama. Sesi yang kedaluwarsa
 dicoba diperbarui sekali; jika tetap gagal, extension meminta login ulang. Error CSRF, koneksi, dan
 respons bukan JSON ditampilkan terpisah. Tidak ada percobaan ulang pengiriman pesan akibat perbaikan ini.
 

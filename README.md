@@ -114,11 +114,15 @@ pnpm build         # build produksi semua package & aplikasi
 | Role               | Ringkasan akses                                                             |
 | ------------------ | --------------------------------------------------------------------------- |
 | Super Admin        | Semua fitur termasuk pengaturan sistem                                      |
-| Admin              | Kelola pengguna (di bawah Admin), akun, campaign, integrasi, knowledge base |
-| Marketing Operator | Prospek, Outbound Workstation, percakapan, AI copilot                       |
+| Admin              | Dashboard, akun, dan outreach milik sendiri sesuai permission; pengelolaan global dibatasi Super Admin |
+| Marketing Operator | Dashboard, akun TikTok sendiri, pengambilan followers, DM, follow-up, dan template pribadi melalui Outbound |
 | Viewer             | Hanya melihat                                                               |
 
 Detail permission: [packages/shared/src/permissions.ts](packages/shared/src/permissions.ts).
+
+Menu CRM / Prospek dan AI Sales Agent saat ini hanya dibuka untuk Super Admin. Menu Jalur A
+disembunyikan. Panduan kerja Marketing yang mengikuti tampilan saat ini tersedia di
+[Panduan pengguna Marketing](docs/PANDUAN-MARKETING.md).
 
 ## Produksi
 
@@ -134,6 +138,7 @@ Panduan lengkap (hardening server, backup, update, rollback): [docs/DEPLOYMENT.m
 
 ## Dokumentasi
 
+- [Panduan pengguna Marketing](docs/PANDUAN-MARKETING.md): cara login, mengambil followers, mengirim DM, follow-up, dan mengelola template pribadi
 - [docs/ARSITEKTUR.md](docs/ARSITEKTUR.md): arsitektur, alur autentikasi, dan keamanan
 - [docs/DATABASE.md](docs/DATABASE.md): rancangan database, deduplikasi, dan retensi
 - [docs/API.md](docs/API.md): referensi endpoint REST
