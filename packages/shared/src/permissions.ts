@@ -37,6 +37,8 @@ export const PERMISSIONS = {
   CONVERSATIONS_REPLY: 'conversations:reply',
 
   AI_USE: 'ai:use',
+  /** Menautkan nomor WhatsApp (WAHA) milik sendiri, membaca dan membalas chat di nomor itu */
+  WHATSAPP_USE: 'whatsapp:use',
   KNOWLEDGE_MANAGE: 'knowledge:manage',
 
   INTEGRATIONS_READ: 'integrations:read',
@@ -77,6 +79,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<RoleCode, Permission[]> = {
     P.OUTREACH_WORK,
     P.CONVERSATIONS_REPLY,
     P.AI_USE,
+    P.WHATSAPP_USE,
   ],
   VIEWER: READ_ONLY,
 };

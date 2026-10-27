@@ -784,3 +784,155 @@ export interface AnalyticsReportDto {
   accounts: AccountPerformanceDto[];
   operators: OperatorProductivityDto[];
 }
+
+// ---------------------------------------------------------------------
+// WhatsApp (WAHA)
+// ---------------------------------------------------------------------
+
+export interface WhatsappConfigDto {
+  /** WAHA diaktifkan di server (WAHA_ENABLED + konfigurasi lengkap) */
+  enabled: boolean;
+  /** Batas jumlah nomor per user */
+  maxSessionsPerUser: number;
+  /** Server hanya memakai satu sesi bersama (WAHA lama); user tidak bisa menambah nomor */
+  singleSession: boolean;
+  /** Nomor baru menyinkronkan kontak ponsel ke WAHA sehingga kontak bisa dipilih */
+  contactsSync: boolean;
+  /** Batas chat baru yang dimulai dari SMGE per nomor per hari */
+  newChatsPerDay: number;
+  /** Riwayat chat dari ponsel diimpor otomatis setelah nomor ditautkan */
+  historySync: boolean;
+  historyDays: number;
+  /** Kirim terjadwal ke daftar terpilih diaktifkan, beserta batasnya */
+  broadcast: {
+    enabled: boolean;
+    maxRecipients: number;
+    perDay: number;
+    minDelaySeconds: number;
+    maxDelaySeconds: number;
+  };
+}
+
+/** Kontak dari ponsel yang tertaut ke satu nomor (hanya bila sinkronisasi kontak aktif). */
+export interface WhatsappContactsDto {
+  /** false bila nomor ini belum menyinkronkan kontak; pakai input nomor manual */
+  available: boolean;
+  items: Array<{ phone: string; name: string; saved: boolean }>;
+}
+
+/** Satu nomor WhatsApp milik user yang sedang login. */
+export interface WhatsappSessionDto {
+  id: string;
+  label: string;
+  /** Jumlah chat di nomor ini; nomor tanpa chat boleh dihapus */
+  chatCount: number;
+  /** Impor riwayat chat dari ponsel */
+  historySyncedAt: string | null;
+  historySyncing: boolean;
+  /** Jumlah chat yang diimpor pada sinkronisasi terakhir */
+  historyChats: number;
+  /** Kode kegagalan terakhir, mis. store_disabled (nomor perlu dipindai ulang) */
+  historyError: string | null;
+  /** Salah satu WahaSessionStatus */
+  status: string;
+  /** Nomor tertaut, disamarkan */
+  connectedNumber: string | null;
+  connectedName: string | null;
+  /** Kode masalah saat berbicara dengan WAHA, tanpa isi pesan atau secret */
+  problem: string | null;
+  /** Sesi dibuat sebelum event status/ack didaftarkan; putuskan nomor lalu atur ulang */
+  eventsOutdated: boolean;
+  /** Nomor terputus tanpa disengaja */
+  connectionLost: boolean;
+}
+
+export interface WhatsappAdminSessionDto {
+  sessionId: string;
+  label: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  userRole: RoleCode;
+  userActive: boolean;
+  status: string;
+  connectedNumber: string | null;
+  connectedName: string | null;
+  problem: string | null;
+  connectionLost: boolean;
+  chatCount: number;
+}
+
+export interface WhatsappChatDto {
+  id: string;
+  contactName: string | null;
+  /** Digit nomor, null bila WhatsApp menyembunyikannya (chat @lid) */
+  contactPhone: string | null;
+  unreadCount: number;
+  lastMessageAt: string | null;
+  lastMessagePreview: string | null;
+  /** Nomor WhatsApp yang menerima chat ini; balasan selalu keluar dari nomor ini */
+  session: { id: string; label: string };
+  owner: { id: string; name: string } | null;
+  /** Chat ada di nomor milik user yang sedang login */
+  mine: boolean;
+}
+
+export interface WhatsappChatListDto extends Paginated<WhatsappChatDto> {
+  unreadTotal: number;
+}
+
+export interface WhatsappMessageDto {
+  id: string;
+  direction: 'INBOUND' | 'OUTBOUND';
+  status: 'RECEIVED' | 'SENDING' | 'SENT' | 'DELIVERED' | 'READ' | 'FAILED';
+  body: string;
+  failureReason: string | null;
+  sentAt: string;
+}
+
+export interface WhatsappThreadDto {
+  chat: WhatsappChatDto;
+  messages: WhatsappMessageDto[];
+  canReply: boolean;
+  /** Alasan balasan tidak tersedia (bukan pemilik nomor, pelanggan minta berhenti, dll.) */
+  replyBlockedReason: string | null;
+}
+
+export interface WhatsappSendResultDto {
+  message: WhatsappMessageDto;
+  status: 'sent' | 'duplicate';
+}
+
+export interface WhatsappBroadcastDto {
+  id: string;
+  name: string;
+  message: string;
+  status: 'RUNNING' | 'PAUSED' | 'DONE' | 'CANCELLED';
+  /** session_not_connected, too_many_failures, atau null (dijeda manual / tidak dijeda) */
+  pauseReason: string | null;
+  sessionId: string;
+  sessionLabel: string;
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  pending: number;
+  nextSendAt: string | null;
+  createdAt: string;
+  finishedAt: string | null;
+}
+
+export interface WhatsappBroadcastRecipientDto {
+  id: string;
+  phone: string;
+  name: string | null;
+  status: 'PENDING' | 'SENT' | 'FAILED' | 'SKIPPED';
+  /** dnc, opt_out, not_registered, self, cancelled, send_failed:<kode> */
+  reason: string | null;
+  chatId: string | null;
+  sentAt: string | null;
+}
+
+export interface WhatsappBroadcastDetailDto extends WhatsappBroadcastDto {
+  recipients: WhatsappBroadcastRecipientDto[];
+}
