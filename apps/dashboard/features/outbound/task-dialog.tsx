@@ -152,7 +152,7 @@ function TaskBody({ taskId }: { taskId: string }) {
       await invalidate();
       toast.success(
         result.queued
-          ? 'Siap dikirim. Tutup panel lalu klik Mulai di extension SMGE DM Sender.'
+          ? 'Siap dikirim. Tutup panel, buka extension SMGE Toolkit, pilih Kirim DM, lalu klik Mulai.'
           : 'Periksa status tugas ini pada panel Status pengiriman.',
       );
     } catch (cause) {

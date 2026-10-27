@@ -1,7 +1,7 @@
 # Pengiriman DM melalui browser (versi awal)
 
-Modul ini mencoba mengirim pesan melalui tampilan TikTok di Chrome/Edge. Ia terpisah dari
-Login Kit dan extension pengambil followers. Tidak memakai endpoint privat, password, atau cookie
+Modul ini mencoba mengirim pesan melalui tampilan TikTok di Chrome/Edge. Ia adalah satu alat
+di extension **SMGE Toolkit** (bersama pengambil followers) dan terpisah dari Login Kit. Tidak memakai endpoint privat, password, atau cookie
 TikTok di server. Struktur UI TikTok belum diuji pada sesi akun sungguhan; bila identitas atau kontrol
 chat tidak dikenali, pengiriman berhenti sebelum tombol kirim ditekan.
 
@@ -12,7 +12,7 @@ bukan `execCommand` atau event input JavaScript buatan. Perubahan ini menangani 
 `Isi editor tidak cocok dengan pesan yang disetujui` yang terlihat pada log percobaan versi sebelumnya.
 Template harus terverifikasi utuh di editor sebelum otorisasi dan Enter/klik dilakukan.
 
-Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.0**.
+Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **SMGE Toolkit v1.0.0**.
 Versi ini menambah izin **debugger** yang wajib dideklarasikan saat pemasangan/update; Chrome tidak
 mengizinkannya sebagai permission opsional. Implementasi hanya melampirkan debugger ke tab TikTok
 pengiriman dan memakai domain Input, lalu melepasnya setelah percobaan. Tutup DevTools pada tab itu
@@ -32,14 +32,14 @@ Tidak ada fallback pengiriman kedua ketika hasil percobaan pertama belum jelas.
    pilih template atau tulis pesan, dan periksa pesan hasil personalisasi pada langkah **Tinjau**.
    Tekan **Masukkan ke antrean**. Marketing maupun Admin langsung menyiapkan antrean tanpa
    persetujuan terpisah. Mode API lama `submit` juga masuk antrean setelah konfirmasi pengirim.
-2. Di panel **Status pengiriman → Pasang extension / bantuan pengiriman**, unduh DM Sender, ekstrak ZIP dan pasang folder melalui
+2. Di panel **Status pengiriman → Pasang extension / bantuan pengiriman**, unduh SMGE Toolkit, ekstrak ZIP dan pasang folder melalui
    **Load unpacked** pada `chrome://extensions` atau `edge://extensions` dengan Developer mode aktif.
 3. Login TikTok di browser yang sama sebagai akun pengirim. Pastikan tautan Profil akun login tersedia
    di navigasi TikTok; bila tak bisa diverifikasi, extension akan berhenti.
 4. Batch dari **Kirim DM** sudah masuk antrean. Untuk draft atau tugas lama yang masih menunggu
    review, gunakan **Masukkan pesan ke antrean** pada panel Status pengiriman atau buka pesannya
    dan tekan **Masukkan ke antrean**. Maksimal 30 tugas per batch; data tetap dibatasi pemilik.
-5. Dari tab Outbound tersebut, buka extension **SMGE DM Sender**, centang persetujuan pengiriman,
+5. Dari tab Outbound tersebut, buka extension **SMGE Toolkit**, pilih **Kirim DM**, centang persetujuan pengiriman,
    lalu klik **Mulai**. Berikan izin akses ke origin dashboard bila diminta. Biarkan tab dashboard
    tetap terbuka dan login. Extension membuka tab TikTok untuk memproses satu penerima per putaran.
 6. Hasil muncul di panel dan diperbarui setiap 5 detik. Extension mengambil tugas berikutnya melalui
@@ -84,7 +84,7 @@ percobaan terakhir per tugas, sedangkan riwayat pesan tetap tersimpan pada aktiv
 
 ### Extension menampilkan error akses dashboard
 
-Gunakan DM Sender versi **0.1.1** atau lebih baru. Versi 0.1.0 salah menangani respons sukses kosong
+Gunakan SMGE Toolkit **1.0.0** atau lebih baru. Versi 0.1.0 salah menangani respons sukses kosong
 saat antrean belum ada dan dapat menampilkan pesan login yang keliru. Unduh ulang ZIP dari panel,
 ekstrak, lalu ganti/reload extension melalui halaman Extensions. Memuat ulang dashboard saja tidak
 memperbarui kode extension.
@@ -100,7 +100,7 @@ Membuka `/messages` belum berarti percakapan penerima yang dituju sudah terpilih
 username di header chat dengan penerima tugas. Extension berhenti sebelum mengisi pesan bila
 identitas chat belum cocok/dikenali; tab terbuka belum menunjukkan pengiriman berhasil.
 
-DM Sender **0.1.2** menyediakan tombol **Unduh diagnostik chat TikTok**. Unduh ulang ZIP, ekstrak
+Alat **Diagnostik chat** di SMGE Toolkit menyediakan tombol **Unduh diagnostik chat TikTok**. Unduh ulang ZIP, ekstrak
 ke folder extension dan Reload di halaman Extensions. Buka tab chat TikTok yang gagal,
 buka popup extension dari tab itu lalu pilih diagnostik. File JSON berisi tag, penanda `data-e2e`,
 role, class, posisi elemen, rantai parent, placeholder, dan username profil yang terlihat. File tidak
@@ -143,7 +143,7 @@ terverifikasi tidak bisa langsung diantrekan ulang. Tugas yang sudah kehilangan 
   token sesi tidak diekspor. Jangan tutup tab dashboard selama percobaan.
 - Satu klik kirim tidak menjamin penerima boleh menerima DM. Verifikasi, pembatasan, atau selector
   yang tidak cocok menghentikan antrean; tidak ada bypass, rotasi akun, atau retry pesan otomatis.
-- Selector di `infrastructure/browser-dm-sender/page.js` sengaja mensyaratkan identitas akun di navigasi
+- Selector di `infrastructure/smge-extension/page.js` sengaja mensyaratkan identitas akun di navigasi
   dan tautan username penerima di header chat. Bila layout TikTok berbeda, perlu inspeksi dan
   penyesuaian selector; jangan melepas pengecekan identitas agar script sekadar menekan tombol.
 - Catatan aktivitas dan audit memisahkan observasi browser dari konfirmasi operator. Data hasil browser
@@ -157,14 +157,14 @@ dan restart API agar model baru tersedia. Di Windows, hentikan proses API sebelu
 Prisma sedang dikunci proses Node.
 
 ```powershell
-node --test infrastructure/browser-dm-sender/page.test.mjs
-node --test infrastructure/browser-dm-sender/worker.test.mjs
-node --test infrastructure/browser-dm-sender/transport.test.mjs
-node --test infrastructure/browser-dm-sender/new-layout.test.mjs
-node --test infrastructure/browser-dm-sender/native-input.test.mjs
-node --test infrastructure/browser-dm-sender/native-browser.test.mjs
+node --test infrastructure/smge-extension/page.test.mjs
+node --test infrastructure/smge-extension/worker.test.mjs
+node --test infrastructure/smge-extension/transport.test.mjs
+node --test infrastructure/smge-extension/new-layout.test.mjs
+node --test infrastructure/smge-extension/native-input.test.mjs
+node --test infrastructure/smge-extension/native-browser.test.mjs
 pnpm --filter @smge/api test:e2e --testPathPattern browser-dm
-powershell -NoProfile -ExecutionPolicy Bypass -File infrastructure/scripts/package-browser-dm-sender.ps1
+node infrastructure/scripts/package-extension.mjs
 ```
 
 Endpoint di bawah `/api/outbound/browser-dm`: `GET ?accountId=...`, `POST queue`, `POST claim`,

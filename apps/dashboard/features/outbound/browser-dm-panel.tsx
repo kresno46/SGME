@@ -59,7 +59,7 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
       if (path === 'queue' || path.endsWith('/retry'))
         setNotice(
           result.queued
-            ? `${result.queued} tugas masuk antrean. Klik Mulai di extension SMGE DM Sender dari tab Outbound ini.`
+            ? `${result.queued} tugas masuk antrean. Buka extension SMGE Toolkit, pilih Kirim DM, lalu klik Mulai dari tab Outbound ini.`
             : 'Tidak ada tugas baru untuk diantrekan. Untuk baris Gagal, periksa chat lalu gunakan Antrekan ulang pada baris tersebut.',
         );
       else if (path === 'cancel')
@@ -103,7 +103,7 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
           : processing
             ? `${processing} DM sedang diproses. Biarkan tab ini terbuka.`
             : waiting
-              ? `${waiting} DM siap. Buka extension SMGE DM Sender, lalu klik Mulai dari tab Outbound ini.`
+              ? `${waiting} DM siap. Buka extension SMGE Toolkit, pilih Kirim DM, lalu klik Mulai dari tab Outbound ini.`
               : approved > 0
                 ? `${approved} pesan belum masuk antrean. Klik Masukkan pesan ke antrean untuk melanjutkan.`
                 : 'Mulai dari tombol Kirim DM untuk memilih penerima dan menyiapkan pesan.'}
@@ -143,8 +143,8 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
         </summary>
         <div className="my-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" asChild>
-            <a href="/downloads/smge-browser-dm-sender.zip?v=0.2.0" download>
-              <Download /> Unduh DM Sender
+            <a href="/downloads/smge-extension.zip?v=1.0.0" download>
+              <Download /> Unduh SMGE Toolkit
             </a>
           </Button>
         </div>

@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="utf-8" />
+    <title>SMGE Toolkit</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <button type="button" id="back" class="icon-btn" hidden aria-label="Kembali ke daftar alat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" /></svg>
+      </button>
+      <p class="brand"><span class="mark">SMGE</span> <span id="title">Toolkit</span></p>
+      <span class="ver" id="version"></span>
+    </header>
+
+    <main>
+      <section id="view-home" aria-labelledby="home-h">
+        <h1 id="home-h" tabindex="-1">Pilih alat</h1>
+        <ul class="tiles">
+          <li>
+            <button type="button" class="tile" data-view="collector">
+              <span class="glyph">
+                <!-- dua sosok: daftar followers -->
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <circle cx="9" cy="8" r="3.2" />
+                  <path d="M3 19c0-3.3 2.7-5.5 6-5.5s6 2.2 6 5.5" />
+                  <path d="M16 5.2a3 3 0 010 5.6M18 14c1.8.7 3 2.3 3 5" />
+                </svg>
+              </span>
+              <span class="t">Ambil followers</span>
+              <span class="s">Dari profil TikTok</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="tile" data-view="sender" id="tile-sender">
+              <span class="glyph">
+                <!-- pesawat kertas: kirim DM -->
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M21 3L3 10.5l7 2.5 2.5 7L21 3z" />
+                  <path d="M10 13l11-10" />
+                </svg>
+              </span>
+              <span class="t">Kirim DM</span>
+              <span class="s" id="tile-sender-state">Antrean SMGE</span>
+            </button>
+          </li>
+          <li>
+            <button type="button" class="tile" data-view="diagnostic">
+              <span class="glyph">
+                <!-- denyut: pemeriksaan struktur chat -->
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M3 12h4l2.5-6 4 12 2.5-6H21" />
+                </svg>
+              </span>
+              <span class="t">Diagnostik chat</span>
+              <span class="s">Bila kirim gagal</span>
+            </button>
+          </li>
+        </ul>
+      </section>
+
+      <section id="view-collector" hidden aria-labelledby="collector-h">
+        <h1 id="collector-h" tabindex="-1">Ambil followers</h1>
+        <p>
+          Buka profil akun sumber, login sendiri bila diminta, lalu buka daftar
+          <strong>Followers / Pengikut</strong>.
+        </p>
+        <label class="check">
+          <input id="c-confirm" type="checkbox" />
+          <span>Saya membuka daftar followers akun yang saya kelola.</span>
+        </label>
+        <div class="actions">
+          <button type="button" id="c-start" class="primary">Mulai</button>
+          <button type="button" id="c-stop">Hentikan</button>
+          <button type="button" id="c-export">Ekspor JSON</button>
+        </div>
+        <p class="note">
+          Maksimal 250 username per batch. Popup boleh ditutup; jangan refresh tab sebelum ekspor.
+          Extension tidak membaca cookie, password, atau token. Hasil belum tentu seluruh followers.
+        </p>
+      </section>
+
+      <section id="view-sender" hidden aria-labelledby="sender-h">
+        <h1 id="sender-h" tabindex="-1">Kirim DM</h1>
+        <p>
+          Login TikTok di browser ini sebagai akun pengirim. Di SMGE, masukkan pesan ke antrean
+          Pengiriman browser, lalu buka tab Outbound dengan akun pengirim yang dipilih dan klik
+          Mulai. Tab SMGE harus tetap terbuka dan login.
+        </p>
+        <label class="check">
+          <input id="s-confirm" type="checkbox" />
+          <span>Saya sudah memeriksa penerima dan menyetujui pengiriman pesan di antrean.</span>
+        </label>
+        <div class="actions">
+          <button type="button" id="s-start" class="primary">Mulai dari tab Outbound ini</button>
+          <button type="button" id="s-stop">Hentikan setelah pesan ini</button>
+        </div>
+        <p class="note">
+          Input template memakai izin debugger browser pada tab TikTok yang diproses; tutup DevTools
+          di tab itu saat mengirim. “Terlihat terkirim” berarti pesan terlihat di chat browser,
+          bukan bukti sudah dibaca. Login, CAPTCHA, atau identitas yang tidak jelas menghentikan
+          antrean.
+        </p>
+      </section>
+
+      <section id="view-diagnostic" hidden aria-labelledby="diagnostic-h">
+        <h1 id="diagnostic-h" tabindex="-1">Diagnostik chat</h1>
+        <p>
+          Dipakai bila pengiriman gagal mengenali chat TikTok. Buka tab chat yang gagal, buka popup
+          ini dari tab itu, lalu unduh diagnostik.
+        </p>
+        <div class="actions">
+          <button type="button" id="d-run" class="primary">Unduh diagnostik chat TikTok</button>
+        </div>
+        <p class="note">
+          File hanya berisi struktur elemen dan username profil, tanpa isi pesan, cookie, password,
+          atau token. Pemeriksaan hanya membaca halaman: tidak memilih chat atau mengirim pesan.
+        </p>
+      </section>
+    </main>
+
+    <footer id="status" role="status" aria-live="polite">Pilih alat untuk memulai.</footer>
+    <script src="popup.js"></script>
+  </body>
+</html>

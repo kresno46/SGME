@@ -12,7 +12,7 @@ Sumber daftar dilaporkan operator dan tidak diverifikasi sebagai relasi follower
    pilih **Load unpacked**, lalu pilih folder berisi `manifest.json`.
 3. Di browser yang sama, buka `https://www.tiktok.com/@username` akun sumber yang Anda kelola.
    Login dan selesaikan verifikasi sendiri bila diminta. Buka **Followers/Pengikut**, bukan Following.
-4. Klik extension **SMGE Followers**, centang konfirmasi, pilih **Mulai**. Popup boleh ditutup;
+4. Klik extension **SMGE Toolkit**, pilih **Ambil followers**, centang konfirmasi, pilih **Mulai**. Popup boleh ditutup;
    proses tetap berjalan pada tab. **Jangan refresh/menutup tab sebelum ekspor** karena hasil
    disimpan sementara dalam memori tab.
 5. Klik **Hentikan** bila diperlukan lalu **Ekspor JSON**. Pilih file di dialog SMGE, periksa akun
@@ -46,12 +46,12 @@ Sumber daftar dilaporkan operator dan tidak diverifikasi sebagai relasi follower
 
 ## Pengembangan dan validasi
 
-Sumber extension: `infrastructure/follower-collector`. Setelah mengubah sumber, format dan uji lalu
+Sumber extension: `infrastructure/smge-extension` (satu extension untuk Ambil followers dan Kirim DM). Setelah mengubah sumber, format dan uji lalu
 buat ulang ZIP yang dilayani dashboard:
 
 ```powershell
-node --test infrastructure/follower-collector/collector.test.mjs
-powershell -NoProfile -ExecutionPolicy Bypass -File infrastructure/scripts/package-follower-collector.ps1
+node --test infrastructure/smge-extension/collector.test.mjs
+node infrastructure/scripts/package-extension.mjs
 pnpm --filter @smge/shared test
 pnpm --filter @smge/api test --runInBand follower-import
 pnpm --filter @smge/api test:e2e --testPathPattern followers

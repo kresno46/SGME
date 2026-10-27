@@ -1,12 +1,12 @@
 {
   "manifest_version": 3,
   "minimum_chrome_version": "120",
-  "name": "SMGE Browser DM Sender",
-  "version": "0.2.0",
-  "description": "Kirim tugas DM yang disetujui dari antrean SMGE melalui browser TikTok.",
+  "name": "SMGE Toolkit",
+  "version": "1.0.0",
+  "description": "Alat browser untuk SMGE: ambil followers yang tampil dan kirim DM TikTok yang sudah disetujui.",
   "permissions": ["activeTab", "scripting", "storage", "alarms", "debugger"],
   "host_permissions": ["https://www.tiktok.com/*"],
   "optional_host_permissions": ["http://*/*", "https://*/*"],
   "background": { "service_worker": "worker.js" },
-  "action": { "default_popup": "popup.html" }
+  "action": { "default_popup": "popup.html", "default_title": "SMGE Toolkit" }
 }

@@ -1,8 +1,0 @@
-{
-  "manifest_version": 3,
-  "name": "SMGE Follower Collector",
-  "description": "Ambil username yang tampil pada dialog followers TikTok dan ekspor untuk SMGE.",
-  "version": "1.0.0",
-  "permissions": ["activeTab", "scripting"],
-  "action": { "default_popup": "popup.html", "default_title": "SMGE Followers" }
-}

@@ -103,14 +103,14 @@ export function FollowersDialog({
             <strong>Followers / Pengikut</strong>.
           </li>
           <li>
-            Klik extension SMGE, centang konfirmasi, lalu Mulai. Bisa dihentikan kapan saja. Ekspor
-            JSON setelah selesai.
+            Klik extension SMGE Toolkit, pilih Ambil followers, centang konfirmasi, lalu Mulai. Bisa
+            dihentikan kapan saja. Ekspor JSON setelah selesai.
           </li>
           <li>Pilih file JSON di bawah, periksa hasilnya, lalu Simpan ke database.</li>
         </ol>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
-            <a href="/downloads/smge-follower-collector.zip" download>
+            <a href="/downloads/smge-extension.zip?v=1.0.0" download>
               <Download /> Unduh extension
             </a>
           </Button>
