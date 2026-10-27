@@ -39,6 +39,26 @@ describe('konfigurasi produksi', () => {
     expect(load({ AI_PROVIDER: 'simulated' })).toThrow(/simulated/);
   });
 
+  it('WAHA aktif wajib lengkap, dan di produksi tanpa nilai contoh', () => {
+    const waha = {
+      WAHA_ENABLED: 'true',
+      WAHA_BASE_URL: 'http://waha:3000',
+      WAHA_API_KEY: randomBytes(16).toString('hex'),
+      WAHA_PUBLIC_WEBHOOK_BASE_URL: 'https://smge.example.id/api/webhooks/waha',
+      WAHA_WEBHOOK_MASTER_SECRET: randomBytes(32).toString('hex'),
+    };
+    expect(load(waha)()).toMatchObject({ WAHA_ENABLED: true });
+    expect(load({ ...waha, WAHA_WEBHOOK_MASTER_SECRET: 'pendek' })).toThrow(
+      /WAHA_WEBHOOK_MASTER_SECRET/,
+    );
+    expect(load({ ...waha, WAHA_BASE_URL: '' })).toThrow(/WAHA_BASE_URL/);
+    expect(load({ ...waha, WAHA_API_KEY: 'ganti-dengan-kunci-acak' })).toThrow(/WAHA_API_KEY/);
+    // Webhook lewat jaringan Docker internal (http) diperbolehkan: ditandatangani HMAC.
+    expect(
+      load({ ...waha, WAHA_PUBLIC_WEBHOOK_BASE_URL: 'http://api:4000/api/webhooks/waha' })(),
+    ).toMatchObject({ WAHA_ENABLED: true });
+  });
+
   it('productionProblems mendaftar semua masalah sekaligus', () => {
     const problems = productionProblems({
       ...(base as unknown as Env),
