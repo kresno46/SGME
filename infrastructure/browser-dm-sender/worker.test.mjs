@@ -21,6 +21,9 @@ function fixture({
   reportFailsOnce = false,
   stopDuringSend = false,
   prepareFails = false,
+  businessSuite = false,
+  duplicateFrames = false,
+  frameReplaced = false,
 } = {}) {
   let saved = initial;
   let listener;
@@ -29,6 +32,7 @@ function fixture({
   let reports = 0;
   let claims = 0;
   const calls = [];
+  const scriptTargets = [];
   let tiktokUrl = 'https://www.tiktok.com/';
   const copy = (value) => (value ? JSON.parse(JSON.stringify(value)) : value);
   const command = (message) => new Promise((resolve) => listener(message, {}, resolve));
@@ -84,8 +88,34 @@ function fixture({
       },
       scripting: {
         executeScript: async (options) => {
+          scriptTargets.push({ target: options.target, method: options.args?.[0] });
           if (options.files) return [];
           const [path] = options.args;
+          if (frameReplaced && path === 'focus' && options.target.documentIds)
+            throw new Error('No document with the given ID');
+          if (typeof path === 'object')
+            return [
+              {
+                frameId: 0,
+                documentId: 'shell',
+                result: { path: '/business-suite/messages', chat: false },
+              },
+              {
+                frameId: 8,
+                documentId: 'video',
+                result: { path: '/@someone/video/1', chat: true },
+              },
+              { frameId: 7, documentId: 'chat-doc', result: { path: '/messages', chat: true } },
+              ...(duplicateFrames
+                ? [
+                    {
+                      frameId: 9,
+                      documentId: 'other-chat',
+                      result: { path: '/messages', chat: true },
+                    },
+                  ]
+                : []),
+            ];
           calls.push(path);
           if (path === 'claim') {
             claims++;
@@ -98,7 +128,10 @@ function fixture({
             if (reportFailsOnce && reports === 1) throw new Error('Response lost');
             return [{ result: { ok: true, data: { saved: true } } }];
           }
-          if (path === 'open') return [{ result: { opened: true } }];
+          if (path === 'open') {
+            if (businessSuite) tiktokUrl = 'https://www.tiktok.com/business-suite/messages';
+            return [{ result: { opened: true } }];
+          }
           if (path === 'prepare')
             return [
               {
@@ -127,6 +160,7 @@ function fixture({
     state: () => saved,
     counts: () => ({ sends, reports, claims }),
     calls,
+    scriptTargets,
     start: async () => {
       await command({
         action: 'start',
@@ -148,6 +182,37 @@ test('one click attempt per claim, then moves to the next alarm instead of an im
   await f.next();
   assert.equal(f.state().active, false);
   assert.equal(f.counts().sends, 1);
+});
+
+test('Business Suite pins all chat operations to the matching iframe document, ignoring the video frame', async () => {
+  const f = fixture({ businessSuite: true });
+  await f.start();
+  assert.equal(f.counts().sends, 1);
+  for (const method of ['prepare', 'focus', 'inspect', 'observe']) {
+    const operations = f.scriptTargets.filter((item) => item.method === method);
+    assert.ok(operations.length);
+    for (const item of operations)
+      assert.deepEqual(Array.from(item.target.documentIds), ['chat-doc']);
+  }
+});
+
+test('ambiguous Business Suite frames fail before typing, authorization, or sending', async () => {
+  const f = fixture({ businessSuite: true, duplicateFrames: true });
+  await f.start();
+  assert.equal(f.counts().sends, 0);
+  assert.equal(f.state().active, false);
+  assert.ok(!f.calls.some((path) => path === 'focus' || path.endsWith('/authorize')));
+});
+
+test('a replaced Business Suite iframe document never falls back to a different frame', async () => {
+  const f = fixture({ businessSuite: true, frameReplaced: true });
+  await f.start();
+  assert.equal(f.counts().sends, 0);
+  assert.equal(f.state().active, false);
+  assert.ok(!f.calls.some((path) => path.endsWith('/authorize')));
+  const focus = f.scriptTargets.filter((item) => item.method === 'focus');
+  assert.equal(focus.length, 1);
+  assert.deepEqual(Array.from(focus[0].target.documentIds), ['chat-doc']);
 });
 test('uncertain result stops automatic progression', async () => {
   const f = fixture({ outcome: 'UNVERIFIED' });

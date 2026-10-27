@@ -17,10 +17,78 @@
   const blocked = () =>
     !!document.querySelector('iframe[src*="captcha"], [id*="captcha"], [data-e2e="captcha"]');
   function senderMatches(expected) {
-    const links = all(
-      'a[data-e2e="nav-profile"], a[data-e2e="profile-icon"], a:has([data-e2e="profile-icon"]), nav a[aria-label="Profile" i], nav a[aria-label="Profil" i]',
-    );
-    return links.some((link) => username(link.href) === expected.toLowerCase());
+    const selector =
+      'a[data-e2e="nav-profile"], a[data-e2e="profile-icon"], a:has([data-e2e="profile-icon"]), nav a[aria-label="Profile" i], nav a[aria-label="Profil" i]';
+    let current = typeof window === 'undefined' ? null : window;
+    let doc = document;
+    for (let depth = 0; depth < 8; depth++) {
+      if (all(selector, doc).some((link) => username(link.href) === expected.toLowerCase()))
+        return true;
+      if (!current || current === current.top) break;
+      try {
+        if (current.parent.location.origin !== 'https://www.tiktok.com') break;
+        current = current.parent;
+        doc = current.document;
+      } catch {
+        break;
+      }
+    }
+    return false;
+  }
+  function frameVisible() {
+    if (typeof window === 'undefined') return true;
+    let current = window;
+    try {
+      for (let depth = 0; current !== current.top && depth < 8; depth++) {
+        if (
+          current.parent.location.origin !== 'https://www.tiktok.com' ||
+          !visible(current.frameElement)
+        )
+          return false;
+        const rect = current.frameElement.getBoundingClientRect();
+        if (rect.width <= 0 || rect.height <= 0) return false;
+        current = current.parent;
+      }
+      return current === current.top;
+    } catch {
+      return false;
+    }
+  }
+  function clickPoint(button) {
+    const bounds = button.getBoundingClientRect();
+    if (bounds.width <= 0 || bounds.height <= 0) throw new Error('Tombol kirim tidak terlihat.');
+    let x = bounds.x + bounds.width / 2;
+    let y = bounds.y + bounds.height / 2;
+    if (typeof window !== 'undefined') {
+      let current = window;
+      for (let depth = 0; current !== current.top && depth < 8; depth++) {
+        const frame = current.frameElement;
+        if (!frame || current.parent.location.origin !== 'https://www.tiktok.com')
+          throw new Error('Frame chat tidak dapat diverifikasi.');
+        const rect = frame.getBoundingClientRect();
+        if (
+          !visible(frame) ||
+          current.parent.getComputedStyle(frame).transform !== 'none' ||
+          Math.abs(rect.width - frame.offsetWidth) > 1 ||
+          Math.abs(rect.height - frame.offsetHeight) > 1
+        )
+          throw new Error('Posisi iframe berubah atau memakai transformasi. Tidak mengirim.');
+        if (x < 0 || y < 0 || x >= current.innerWidth || y >= current.innerHeight)
+          throw new Error('Tombol kirim di luar area iframe.');
+        x += rect.x + frame.clientLeft;
+        y += rect.y + frame.clientTop;
+        current = current.parent;
+      }
+      if (
+        current !== current.top ||
+        x < 0 ||
+        y < 0 ||
+        x >= current.innerWidth ||
+        y >= current.innerHeight
+      )
+        throw new Error('Tombol kirim di luar area halaman.');
+    }
+    return { x, y };
   }
   function chatRoot(target) {
     // These new-layout markers come from the supplied TikTok DOM diagnostic.
@@ -76,7 +144,11 @@
       await wait(500);
     }
     if (!senderMatches(delivery.senderUsername))
-      throw new Error('Akun pengirim belum dapat diverifikasi dari navigasi profil TikTok.');
+      throw new Error(
+        typeof window !== 'undefined' && window !== window.top
+          ? 'Chat Business Suite sudah ditemukan, tetapi akun pengirim belum dapat diverifikasi dari profil di chat atau halaman induk. Tidak mengirim.'
+          : 'Akun pengirim belum dapat diverifikasi dari navigasi profil TikTok.',
+      );
     throw new Error(
       `Chat aktif ${
         all('[data-e2e="chat-uniqueid"]')
@@ -86,6 +158,12 @@
     );
   }
   globalThis.smgeDmPage = {
+    locate(delivery) {
+      return {
+        path: location.pathname,
+        chat: frameVisible() && !!chatRoot(delivery.username),
+      };
+    },
     async prepare(delivery) {
       try {
         await awaitChat(delivery);
@@ -174,6 +252,7 @@
         if (!delivery.attemptId) throw new Error('ID percobaan pengiriman tidak tersedia.');
         if (globalThis.__smgeDmStage?.attemptId === delivery.attemptId)
           throw new Error('Percobaan ini sudah pernah menyiapkan editor; tidak mengetik ulang.');
+        if (!frameVisible()) throw new Error('Iframe chat tidak terlihat. Tidak mengirim.');
         const root = await awaitChat(delivery);
         const editors = all(
           '[contenteditable="true"][role="textbox"], [contenteditable="true"][data-e2e="message-input"], textarea',
@@ -211,6 +290,7 @@
         )
           throw new Error('Persiapan input tidak cocok dengan percobaan aktif.');
         if (
+          !frameVisible() ||
           blocked() ||
           !senderMatches(delivery.senderUsername) ||
           chatRoot(delivery.username) !== state.root
@@ -233,15 +313,12 @@
           !buttons[0].disabled &&
           buttons[0].getAttribute('aria-disabled') !== 'true'
         ) {
-          const bounds = buttons[0].getBoundingClientRect();
-          if (bounds.width <= 0 || bounds.height <= 0)
-            throw new Error('Tombol kirim tidak terlihat.');
+          const point = clickPoint(buttons[0]);
           return {
             ready: true,
             action: {
               kind: 'click',
-              x: bounds.x + bounds.width / 2,
-              y: bounds.y + bounds.height / 2,
+              ...point,
             },
           };
         }
@@ -266,6 +343,7 @@
         for (let i = 0; i < 12; i++) {
           await wait(500);
           if (
+            !frameVisible() ||
             blocked() ||
             chatRoot(delivery.username) !== state.root ||
             !senderMatches(delivery.senderUsername)
@@ -276,6 +354,7 @@
           if (item && !messagePending(item, state.root) && !normalize(textOf(state.editor))) {
             await wait(2000);
             if (
+              frameVisible() &&
               chatRoot(delivery.username) === state.root &&
               item.isConnected &&
               messageNodes(state.root, delivery.message).length > state.beforeCount &&

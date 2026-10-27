@@ -22,6 +22,9 @@ function fixture({
   labelledButton = false,
   disabled = false,
   delayed = false,
+  businessFrame = false,
+  parentSender = 'sender_test',
+  hiddenFrame = false,
 } = {}) {
   const { document, window } = parseHTML(`<!doctype html><html><body>
     <nav><a data-e2e="nav-profile" href="https://www.tiktok.com/@${sender}">Profil</a></nav>
@@ -86,7 +89,26 @@ function fixture({
       Object.assign(this, { key: options.key, code: options.code, keyCode: options.keyCode });
     }
   }
+  let frameWindow;
+  if (businessFrame) {
+    document.querySelector('nav').remove();
+    const outer = parseHTML(
+      `<html><body><nav><a data-e2e="nav-profile" href="https://www.tiktok.com/@${parentSender}">Profil</a></nav></body></html>`,
+    );
+    outer.window.Element.prototype.getClientRects = () => [{}];
+    const top = { document: outer.document, location: { origin: 'https://www.tiktok.com' } };
+    top.top = top;
+    frameWindow = {
+      parent: top,
+      top,
+      frameElement: {
+        getClientRects: () => (hiddenFrame ? [] : [{}]),
+        getBoundingClientRect: () => ({ x: 218, y: 120, width: 1100, height: 563 }),
+      },
+    };
+  }
   const context = vm.createContext({
+    ...(frameWindow ? { window: frameWindow } : {}),
     URL,
     document,
     Event: window.Event,
@@ -128,6 +150,22 @@ test('recognizes diagnostic dm-new-chatbox/chat-uniqueid and sends once through 
   const f = fixture();
   assert.equal((await f.send()).status, 'SENT');
   assert.equal(f.attempts(), 1);
+});
+
+test('Business Suite iframe uses a visible parent profile to verify sender, not the recipient handle', async () => {
+  const f = fixture({ businessFrame: true });
+  assert.equal((await f.send()).status, 'SENT');
+  assert.equal(f.attempts(), 1);
+  for (const options of [
+    { parentSender: 'other_sender' },
+    { parentSender: '' },
+    { hiddenFrame: true },
+  ]) {
+    const rejected = fixture({ businessFrame: true, ...options });
+    assert.equal((await rejected.send()).status, 'FAILED');
+    assert.equal(rejected.attempts(), 0);
+    assert.equal(rejected.editor.textContent, '');
+  }
 });
 test('readiness waits for the header without typing or attempting a send', async () => {
   const f = fixture({ recipient: 'previous_chat', delayed: true });

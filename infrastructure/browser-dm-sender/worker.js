@@ -92,14 +92,52 @@ async function navigate(tabId, url) {
   }
   throw new Error('Halaman TikTok tidak selesai dimuat.');
 }
+const chatFrames = new Map();
 async function page(tabId, method, delivery) {
-  await chrome.scripting.executeScript({ target: { tabId }, files: ['page.js'] });
+  const key = `${tabId}:${delivery.attemptId}`;
+  if (method === 'open') chatFrames.clear();
+  const tab = await chrome.tabs.get(tabId);
+  const businessSuite =
+    new URL(tab.url).pathname.replace(/\/+$/, '') === '/business-suite/messages';
+  if (method === 'prepare' && businessSuite) {
+    chatFrames.delete(key);
+    for (let i = 0; i < 25; i++) {
+      await chrome.scripting.executeScript({
+        target: { tabId, allFrames: true },
+        files: ['page.js'],
+      });
+      const candidates = await chrome.scripting.executeScript({
+        target: { tabId, allFrames: true },
+        func: (delivery) => globalThis.smgeDmPage.locate(delivery),
+        args: [delivery],
+      });
+      const matches = candidates.filter(
+        (item) =>
+          item.frameId > 0 &&
+          item.documentId &&
+          item.result?.path === '/messages' &&
+          item.result.chat,
+      );
+      if (matches.length > 1) throw new Error('Lebih dari satu iframe chat cocok. Tidak mengirim.');
+      if (matches.length === 1) {
+        chatFrames.set(key, { documentIds: [matches[0].documentId] });
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (!chatFrames.has(key))
+      throw new Error('Chat penerima belum dikenali dalam iframe Business Suite. Tidak mengirim.');
+  }
+  if (businessSuite && method !== 'open' && !chatFrames.has(key))
+    throw new Error('Dokumen iframe chat berubah; periksa hasil sebelum mencoba lagi.');
+  const target = { tabId, ...(chatFrames.get(key) ?? {}) };
+  await chrome.scripting.executeScript({ target, files: ['page.js'] });
   const [response] = await chrome.scripting.executeScript({
-    target: { tabId },
+    target,
     func: (method, delivery) => globalThis.smgeDmPage[method](delivery),
     args: [method, delivery],
   });
-  if (!response.result) throw new Error('Halaman TikTok berubah saat diproses.');
+  if (!response?.result) throw new Error('Halaman TikTok berubah saat diproses.');
   return response.result;
 }
 async function step() {

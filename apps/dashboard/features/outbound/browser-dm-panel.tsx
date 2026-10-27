@@ -143,7 +143,7 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
         </summary>
         <div className="my-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" asChild>
-            <a href="/downloads/smge-browser-dm-sender.zip?v=0.2.1" download>
+            <a href="/downloads/smge-browser-dm-sender.zip?v=0.2.2" download>
               <Download /> Unduh DM Sender
             </a>
           </Button>

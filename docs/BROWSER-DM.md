@@ -12,7 +12,7 @@ bukan `execCommand` atau event input JavaScript buatan. Perubahan ini menangani 
 `Isi editor tidak cocok dengan pesan yang disetujui` yang terlihat pada log percobaan versi sebelumnya.
 Template harus terverifikasi utuh di editor sebelum otorisasi dan Enter/klik dilakukan.
 
-Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.1**.
+Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.2**.
 Versi ini menambah izin **debugger** yang wajib dideklarasikan saat pemasangan/update; Chrome tidak
 mengizinkannya sebagai permission opsional. Implementasi hanya melampirkan debugger ke tab TikTok
 pengiriman dan memakai domain Input, lalu melepasnya setelah percobaan. Tutup DevTools pada tab itu
@@ -90,11 +90,30 @@ status pemuatan halaman, dan jumlah editor. Bila pemeriksaan frame ditolak brows
 diambil dari halaman utama dengan `frameScan: top-frame-only`. Iframe dicatat berupa origin sumber
 dan struktur elemen, tanpa path sumber, query, isi frame, atau token. Tidak ada perluasan izin host.
 
-Pembaruan ini memperbaiki alat pemeriksaan; belum menambahkan pengiriman pada layout Business Suite
-yang tidak dikenali. File v1 dengan `elements: []` dan `handles: []` belum membuktikan penyebabnya
+Pembaruan v0.2.1 memperbaiki alat pemeriksaan. File v1 dengan `elements: []` dan `handles: []` belum membuktikan penyebabnya
 iframe: halaman belum selesai memuat atau penanda DOM berbeda juga mungkin. Setelah update extension,
 buka percakapan Business Suite sampai kolom pesan terlihat, klik **Unduh diagnostik chat TikTok**,
 lalu berikan file v2 kepada pengembang. Diagnostik hanya membaca struktur, tanpa mengirim DM.
+
+### Pengiriman melalui iframe Business Suite (v0.2.2)
+
+Diagnostik Business Suite yang diberikan menunjukkan halaman induk `/business-suite/messages` tanpa
+editor, iframe `/messages` berisi `dm-new-chatbox`, `chat-uniqueid`, dan editor DraftJS, serta iframe
+video terpisah. Worker sekarang memilih satu iframe `/messages` yang terlihat dan header penerimanya
+cocok, lalu mengunci `documentId` yang sama untuk persiapan, fokus, pemeriksaan, dan observasi hasil.
+Iframe video dan frame ambigu tidak dipakai. Navigasi iframe tidak boleh memindahkan percobaan ke
+dokumen baru. Input native tetap satu percobaan; klik memperhitungkan posisi/border iframe tanpa
+menerima frame yang memakai transformasi atau posisi yang tidak dapat dipastikan.
+
+Identitas pengirim masih harus terbukti dari tautan Profil di dokumen chat atau halaman induk TikTok
+yang sama origin. Diagnostik yang diberikan belum memperlihatkan identitas pengirim; pembaruan iframe
+tidak menjamin Business Suite siap mengirim pada akun tersebut. Jika muncul **Chat Business Suite sudah
+ditemukan, tetapi akun pengirim belum dapat diverifikasi**, periksa akun login dan berikan diagnostik
+dengan menu profil pengirim terbuka untuk pemeriksaan struktur lebih lanjut. Jangan menghapus
+validasi pengirim atau menganggap username penerima sebagai identitas pengirim.
+
+Uji browser lokal membuktikan input, Enter, dan klik tunggal pada iframe dengan posisi bergeser;
+seluruh request diintersepsi dengan fixture. Belum ada pengiriman akun TikTok sungguhan oleh tes ini.
 
 ### Extension menampilkan error akses dashboard
 
@@ -180,6 +199,7 @@ node --test infrastructure/browser-dm-sender/new-layout.test.mjs
 node --test infrastructure/browser-dm-sender/native-input.test.mjs
 node --test infrastructure/browser-dm-sender/native-browser.test.mjs
 node --test infrastructure/browser-dm-sender/business-diagnostic.test.mjs
+node --test infrastructure/browser-dm-sender/business-native-browser.test.mjs
 pnpm --filter @smge/api test:e2e --testPathPattern browser-dm
 powershell -NoProfile -ExecutionPolicy Bypass -File infrastructure/scripts/package-browser-dm-sender.ps1
 ```
