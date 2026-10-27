@@ -12,14 +12,18 @@ import { IntegrationLogService } from './integrations/integration-log.service';
 import { createTikTokAdapters } from './integrations/integrations.module';
 import { IntegrationsService, TIKTOK_ADAPTERS } from './integrations/integrations.service';
 import { RetentionService } from './retention/retention.service';
+import { WAHA_GATEWAY, createWahaGateway } from './whatsapp/waha-gateway';
+import { WhatsappMonitorService } from './whatsapp/whatsapp-monitor.service';
+import { WhatsappSessionService } from './whatsapp/whatsapp-session.service';
 
 /**
  * Proses background (BullMQ). Dijalankan terpisah dari API: `pnpm --filter @smge/api worker`.
- * Job: retensi data & sinkron akun TikTok. TIDAK ada job pengirim pesan/DM.
+ * Job: retensi data, sinkron akun TikTok, dan pemantauan sesi WhatsApp. TIDAK ada job pengirim pesan/DM.
  */
 const QUEUE = 'smge-maintenance';
 const RETENTION_JOB = 'retention';
 const TIKTOK_SYNC_JOB = 'tiktok-sync';
+const WHATSAPP_MONITOR_JOB = 'whatsapp-monitor';
 
 @Module({
   imports: [
@@ -34,6 +38,9 @@ const TIKTOK_SYNC_JOB = 'tiktok-sync';
     IntegrationsService,
     IntegrationLogService,
     { provide: TIKTOK_ADAPTERS, useFactory: createTikTokAdapters },
+    { provide: WAHA_GATEWAY, useFactory: createWahaGateway },
+    WhatsappSessionService,
+    WhatsappMonitorService,
   ],
 })
 class WorkerModule {}
@@ -54,6 +61,7 @@ async function main() {
   const app = await NestFactory.createApplicationContext(WorkerModule);
   const retention = app.get(RetentionService);
   const integrations = app.get(IntegrationsService);
+  const whatsapp = app.get(WhatsappMonitorService);
 
   const queue = new Queue(QUEUE, { connection });
   // Setiap hari pukul 02.00 WIB
@@ -77,6 +85,14 @@ async function main() {
     },
   );
 
+  // Status nomor WhatsApp & pesan keluar yang macet; hanya bila WAHA diaktifkan
+  if (e.WAHA_ENABLED)
+    await queue.upsertJobScheduler(
+      'whatsapp-monitor',
+      { every: 60_000 },
+      { name: WHATSAPP_MONITOR_JOB, opts: { removeOnComplete: 5, removeOnFail: 20 } },
+    );
+
   const worker = new Worker(
     QUEUE,
     async (job) => {
@@ -85,6 +101,7 @@ async function main() {
         const r = await integrations.syncAll();
         return { total: r.total, ok: r.ok };
       }
+      if (job.name === WHATSAPP_MONITOR_JOB) return whatsapp.run();
       logger.warn(`Job tidak dikenal: ${job.name}`);
     },
     { connection, concurrency: 1 },
@@ -92,7 +109,7 @@ async function main() {
   worker.on('completed', (job) => logger.log(`Job ${job.name} selesai`));
   worker.on('failed', (job, err) => logger.error(`Job ${job?.name} gagal: ${err.message}`));
   logger.log(
-    `Worker berjalan — antrean "${QUEUE}": retensi harian 02.00 WIB, sinkron TikTok tiap 6 jam`,
+    `Worker berjalan — antrean "${QUEUE}": retensi harian 02.00 WIB, sinkron TikTok tiap 6 jam${e.WAHA_ENABLED ? ', pemantauan WhatsApp tiap menit' : ''}`,
   );
 
   const shutdown = async () => {

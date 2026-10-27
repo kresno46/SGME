@@ -72,6 +72,77 @@ const envSchema = z.object({
   /** Jendela atribusi (hari) */
   ATTRIBUTION_LOOKBACK_DAYS: z.coerce.number().int().min(1).max(180).default(30),
   THROTTLE_TRACKING_LIMIT_PER_MINUTE: z.coerce.number().int().min(1).default(120),
+  /** WhatsApp lewat WAHA. Mati secara default; tiap user menautkan nomornya sendiri. */
+  WAHA_ENABLED: bool,
+  /** Alamat WAHA dari sisi API; boleh internal, mis. http://waha:3000 */
+  WAHA_BASE_URL: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  /** Kunci API WAHA (plaintext; WAHA menyimpan hash-nya). Dikirim di header X-Api-Key. */
+  WAHA_API_KEY: z.string().optional(),
+  /**
+   * URL webhook SMGE yang dijangkau WAHA, mis. http://api:4000/api/webhooks/waha (jaringan Docker internal)
+   * atau https://domain/api/webhooks/waha. Webhook ditandatangani HMAC, jadi http internal aman.
+   */
+  WAHA_PUBLIC_WEBHOOK_BASE_URL: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  /** Rahasia induk; secret HMAC tiap sesi diturunkan darinya dan tidak disimpan. */
+  WAHA_WEBHOOK_MASTER_SECRET: z.string().optional(),
+  /**
+   * Hanya untuk WAHA lama (sebelum 2026.6.1) yang membatasi satu sesi bernama "default": isi nama itu agar
+   * server memakai satu sesi bersama. Kosong (disarankan) = banyak sesi, banyak nomor per user.
+   */
+  WAHA_SESSION_NAME: z
+    .string()
+    .regex(/^[A-Za-z0-9._-]{1,100}$/, 'WAHA_SESSION_NAME hanya boleh huruf, angka, titik, garis')
+    .optional()
+    .or(z.literal('').transform(() => undefined)),
+  WAHA_MAX_SESSIONS: z.coerce.number().int().min(1).max(1000).default(25),
+  /** Batas jumlah nomor WhatsApp yang boleh ditautkan satu user */
+  WAHA_MAX_SESSIONS_PER_USER: z.coerce.number().int().min(1).max(20).default(3),
+  WAHA_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).default(10_000),
+  /**
+   * Sinkronkan kontak ponsel ke WAHA (NOWEB store + full sync) pada nomor yang BARU dipindai, agar kontak bisa
+   * dipilih saat memulai chat. Konsekuensi: WAHA menyimpan seluruh riwayat chat ponsel di volumenya.
+   * Nomor yang sudah tertaut harus dipindai ulang agar kontaknya tersinkron.
+   */
+  WAHA_CONTACTS_SYNC: bool,
+  /**
+   * Impor otomatis riwayat chat 1:1 dari ponsel (lewat NOWEB store WAHA) setelah nomor ditautkan, agar konteks
+   * percakapan sebelumnya ikut terbawa. PRIVASI: semua chat 1:1 dalam jendela hari yang diatur akan masuk ke SMGE
+   * dan terlihat oleh pemilik nomor dan Super Admin. Hanya berlaku pada nomor yang dipindai SETELAH opsi ini aktif.
+   */
+  WAHA_HISTORY_SYNC: bool,
+  /** Hanya chat dengan pesan dalam sekian hari terakhir yang diimpor */
+  WAHA_HISTORY_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+  WAHA_HISTORY_MAX_CHATS: z.coerce.number().int().min(1).max(2000).default(200),
+  WAHA_HISTORY_MESSAGES_PER_CHAT: z.coerce.number().int().min(1).max(500).default(50),
+  /** Seberapa sering penjadwal memeriksa nomor yang perlu disinkronkan */
+  WAHA_HISTORY_TICK_SECONDS: z.coerce.number().int().min(30).max(3600).default(120),
+  /**
+   * Kirim terjadwal satu pesan ke daftar kecil penerima terpilih. Mati secara default. WAHA bukan jalur resmi:
+   * pengiriman beruntun ke banyak orang menaikkan risiko nomor diblokir, jadi dibatasi jumlah penerima, jeda acak,
+   * dan batas harian per nomor.
+   */
+  WAHA_BROADCAST_ENABLED: bool,
+  WAHA_BROADCAST_MAX_RECIPIENTS: z.coerce.number().int().min(1).max(200).default(50),
+  /** Batas pesan blast terkirim per nomor per hari (WIB); sisanya lanjut keesokan harinya */
+  WAHA_BROADCAST_PER_DAY: z.coerce.number().int().min(1).max(500).default(30),
+  WAHA_BROADCAST_MIN_DELAY_SECONDS: z.coerce.number().int().min(5).max(3600).default(20),
+  WAHA_BROADCAST_MAX_DELAY_SECONDS: z.coerce.number().int().min(5).max(3600).default(60),
+  /** Batas chat baru yang dimulai dari SMGE per nomor per hari (WIB); melindungi nomor dari blokir */
+  WAHA_NEW_CHATS_PER_DAY: z.coerce.number().int().min(1).max(500).default(20),
+  WAHA_SEND_MIN_INTERVAL_MS: z.coerce.number().int().min(0).max(60_000).default(1200),
+  WAHA_SEND_JITTER_MS: z.coerce.number().int().min(0).max(60_000).default(800),
+  WAHA_SEND_MAX_PER_CHAT_PER_MINUTE: z.coerce.number().int().min(1).max(600).default(10),
+  WAHA_SEND_MAX_PER_SESSION_PER_MINUTE: z.coerce.number().int().min(1).max(6000).default(30),
+  /** Pesan keluar yang macet di "mengirim" lebih lama dari ini ditandai gagal oleh worker. */
+  WAHA_SEND_STUCK_SECONDS: z.coerce.number().int().min(30).max(86_400).default(300),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().default(587),
   SMTP_USER: z.string().optional(),
@@ -97,6 +168,26 @@ export function productionProblems(e: Env): string[] {
   }
   if (/localhost|127\.0\.0\.1/.test(e.CORS_ORIGINS))
     problems.push('CORS_ORIGINS masih berisi localhost');
+  if (e.WAHA_ENABLED) {
+    if (placeholder.test(e.WAHA_WEBHOOK_MASTER_SECRET ?? ''))
+      problems.push('WAHA_WEBHOOK_MASTER_SECRET masih berisi nilai contoh');
+    if (placeholder.test(e.WAHA_API_KEY ?? ''))
+      problems.push('WAHA_API_KEY masih berisi nilai contoh');
+  }
+  return problems;
+}
+
+/** Konfigurasi WAHA yang wajib lengkap bila WAHA_ENABLED=true (semua lingkungan). */
+export function wahaProblems(e: Env): string[] {
+  if (!e.WAHA_ENABLED) return [];
+  const problems: string[] = [];
+  if (!e.WAHA_BASE_URL) problems.push('WAHA_BASE_URL wajib diisi');
+  if (!e.WAHA_API_KEY) problems.push('WAHA_API_KEY wajib diisi');
+  if (!e.WAHA_PUBLIC_WEBHOOK_BASE_URL) problems.push('WAHA_PUBLIC_WEBHOOK_BASE_URL wajib diisi');
+  if (e.WAHA_BROADCAST_MIN_DELAY_SECONDS > e.WAHA_BROADCAST_MAX_DELAY_SECONDS)
+    problems.push('WAHA_BROADCAST_MIN_DELAY_SECONDS tidak boleh lebih besar dari MAX');
+  if ((e.WAHA_WEBHOOK_MASTER_SECRET ?? '').length < 32)
+    problems.push('WAHA_WEBHOOK_MASTER_SECRET minimal 32 karakter');
   return problems;
 }
 
@@ -110,6 +201,11 @@ export function env(): Env {
       .map((i) => `  - ${i.path.join('.')}: ${i.message}`)
       .join('\n');
     throw new Error(`Konfigurasi environment tidak valid:\n${issues}`);
+  }
+  const waha = wahaProblems(parsed.data);
+  if (waha.length) {
+    const list = waha.map((p) => `  - ${p}`).join('\n');
+    throw new Error(`Konfigurasi WAHA tidak lengkap:\n${list}`);
   }
   if (parsed.data.NODE_ENV === 'production' && !parsed.data.COOKIE_SECURE) {
     throw new Error('COOKIE_SECURE wajib true di produksi (HTTPS).');
