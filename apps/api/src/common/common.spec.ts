@@ -157,7 +157,12 @@ describe('ZodValidationPipe', () => {
   const pipe = new ZodValidationPipe(createTikTokAccountSchema);
 
   it('mengembalikan data yang sudah ditransformasi', () => {
-    const out = pipe.transform({ username: '@Akun.Satu', displayName: 'Akun', lane: 'OUTBOUND' });
+    const out = pipe.transform({
+      username: '@Akun.Satu',
+      displayName: 'Akun',
+      lane: 'OUTBOUND',
+      profileUrl: 'https://www.tiktok.com/@akun.satu',
+    });
     expect(out.username).toBe('akun.satu');
   });
 
