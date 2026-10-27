@@ -230,6 +230,22 @@
 - Backup offsite, monitoring/alerting uptime, dan staging belum disediakan — perlu dipilih sesuai infrastruktur.
 - Rollback migrasi database tidak otomatis; mengandalkan backup yang dibuat sebelum `update`.
 
+## WhatsApp via WAHA ✅ (26 Oktober 2026) — mati secara default
+
+| Item                                                                                                                          | Status                                                                                            |
+| ----------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Menu WhatsApp: Chat, Nomor saya (QR, mulai/berhenti/putus/atur ulang), Semua nomor (Super Admin)                              | ✅                                                                                                |
+| Webhook WAHA fail-closed (HMAC-SHA512, secret per sesi diturunkan), pesan masuk, ack, status sesi, gema pesan sendiri         | ✅ diuji dengan WAHA Core sungguhan (sesi, webhook, QR)                                           |
+| Kirim balasan: idempoten, tulis dulu, jeda & batas per menit, blokir "stop" dan DNC, pre-cek nomor tersambung                 | ✅ diuji dengan gateway palsu; **belum** dengan nomor nyata                                       |
+| Worker: pemantauan nomor terputus + pesan macet; kepemilikan data per user                                                    | ✅                                                                                                |
+| Banyak nomor per user (batas per user, ganti nama, hapus nomor kosong, filter nomor di inbox, balas dari nomor chat)          | ✅ diuji dengan WAHA Core 2026.9.2 sungguhan (beberapa sesi + QR)                                 |
+| Chat baru duluan: pilih dari kontak ponsel atau ketik nomor, cek terdaftar di WhatsApp, batas harian per nomor, DNC           | ✅ cek nomor diuji di WAHA asli; daftar kontak diuji dengan server tiruan (store WAHA asli belum) |
+| Sinkron otomatis riwayat chat 1:1 dari ponsel (jendela hari, lease, idempoten, tanpa "belum dibaca"), status + tombol sinkron | ✅ diuji dengan WAHA tiruan; bentuk respons store asli belum terverifikasi                        |
+| Kirim terjadwal ke daftar kecil terpilih (maks. 50, jeda acak, batas harian, DNC/"stop", jeda otomatis, persetujuan penerima) | ✅ diuji dengan WAHA tiruan; belum dengan nomor nyata                                             |
+| Mode satu nomor bersama untuk WAHA lama (< 2026.6.1)                                                                          | ✅                                                                                                |
+
+Detail, risiko, dan keterbatasan: [WHATSAPP.md](WHATSAPP.md). Verifikasi: e2e API 185/185 (67 untuk WhatsApp), unit `@smge/shared` 59/59, lint dan typecheck bersih.
+
 ## Menunggu pihak lain
 
 - OpenAI API key & materi Knowledge Base resmi Solid Mini.

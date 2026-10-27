@@ -10,6 +10,8 @@ Platform ini memakai dua jalur:
   lihat [panduan DM browser](docs/BROWSER-DM.md). Pengambilan daftar followers yang tampil melalui extension browser
   tersedia dengan ekspor JSON dan import ke CRM; lihat [panduan collector](docs/FOLLOWER-COLLECTOR.md).
   Tidak memakai rotasi akun.
+- **WhatsApp (WAHA)**: menu **WhatsApp** untuk chat dua arah lewat nomor WhatsApp user sendiri. Mati secara default
+  (`WAHA_ENABLED`); lihat [docs/WHATSAPP.md](docs/WHATSAPP.md) untuk risiko, mode WAHA Core/Plus, dan konfigurasi.
 
 > **Status: Fase 1–3 & 5 selesai; Fase 4 (integrasi TikTok Login Kit) siap menunggu kredensial.** AI aktif setelah
 > `OPENAI_API_KEY` diisi; koneksi TikTok resmi aktif setelah `TIKTOK_CLIENT_KEY/SECRET/REDIRECT_URI` diisi. Lihat [docs/ROADMAP.md](docs/ROADMAP.md) untuk status tiap fase
@@ -139,4 +141,5 @@ Panduan lengkap (hardening server, backup, update, rollback): [docs/DEPLOYMENT.m
 - [docs/API.md](docs/API.md): referensi endpoint REST
 - [docs/ROADMAP.md](docs/ROADMAP.md): status fase, keterbatasan, dan langkah berikutnya
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): deployment produksi di VPS Ubuntu
+- [docs/WHATSAPP.md](docs/WHATSAPP.md): chat WhatsApp dua arah via WAHA (mode, konfigurasi, aturan, keterbatasan)
 - [docs/CONVERSION-API.md](docs/CONVERSION-API.md): spesifikasi tracking untuk tim landing page & backend Solid Mini
