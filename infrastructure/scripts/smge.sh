@@ -25,6 +25,9 @@ die() { echo "✖ $*" >&2; exit 1; }
 # Ambil satu nilai dari .env.production tanpa mengeksekusi file
 envval() { grep -E "^$1=" "$ENV_FILE" | tail -n1 | cut -d= -f2- | sed -e 's/^"//' -e 's/"$//'; }
 
+# WhatsApp (WAHA) opsional: ikut dipasang hanya bila diaktifkan di .env.production
+if [ "$(envval WAHA_ENABLED)" = "true" ]; then COMPOSE+=(-f docker-compose.waha.yml); fi
+
 if grep -q "GANTI_" "$ENV_FILE"; then
   die "Masih ada nilai GANTI_… di $ENV_FILE. Isi semua secret terlebih dahulu."
 fi

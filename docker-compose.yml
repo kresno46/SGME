@@ -37,6 +37,23 @@ services:
       timeout: 3s
       retries: 10
 
+  # WhatsApp (WAHA) untuk uji lokal: `docker compose --profile waha up -d waha`.
+  # WAHA_API_KEY diisi di .env (sama dengan yang dipakai API). Panduan: docs/WHATSAPP.md
+  waha:
+    profiles: ['waha']
+    # Mac/Linux ARM64: WAHA_IMAGE_TAG=arm
+    image: devlikeapro/waha:${WAHA_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      WAHA_API_KEY: ${WAHA_API_KEY:-}
+    ports:
+      - '127.0.0.1:3050:3000'
+    volumes:
+      - wahadata:/app/.sessions
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
+
 volumes:
   pgdata:
   redisdata:
+  wahadata:

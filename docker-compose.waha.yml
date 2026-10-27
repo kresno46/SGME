@@ -1,0 +1,34 @@
+# =====================================================================
+# WhatsApp (WAHA) — tambahan opsional untuk produksi, dipasang di samping docker-compose.prod.yml:
+#   docker compose --env-file .env.production -f docker-compose.prod.yml -f docker-compose.waha.yml up -d
+# (smge.sh memasangnya otomatis bila WAHA_ENABLED=true di .env.production)
+#
+# WAHA tidak membuka port ke host: hanya container API/worker (jaringan internal) yang memanggilnya
+# (http://waha:3000), dan WAHA memanggil webhook API lewat http://api:4000. API WAHA memegang sesi
+# WhatsApp nyata, jadi jangan dibuka ke internet.
+# =====================================================================
+
+services:
+  waha:
+    # Server x86_64: tag latest. Server ARM64: isi WAHA_IMAGE_TAG=arm di .env.production.
+    image: devlikeapro/waha:${WAHA_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # Tanpa kunci, WAHA membuat kunci acak sendiri dan semua panggilan SMGE ditolak 401.
+      WAHA_API_KEY: ${WAHA_API_KEY:?isi WAHA_API_KEY di .env.production (openssl rand -hex 16)}
+    volumes:
+      - waha_sessions:/app/.sessions
+    # Satu sesi menjalankan WhatsApp Web; batasi supaya WAHA tidak menghabiskan memori server.
+    mem_limit: ${WAHA_MEM_LIMIT:-2g}
+    networks: [internal]
+
+  api:
+    depends_on:
+      - waha
+
+  worker:
+    depends_on:
+      - waha
+
+volumes:
+  waha_sessions:
