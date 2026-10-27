@@ -29,6 +29,16 @@ Dashboard marketing hanya menghitung akun, prospek, tugas, serta penggunaan AI m
 
 ## Data bersama
 
+### Pembuatan pengguna oleh Admin
+
+Admin dapat membuka **Pengaturan → Pengguna**, melihat daftar Marketing Operator/Viewer,
+dan menambahkan pengguna dengan kedua role tersebut. Pencarian, filter, dan total daftar tetap
+mengecualikan Admin serta Super Admin. Admin tidak dapat membuat role setara/lebih tinggi,
+mengubah pengguna yang sudah ada, mereset password/2FA pengguna lain, atau membuka pengaturan role.
+Pengelolaan lanjutan tersebut tetap untuk Super Admin. Marketing dan Viewer tidak memiliki akses ini.
+Pembuatan pengguna tidak memberikan Admin akses ke akun TikTok, prospek, atau template pribadi
+pengguna baru; batas kepemilikan data operasional tetap berlaku.
+
 Template dengan `created_by_id = NULL` adalah template bawaan yang dapat dibaca semua marketing,
 tetapi hanya diubah/dihapus Super Admin. Template buatan user hanya terlihat oleh pembuat dan
 Super Admin. Knowledge Base adalah materi produk bersama yang dikelola Super Admin.

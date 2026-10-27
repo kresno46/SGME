@@ -64,6 +64,9 @@ function rawFetch(path: string, init: RequestInit = {}) {
 let onSessionExpired: (() => void) | null = null;
 export function setSessionExpiredHandler(fn: () => void) {
   onSessionExpired = fn;
+  return () => {
+    if (onSessionExpired === fn) onSessionExpired = null;
+  };
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {

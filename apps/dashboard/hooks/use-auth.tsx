@@ -3,7 +3,6 @@
 import { PERMISSIONS, type Permission } from '@smge/shared';
 import type { AuthUser } from '@smge/types';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRouter } from 'next/navigation';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import { api, apiFetch, setSessionExpiredHandler } from '@/lib/api';
 import { writeSessionActivity } from '@/lib/idle-session';
@@ -17,9 +16,8 @@ interface AuthContextValue {
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
+const USER_MANAGEMENT: readonly string[] = [PERMISSIONS.USERS_READ, PERMISSIONS.USERS_MANAGE];
 const SUPER_ADMIN_ONLY: readonly string[] = [
-  PERMISSIONS.USERS_READ,
-  PERMISSIONS.USERS_MANAGE,
   PERMISSIONS.ROLES_READ,
   PERMISSIONS.AUDIT_READ,
   PERMISSIONS.KNOWLEDGE_MANAGE,
@@ -37,7 +35,6 @@ export function useMe() {
 }
 
 export function AuthProvider({ user, children }: { user: AuthUser; children: React.ReactNode }) {
-  const router = useRouter();
   const qc = useQueryClient();
   const loggingOut = useRef<Promise<void> | null>(null);
 
@@ -45,10 +42,21 @@ export function AuthProvider({ user, children }: { user: AuthUser; children: Rea
     if (loggingOut.current) return loggingOut.current;
     writeSessionActivity(user.id, 0);
     loggingOut.current = (async () => {
-      await apiFetch('/auth/logout', {
-        method: 'POST',
-        signal: AbortSignal.timeout(5000),
-      }).catch(() => undefined);
+      // Bound the entire operation, including a shared refresh request after a 401.
+      // Aborting only the logout fetch does not stop an unresponsive token refresh.
+      const controller = new AbortController();
+      await new Promise<void>((resolve) => {
+        const deadline = window.setTimeout(() => {
+          controller.abort();
+          resolve();
+        }, 5000);
+        void apiFetch('/auth/logout', { method: 'POST', signal: controller.signal })
+          .catch(() => undefined)
+          .finally(() => {
+            window.clearTimeout(deadline);
+            resolve();
+          });
+      });
       qc.clear();
       window.location.replace('/login?reason=session-ended');
     })();
@@ -56,22 +64,18 @@ export function AuthProvider({ user, children }: { user: AuthUser; children: Rea
   }, [qc, user.id]);
   const idle = useIdleSession(user.id, logout);
 
-  const redirectToLogin = useCallback(() => {
-    qc.clear();
-    const next =
-      window.location.pathname === '/'
-        ? ''
-        : `?next=${encodeURIComponent(window.location.pathname)}`;
-    router.replace(`/login${next}`);
-  }, [qc, router]);
-
-  useEffect(() => setSessionExpiredHandler(redirectToLogin), [redirectToLogin]);
+  // Use the same bounded logout on authentication failure. The explicit login reason
+  // avoids middleware sending an expired-cookie session back to the dashboard.
+  useEffect(() => setSessionExpiredHandler(() => void logout()), [logout]);
 
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
       can: (p) =>
         user.permissions.includes(p) &&
+        (!USER_MANAGEMENT.includes(p) ||
+          user.role === 'SUPER_ADMIN' ||
+          user.role === 'ADMIN') &&
         (user.role === 'SUPER_ADMIN' || !SUPER_ADMIN_ONLY.includes(p)),
       logout,
     }),

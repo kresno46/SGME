@@ -81,7 +81,7 @@ export class DataScopeInterceptor implements NestInterceptor {
       )
         throw new ForbiddenException('Halaman ini hanya tersedia untuk Super Admin.');
       if (
-        path === '/users' ||
+        (path === '/users' && !(user.role === 'ADMIN' && ['GET', 'POST'].includes(req.method))) ||
         (path.startsWith('/users/') && path !== '/users/assignable') ||
         path === '/roles' ||
         path.startsWith('/audit') ||

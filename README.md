@@ -114,7 +114,7 @@ pnpm build         # build produksi semua package & aplikasi
 | Role               | Ringkasan akses                                                             |
 | ------------------ | --------------------------------------------------------------------------- |
 | Super Admin        | Semua fitur termasuk pengaturan sistem                                      |
-| Admin              | Dashboard, akun, dan outreach milik sendiri sesuai permission; pengelolaan global dibatasi Super Admin |
+| Admin              | Dashboard, akun, dan outreach milik sendiri; dapat menambah Marketing Operator/Viewer lewat Pengaturan → Pengguna |
 | Marketing Operator | Dashboard, akun TikTok sendiri, pengambilan followers, DM, follow-up, dan template pribadi melalui Outbound |
 | Viewer             | Hanya melihat                                                               |
 

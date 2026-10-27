@@ -82,7 +82,8 @@ type PendingAction = { type: 'disable' | 'enable' | 'unlock' | 'reset2fa'; user:
 export function UsersCard() {
   const { user: me, can } = useAuth();
   const qc = useQueryClient();
-  const canManage = can(PERMISSIONS.USERS_MANAGE);
+  const canCreate = can(PERMISSIONS.USERS_MANAGE);
+  const canManage = canCreate && me.role === 'SUPER_ADMIN';
   const [search, setSearch] = useState('');
   const [role, setRole] = useState(ALL);
   const [page, setPage] = useState(1);
@@ -161,10 +162,12 @@ export function UsersCard() {
         <div className="space-y-1.5">
           <CardTitle>Pengguna</CardTitle>
           <CardDescription>
-            Kelola akses tim. Anda hanya dapat mengelola pengguna dengan role di bawah Anda.
+            {me.role === 'ADMIN'
+              ? 'Tambahkan pengguna Marketing Operator atau Viewer. Perubahan akun yang sudah ada ditangani Super Admin.'
+              : 'Kelola akses tim. Anda hanya dapat mengelola pengguna dengan role di bawah Anda.'}
           </CardDescription>
         </div>
-        {canManage && (
+        {canCreate && (
           <Button onClick={() => setCreateOpen(true)}>
             <Plus /> Tambah pengguna
           </Button>
@@ -196,11 +199,13 @@ export function UsersCard() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Semua role</SelectItem>
-            {ROLE_CODES.map((r) => (
-              <SelectItem key={r} value={r}>
-                {ROLE_LABELS[r]}
-              </SelectItem>
-            ))}
+            {ROLE_CODES.filter((r) => me.role === 'SUPER_ADMIN' || canManageRole(me.role, r)).map(
+              (r) => (
+                <SelectItem key={r} value={r}>
+                  {ROLE_LABELS[r]}
+                </SelectItem>
+              ),
+            )}
           </SelectContent>
         </Select>
       </div>
