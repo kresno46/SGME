@@ -4,11 +4,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import {
   createTikTokAccountSchema,
   LANE_LABELS,
-  TIKTOK_ACCOUNT_STATUS_LABELS,
-  TIKTOK_ACCOUNT_STATUSES,
   TIKTOK_ACCOUNT_TYPE_LABELS,
   TIKTOK_ACCOUNT_TYPES,
-  type CreateTikTokAccountInput,
 } from '@smge/shared';
 import type { TikTokAccountDto } from '@smge/types';
 import { Loader2 } from 'lucide-react';
@@ -37,33 +34,30 @@ import { applyServerErrors } from '@/lib/api';
 import { HIDE_OFFICIAL_LANE, VISIBLE_MARKETING_LANES } from '@/lib/marketing-scope';
 import { useSaveAccount } from './api';
 
-type FormInput = z.input<typeof createTikTokAccountSchema>;
-type FormOutput = z.output<typeof createTikTokAccountSchema>;
+const accountFormSchema = createTikTokAccountSchema.omit({ displayName: true, status: true });
+type FormInput = z.input<typeof accountFormSchema>;
+type FormOutput = z.output<typeof accountFormSchema>;
 
 const EMPTY: FormInput = {
   username: '',
-  displayName: '',
   profileUrl: '',
   avatarUrl: '',
   accountType: 'PERSONAL',
   isVerified: false,
   followersCount: 0,
   lane: 'OUTBOUND',
-  status: 'ACTIVE',
   notes: '',
 };
 
 function toForm(a: TikTokAccountDto): FormInput {
   return {
     username: a.username,
-    displayName: a.displayName,
     profileUrl: a.profileUrl ?? '',
     avatarUrl: a.avatarUrl ?? '',
     accountType: a.accountType,
     isVerified: a.isVerified,
     followersCount: a.followersCount,
     lane: a.lane,
-    status: a.status,
     notes: a.notes ?? '',
   };
 }
@@ -104,7 +98,7 @@ function AccountForm({
   const save = useSaveAccount();
   const [error, setError] = useState<string | null>(null);
   const form = useForm<FormInput, unknown, FormOutput>({
-    resolver: zodResolver(createTikTokAccountSchema),
+    resolver: zodResolver(accountFormSchema),
     defaultValues: account ? toForm(account) : EMPTY,
   });
   const { errors, isSubmitting } = form.formState;
@@ -112,7 +106,14 @@ function AccountForm({
   const onSubmit = form.handleSubmit(async (values) => {
     setError(null);
     try {
-      await save.mutateAsync({ id: account?.id, data: values as CreateTikTokAccountInput });
+      await save.mutateAsync({
+        id: account?.id,
+        data: {
+          ...values,
+          displayName: account?.displayName || values.username,
+          status: account?.status ?? 'ACTIVE',
+        },
+      });
       toast.success(account ? 'Akun berhasil diperbarui' : 'Akun berhasil ditambahkan');
       onDone();
     } catch (e) {
@@ -130,13 +131,6 @@ function AccountForm({
             placeholder="@solidmini"
             aria-invalid={!!errors.username}
             {...form.register('username')}
-          />
-        </FormField>
-        <FormField label="Nama tampilan" htmlFor="displayName" error={errors.displayName?.message}>
-          <Input
-            id="displayName"
-            aria-invalid={!!errors.displayName}
-            {...form.register('displayName')}
           />
         </FormField>
 
@@ -196,26 +190,6 @@ function AccountForm({
             inputMode="numeric"
             aria-invalid={!!errors.followersCount}
             {...form.register('followersCount')}
-          />
-        </FormField>
-        <FormField label="Status akun" error={errors.status?.message}>
-          <Controller
-            control={form.control}
-            name="status"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {TIKTOK_ACCOUNT_STATUSES.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {TIKTOK_ACCOUNT_STATUS_LABELS[s]}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
           />
         </FormField>
 

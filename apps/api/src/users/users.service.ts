@@ -33,6 +33,9 @@ export class UsersService {
 
   async list(q: ListUsersQuery) {
     const where: Prisma.UserWhereInput = {
+      ...(scopeUser()?.role === 'ADMIN'
+        ? { AND: [{ role: { code: { in: ['MARKETING_OPERATOR', 'VIEWER'] } } }] }
+        : {}),
       ...(q.role ? { role: { code: q.role } } : {}),
       ...(q.status ? { status: q.status } : {}),
       ...(q.search

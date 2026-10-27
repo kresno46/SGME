@@ -8,9 +8,11 @@ operator yang ditugaskan menangani prospek. Mengubah operator tidak memindahkan 
   ditampilkan pada daftar akun dan prospek.
 - Pemilik akun TikTok baru selalu ditetapkan server dari user login. `ownerId` yang dikirim klien
   tidak dapat dipakai untuk mengambil alih data.
-- Followers yang diimpor mengikuti pemilik akun sumber. Data prospek manual/CSV mengikuti pembuatnya.
+- Followers yang diimpor mengikuti pemilik akun pengirim yang dipilih saat impor; akun sumber pada
+  file boleh berbeda dan tetap dicatat sebagai asal pengambilan. Data prospek manual/CSV mengikuti pembuatnya.
 - Tugas DM memerlukan akun pengirim dan prospek dengan pemilik yang sama. Persetujuan/review tidak
-  mengubah pemilik. Marketing Operator membuat/mengajukan draft; Super Admin dapat mereviewnya.
+  mengubah pemilik. Pada alur Kirim DM TikTok, Marketing Operator langsung memasukkan pesan ke antrean
+  setelah meninjau isi dan penerima, tanpa persetujuan Admin terpisah. Mekanisme review lama tetap tersimpan.
 - Username akun TikTok, username prospek, email, dan nomor telepon unik per pemilik, sehingga dua
   marketing dapat mencatat akun sumber dan kontak yang sama secara terpisah. Setiap record tetap
   memiliki satu pemilik; mendaftarkan username yang sama tidak memberikan akses ke record user lain.
@@ -26,6 +28,16 @@ laporan lintas data dibatasi ke Super Admin (campaign, integrasi, tracking, dan 
 Dashboard marketing hanya menghitung akun, prospek, tugas, serta penggunaan AI miliknya.
 
 ## Data bersama
+
+### Pembuatan pengguna oleh Admin
+
+Admin dapat membuka **Pengaturan → Pengguna**, melihat daftar Marketing Operator/Viewer,
+dan menambahkan pengguna dengan kedua role tersebut. Pencarian, filter, dan total daftar tetap
+mengecualikan Admin serta Super Admin. Admin tidak dapat membuat role setara/lebih tinggi,
+mengubah pengguna yang sudah ada, mereset password/2FA pengguna lain, atau membuka pengaturan role.
+Pengelolaan lanjutan tersebut tetap untuk Super Admin. Marketing dan Viewer tidak memiliki akses ini.
+Pembuatan pengguna tidak memberikan Admin akses ke akun TikTok, prospek, atau template pribadi
+pengguna baru; batas kepemilikan data operasional tetap berlaku.
 
 Template dengan `created_by_id = NULL` adalah template bawaan yang dapat dibaca semua marketing,
 tetapi hanya diubah/dihapus Super Admin. Template buatan user hanya terlihat oleh pembuat dan

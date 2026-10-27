@@ -35,7 +35,7 @@ Sumber daftar dilaporkan operator dan tidak diverifikasi sebagai relasi follower
 - Bila tab Following memiliki penanda `aria-selected`, collector menolaknya. Pada tampilan lain,
   operator tetap perlu memastikan daftar yang dibuka memang Followers. Tidak ada verifikasi server
   bahwa username dalam file benar-benar followers atau bahwa pemiliknya menyetujui komunikasi.
-- File harus cocok dengan username akun yang dipilih. Pengunggahan ulang aman dari duplikat berdasarkan
+- Akun sumber pada file boleh berbeda dari akun pengirim yang dipilih. Pengunggahan ulang aman dari duplikat berdasarkan
   identitas ternormalisasi. Data lama, termasuk identitas terhapus, tidak dipulihkan atau ditimpa;
   akun sendiri dan entri larangan kontak dilewati. Tidak ada record izin komunikasi yang dibuat.
 - Penyimpanan lead dan aktivitas berjalan dalam satu transaksi, dengan unique index dan

@@ -101,17 +101,17 @@ export function OutreachOverview({
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        {work && (
-          <Button asChild>
-            <Link href="/outbound">
-              <Send /> Ambil followers & kirim DM
-            </Link>
-          </Button>
-        )}
         {accounts && (
           <Button variant="outline" asChild>
             <Link href="/accounts">
               <Smartphone /> Akun TikTok
+            </Link>
+          </Button>
+        )}
+        {work && (
+          <Button asChild>
+            <Link href="/outbound">
+              <Send /> Ambil followers & kirim DM
             </Link>
           </Button>
         )}

@@ -1,13 +1,28 @@
 'use client';
 
 import { Loader2, ServerCrash } from 'lucide-react';
+import { useEffect } from 'react';
 import { AppShell } from '@/components/app-shell';
 import { EmptyState } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import { AuthProvider, useMe } from '@/hooks/use-auth';
+import { ApiError } from '@/lib/api';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const me = useMe();
+  const sessionEnded = me.error instanceof ApiError && me.error.status === 401;
+  useEffect(() => {
+    // On a fresh page load AuthProvider has not mounted its expiry handler yet.
+    if (sessionEnded) window.location.replace('/login?reason=session-ended');
+  }, [sessionEnded]);
+
+  if (sessionEnded) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center text-muted-foreground">
+        Sesi berakhir. Mengarahkan ke halaman login…
+      </div>
+    );
+  }
 
   if (me.isPending) {
     return (

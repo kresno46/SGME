@@ -171,6 +171,11 @@ export function OutboundPage() {
           <Summary accountId={accountId} simple={simple} />
           {can(PERMISSIONS.OUTREACH_WORK) && account && (
             <div className="mt-4 flex flex-wrap items-center gap-3">
+              {can(PERMISSIONS.LEADS_IMPORT) && (
+                <Button variant="outline" onClick={() => setFollowersOpen(true)}>
+                  <Users /> Ambil followers
+                </Button>
+              )}
               <Button
                 onClick={() => {
                   if (!params.get('account')) setParam('account', account.id);
@@ -180,11 +185,6 @@ export function OutboundPage() {
               >
                 <Send /> Kirim DM
               </Button>
-              {can(PERMISSIONS.LEADS_IMPORT) && (
-                <Button variant="outline" onClick={() => setFollowersOpen(true)}>
-                  <Users /> Ambil followers
-                </Button>
-              )}
               <p className="text-xs text-muted-foreground">
                 Penerima → pesan → tinjau → mulai extension.
               </p>

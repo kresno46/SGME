@@ -12,7 +12,12 @@ describe('RBAC & manajemen pengguna (integration)', () => {
   beforeEach(() => resetDatabase(prisma));
   afterAll(() => app.close());
 
-  const account = { profileUrl: 'https://www.tiktok.com/@akun_rbac', username: 'akun_rbac', displayName: 'Akun RBAC', lane: 'OUTBOUND' };
+  const account = {
+    profileUrl: 'https://www.tiktok.com/@akun_rbac',
+    username: 'akun_rbac',
+    displayName: 'Akun RBAC',
+    lane: 'OUTBOUND',
+  };
 
   it('Viewer hanya dapat membaca', async () => {
     const { agent, csrf } = await loginAs(app, 'VIEWER');
@@ -29,19 +34,7 @@ describe('RBAC & manajemen pengguna (integration)', () => {
     await agent.get('/api/users').expect(403);
   });
 
-  it('hanya Super Admin mengelola pengguna; validasi dan email unik tetap berlaku', async () => {
-    const denied = await loginAs(app, 'ADMIN');
-    await denied.agent.get('/api/users').expect(403);
-    await denied.agent
-      .post('/api/users')
-      .set('x-csrf-token', denied.csrf)
-      .send({
-        name: 'Denied',
-        email: 'denied@test.local',
-        password: 'PasswordKuat123',
-        role: 'MARKETING_OPERATOR',
-      })
-      .expect(403);
+  it('Super Admin mengelola seluruh role; validasi dan email unik tetap berlaku', async () => {
     const { agent, csrf } = await loginAs(app, 'SUPER_ADMIN');
     const user = { name: 'Operator Baru', email: 'baru@test.local', password: 'PasswordKuat123' };
 
@@ -78,6 +71,74 @@ describe('RBAC & manajemen pengguna (integration)', () => {
       .send({ ...user, email: 'z@test.local', role: 'VIEWER', password: 'lemah' })
       .expect(400);
     expect(weak.body.errors.password).toBeDefined();
+  });
+
+  it('Admin dapat menambah Marketing dan Viewer, tanpa akses role tinggi atau perubahan akun', async () => {
+    const { agent, csrf } = await loginAs(app, 'ADMIN');
+    for (const role of ['MARKETING_OPERATOR', 'VIEWER']) {
+      const result = await agent
+        .post('/api/users')
+        .set('x-csrf-token', csrf)
+        .send({
+          name: 'New User',
+          email: `${role.toLowerCase()}-new@test.local`,
+          password: 'PasswordKuat123',
+          role,
+        })
+        .expect(201);
+      expect(result.body.role).toBe(role);
+      expect(result.body).not.toHaveProperty('passwordHash');
+      await agent
+        .patch(`/api/users/${result.body.id}`)
+        .set('x-csrf-token', csrf)
+        .send({ status: 'DISABLED' })
+        .expect(403);
+    }
+    for (const role of ['ADMIN', 'SUPER_ADMIN']) {
+      await agent
+        .post('/api/users')
+        .set('x-csrf-token', csrf)
+        .send({
+          name: 'Denied User',
+          email: `${role.toLowerCase()}-new@test.local`,
+          password: 'PasswordKuat123',
+          role,
+        })
+        .expect(403);
+      const filtered = await agent.get(`/api/users?role=${role}`).expect(200);
+      expect(filtered.body.total).toBe(0);
+    }
+    const list = await agent.get('/api/users').expect(200);
+    expect(list.body.total).toBe(4);
+    expect(
+      list.body.items.every((u: { role: string }) =>
+        ['MARKETING_OPERATOR', 'VIEWER'].includes(u.role),
+      ),
+    ).toBe(true);
+    await agent.get('/api/roles').expect(403);
+    await agent
+      .post('/api/users')
+      .set('x-csrf-token', csrf)
+      .send({
+        name: 'Duplicate',
+        email: TEST_USERS.VIEWER,
+        password: 'PasswordKuat123',
+        role: 'VIEWER',
+      })
+      .expect(409);
+    for (const role of ['MARKETING_OPERATOR', 'VIEWER'] as const) {
+      const denied = await loginAs(app, role);
+      await denied.agent
+        .post('/api/users')
+        .set('x-csrf-token', denied.csrf)
+        .send({
+          name: 'Denied User',
+          email: 'denied@test.local',
+          password: 'PasswordKuat123',
+          role: 'VIEWER',
+        })
+        .expect(403);
+    }
   });
 
   it('Admin tidak dapat mengubah Super Admin maupun role/status dirinya sendiri', async () => {
