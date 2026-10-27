@@ -44,15 +44,32 @@ document.getElementById('diagnose').addEventListener('click', async () => {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (new URL(tab.url).origin !== 'https://www.tiktok.com')
       throw new Error('Buka tab chat TikTok yang gagal, lalu klik Diagnostik dari tab tersebut.');
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['page.js'] });
-    const [response] = await chrome.scripting.executeScript({
-      target: { tabId: tab.id },
-      func: () => globalThis.smgeDmPage.diagnose(),
-    });
-    if (!response?.result)
+    let frameScan = 'accessible-frames';
+    const scan = async (allFrames) => {
+      const target = { tabId: tab.id, allFrames };
+      await chrome.scripting.executeScript({ target, files: ['diagnostics.js'] });
+      return chrome.scripting.executeScript({
+        target,
+        func: () => globalThis.smgeDmDiagnose(),
+      });
+    };
+    let responses;
+    try {
+      responses = await scan(true);
+    } catch {
+      // Cross-origin frames may be outside the granted host permissions.
+      // Keep their origins in the top-frame report without requesting wider access.
+      frameScan = 'top-frame-only';
+      responses = await scan(false);
+    }
+    const frames = responses
+      .filter((response) => response.result)
+      .map((response) => ({ frameId: response.frameId, ...response.result }));
+    if (!frames.length)
       throw new Error('Struktur chat belum dapat dibaca. Muat ulang extension dan coba lagi.');
+    const diagnostic = { format: 'smge-dm-diagnostic-v2', frameScan, frames };
     const url = URL.createObjectURL(
-      new Blob([JSON.stringify(response.result, null, 2)], { type: 'application/json' }),
+      new Blob([JSON.stringify(diagnostic, null, 2)], { type: 'application/json' }),
     );
     const link = document.createElement('a');
     link.href = url;

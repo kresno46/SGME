@@ -12,7 +12,7 @@ bukan `execCommand` atau event input JavaScript buatan. Perubahan ini menangani 
 `Isi editor tidak cocok dengan pesan yang disetujui` yang terlihat pada log percobaan versi sebelumnya.
 Template harus terverifikasi utuh di editor sebelum otorisasi dan Enter/klik dilakukan.
 
-Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.0**.
+Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.1**.
 Versi ini menambah izin **debugger** yang wajib dideklarasikan saat pemasangan/update; Chrome tidak
 mengizinkannya sebagai permission opsional. Implementasi hanya melampirkan debugger ke tab TikTok
 pengiriman dan memakai domain Input, lalu melepasnya setelah percobaan. Tutup DevTools pada tab itu
@@ -81,6 +81,20 @@ laporan pengiriman lama tidak menggandakan hitungan follow-up. Tampilan Status p
 percobaan terakhir per tugas, sedangkan riwayat pesan tetap tersimpan pada aktivitas prospek.
 
 ## Arti hasil
+
+### Business Suite menghasilkan diagnostik kosong
+
+Versi 0.2.1 menambah diagnostik v2 untuk halaman seperti `/business-suite/messages`. Diagnostik
+memeriksa frame yang bisa diakses dengan izin extension yang sudah diberikan, elemen di open shadow DOM,
+status pemuatan halaman, dan jumlah editor. Bila pemeriksaan frame ditolak browser, laporan tetap
+diambil dari halaman utama dengan `frameScan: top-frame-only`. Iframe dicatat berupa origin sumber
+dan struktur elemen, tanpa path sumber, query, isi frame, atau token. Tidak ada perluasan izin host.
+
+Pembaruan ini memperbaiki alat pemeriksaan; belum menambahkan pengiriman pada layout Business Suite
+yang tidak dikenali. File v1 dengan `elements: []` dan `handles: []` belum membuktikan penyebabnya
+iframe: halaman belum selesai memuat atau penanda DOM berbeda juga mungkin. Setelah update extension,
+buka percakapan Business Suite sampai kolom pesan terlihat, klik **Unduh diagnostik chat TikTok**,
+lalu berikan file v2 kepada pengembang. Diagnostik hanya membaca struktur, tanpa mengirim DM.
 
 ### Extension menampilkan error akses dashboard
 
@@ -165,6 +179,7 @@ node --test infrastructure/browser-dm-sender/transport.test.mjs
 node --test infrastructure/browser-dm-sender/new-layout.test.mjs
 node --test infrastructure/browser-dm-sender/native-input.test.mjs
 node --test infrastructure/browser-dm-sender/native-browser.test.mjs
+node --test infrastructure/browser-dm-sender/business-diagnostic.test.mjs
 pnpm --filter @smge/api test:e2e --testPathPattern browser-dm
 powershell -NoProfile -ExecutionPolicy Bypass -File infrastructure/scripts/package-browser-dm-sender.ps1
 ```
