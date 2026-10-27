@@ -6,6 +6,7 @@ import {
   Cable,
   LayoutDashboard,
   Megaphone,
+  MessageCircle,
   MessagesSquare,
   Send,
   Settings,
@@ -60,6 +61,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     icon: Send,
     permission: PERMISSIONS.OUTREACH_WORK,
     phase: 2,
+  },
+  {
+    title: 'WhatsApp',
+    href: '/whatsapp',
+    icon: MessageCircle,
+    permission: PERMISSIONS.WHATSAPP_USE,
+    phase: 6,
   },
   {
     title: 'AI Sales Agent',
