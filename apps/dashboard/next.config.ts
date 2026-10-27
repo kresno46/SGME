@@ -11,6 +11,8 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  // Folder build terpisah (mis. server uji kedua) agar tidak menimpa .next milik `next dev` yang sedang berjalan.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   // Output standalone untuk image Docker (Linux). Di Windows tanpa hak symlink, build biasa saja.
   output: process.env.NEXT_OUTPUT === 'standalone' ? 'standalone' : undefined,
   // Monorepo: lacak dependency sampai root agar paket workspace (@smge/*) ikut ke output standalone
