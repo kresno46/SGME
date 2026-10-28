@@ -20,6 +20,7 @@ globalThis.smgeNativeInput = async function ({ tabId, delivery, page, authorize,
     if (!(await isActive())) throw new Error('Dihentikan operator sebelum mengetik.');
     const focused = await page('focus', delivery);
     if (!focused.focused) return focused;
+    if (!(await isActive())) throw new Error('Dihentikan operator sebelum mengetik.');
     await chrome.debugger.sendCommand(target, 'Input.insertText', { text: delivery.message });
     let ready = await page('inspect', delivery);
     if (!ready.ready) return ready;

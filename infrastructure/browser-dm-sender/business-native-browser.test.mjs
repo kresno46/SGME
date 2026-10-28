@@ -21,16 +21,22 @@ for (const action of ['enter', 'click']) {
     async () => {
       const browser = await chromium.launch({ executablePath, headless: true });
       try {
-        const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+        const browserContext = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+        const page = await browserContext.newPage();
         // Intercept every URL, including the fixture's TikTok-shaped origins. No live TikTok traffic.
-        await page.route('**/*', (route) => {
+        await browserContext.route('**/*', (route) => {
           const path = new URL(route.request().url()).pathname;
           if (path === '/business-suite/messages')
             return route.fulfill({
               contentType: 'text/html',
               body: `
-            <html><body><nav><a data-e2e="nav-profile" href="/@sender_test">Profile</a></nav>
+            <html><body>
             <iframe src="/messages" style="position:absolute;left:218px;top:120px;width:1100px;height:563px"></iframe></body></html>`,
+            });
+          if (path === '/@sender_test')
+            return route.fulfill({
+              contentType: 'text/html',
+              body: '<html><body><a data-e2e="nav-profile" href="/@sender_test">Profile</a></body></html>',
             });
           if (path !== '/messages') return route.abort();
           return route.fulfill({
@@ -55,6 +61,10 @@ for (const action of ['enter', 'click']) {
         const frame = page.frames().find((item) => new URL(item.url()).pathname === '/messages');
         assert.ok(frame);
         await frame.addScriptTag({ content: pageSource });
+        const probe = await page.context().newPage();
+        await probe.goto('https://www.tiktok.com/@sender_test');
+        await probe.addScriptTag({ content: pageSource });
+        await page.bringToFront();
         const session = await page.context().newCDPSession(page);
         const context = vm.createContext({
           URL,
@@ -77,11 +87,20 @@ for (const action of ['enter', 'click']) {
         const result = await context.smgeNativeInput({
           tabId: 1,
           delivery,
-          page: (method, item) =>
-            frame.evaluate(({ method, item }) => globalThis.smgeDmPage[method](item), {
+          page: async (method, item) => {
+            const identity = await probe.evaluate(() => globalThis.smgeDmPage.identifySender());
+            return frame.evaluate(({ method, item }) => globalThis.smgeDmPage[method](item), {
               method,
-              item,
-            }),
+              item: {
+                ...item,
+                senderVerification: {
+                  username: identity.username,
+                  attemptId: item.attemptId,
+                  verifiedAt: Date.now(),
+                },
+              },
+            });
+          },
           authorize: async () => {},
           isActive: async () => true,
         });

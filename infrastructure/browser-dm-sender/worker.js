@@ -93,6 +93,46 @@ async function navigate(tabId, url) {
   throw new Error('Halaman TikTok tidak selesai dimuat.');
 }
 const chatFrames = new Map();
+let senderProbeTabId = null;
+async function verifyBusinessSender(delivery) {
+  // This reads the logged-in account from public navigation, not from the URL of
+  // the visited profile. Keep this tab in the background so chat focus is preserved.
+  const url = `https://www.tiktok.com/@${delivery.senderUsername}`;
+  if (senderProbeTabId === null) {
+    senderProbeTabId = (await chrome.tabs.create({ url, active: false })).id;
+  } else {
+    await chrome.tabs.reload(senderProbeTabId);
+  }
+  for (let i = 0; i < 30; i++) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const tab = await chrome.tabs.get(senderProbeTabId);
+    const parsed = new URL(tab.url);
+    if (parsed.origin !== 'https://www.tiktok.com')
+      throw new Error('Tab verifikasi pengirim berubah alamat.');
+    if (tab.status !== 'complete' || parsed.pathname !== `/@${delivery.senderUsername}`) continue;
+    await chrome.scripting.executeScript({
+      target: { tabId: senderProbeTabId },
+      files: ['page.js'],
+    });
+    const [response] = await chrome.scripting.executeScript({
+      target: { tabId: senderProbeTabId },
+      func: () => globalThis.smgeDmPage.identifySender(),
+      args: [],
+    });
+    if (response?.result?.blocked)
+      throw new Error('Verifikasi TikTok terdeteksi pada akun pengirim. Selesaikan manual.');
+    const actual = response?.result?.username;
+    if (!actual) continue;
+    if (actual !== delivery.senderUsername.toLowerCase())
+      throw new Error(
+        `Akun TikTok login @${actual} berbeda dengan pengirim @${delivery.senderUsername}. Tidak mengirim.`,
+      );
+    return { username: actual, attemptId: delivery.attemptId, verifiedAt: Date.now() };
+  }
+  throw new Error(
+    'Identitas pengirim belum terbaca pada navigasi profil TikTok. Pastikan login akun pengirim.',
+  );
+}
 async function page(tabId, method, delivery) {
   const key = `${tabId}:${delivery.attemptId}`;
   if (method === 'open') chatFrames.clear();
@@ -131,6 +171,10 @@ async function page(tabId, method, delivery) {
   if (businessSuite && method !== 'open' && !chatFrames.has(key))
     throw new Error('Dokumen iframe chat berubah; periksa hasil sebelum mencoba lagi.');
   const target = { tabId, ...(chatFrames.get(key) ?? {}) };
+  if (businessSuite && method !== 'open') {
+    const senderVerification = await verifyBusinessSender(delivery);
+    delivery = { ...delivery, senderVerification };
+  }
   await chrome.scripting.executeScript({ target, files: ['page.js'] });
   const [response] = await chrome.scripting.executeScript({
     target,
@@ -170,7 +214,7 @@ async function step() {
     if (!delivery) {
       job.active = false;
       job.detail =
-        'Tidak ada tugas dalam antrean. Di Outbound, setujui tugas lalu klik Antrekan tugas disetujui sebelum Mulai.';
+        'Tidak ada tugas dalam antrean. Di Outbound, pilih penerima dan pesan melalui Kirim DM, lalu klik Masukkan ke antrean sebelum Mulai.';
       await save(job);
       return;
     }
@@ -244,6 +288,15 @@ async function step() {
       await save(job);
     }
   } finally {
+    if (senderProbeTabId !== null) {
+      const probeId = senderProbeTabId;
+      senderProbeTabId = null;
+      try {
+        await chrome.tabs.remove(probeId);
+      } catch {
+        /* Already closed by the operator. */
+      }
+    }
     working = false;
   }
 }

@@ -24,6 +24,8 @@ function fixture({
   businessSuite = false,
   duplicateFrames = false,
   frameReplaced = false,
+  probeSender = 'sender',
+  probeBlocked = false,
 } = {}) {
   let saved = initial;
   let listener;
@@ -34,6 +36,8 @@ function fixture({
   const calls = [];
   const scriptTargets = [];
   let tiktokUrl = 'https://www.tiktok.com/';
+  let probeUrl = '';
+  const closedTabs = [];
   const copy = (value) => (value ? JSON.parse(JSON.stringify(value)) : value);
   const command = (message) => new Promise((resolve) => listener(message, {}, resolve));
   const context = vm.createContext({
@@ -78,12 +82,28 @@ function fixture({
       tabs: {
         get: async (id) => ({
           id,
-          url: id === 1 ? 'http://localhost:3000/outbound?account=account-test' : tiktokUrl,
+          url:
+            id === 1
+              ? 'http://localhost:3000/outbound?account=account-test'
+              : id === 3
+                ? probeUrl
+                : tiktokUrl,
           status: 'complete',
         }),
-        create: async () => ({ id: 2 }),
-        update: async (_id, { url }) => {
-          tiktokUrl = url;
+        create: async ({ url, active }) => {
+          if (active === false) {
+            probeUrl = url;
+            return { id: 3 };
+          }
+          return { id: 2 };
+        },
+        remove: async (id) => {
+          closedTabs.push(id);
+        },
+        reload: async () => {},
+        update: async (id, { url }) => {
+          if (id === 3) probeUrl = url;
+          else tiktokUrl = url;
         },
       },
       scripting: {
@@ -91,6 +111,8 @@ function fixture({
           scriptTargets.push({ target: options.target, method: options.args?.[0] });
           if (options.files) return [];
           const [path] = options.args;
+          if (options.target.tabId === 3)
+            return [{ result: { username: probeSender, blocked: probeBlocked } }];
           if (frameReplaced && path === 'focus' && options.target.documentIds)
             throw new Error('No document with the given ID');
           if (typeof path === 'object')
@@ -161,6 +183,7 @@ function fixture({
     counts: () => ({ sends, reports, claims }),
     calls,
     scriptTargets,
+    closedTabs,
     start: async () => {
       await command({
         action: 'start',
@@ -213,6 +236,21 @@ test('a replaced Business Suite iframe document never falls back to a different 
   const focus = f.scriptTargets.filter((item) => item.method === 'focus');
   assert.equal(focus.length, 1);
   assert.deepEqual(Array.from(focus[0].target.documentIds), ['chat-doc']);
+});
+
+test('Business Suite rejects a different logged-in account and closes its verification tab', async () => {
+  for (const options of [
+    { probeSender: 'wrong_sender' },
+    { probeSender: null },
+    { probeBlocked: true },
+  ]) {
+    const f = fixture({ businessSuite: true, ...options });
+    await f.start();
+    assert.equal(f.counts().sends, 0);
+    assert.equal(f.state().active, false);
+    assert.ok(!f.calls.some((path) => path.endsWith('/authorize')));
+    assert.deepEqual(f.closedTabs, [3]);
+  }
 });
 test('uncertain result stops automatic progression', async () => {
   const f = fixture({ outcome: 'UNVERIFIED' });

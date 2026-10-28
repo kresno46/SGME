@@ -16,14 +16,21 @@
   const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
   const blocked = () =>
     !!document.querySelector('iframe[src*="captcha"], [id*="captcha"], [data-e2e="captcha"]');
-  function senderMatches(expected) {
-    const selector =
-      'a[data-e2e="nav-profile"], a[data-e2e="profile-icon"], a:has([data-e2e="profile-icon"]), nav a[aria-label="Profile" i], nav a[aria-label="Profil" i]';
+  const senderSelector =
+    'a[data-e2e="nav-profile"], a[data-e2e="profile-icon"], a:has([data-e2e="profile-icon"]), nav a[aria-label="Profile" i], nav a[aria-label="Profil" i]';
+  function senderMatches(expected, delivery) {
     let current = typeof window === 'undefined' ? null : window;
     let doc = document;
     for (let depth = 0; depth < 8; depth++) {
-      if (all(selector, doc).some((link) => username(link.href) === expected.toLowerCase()))
-        return true;
+      const identities = [
+        ...new Set(
+          all(senderSelector, doc)
+            .map((link) => username(link.href))
+            .filter(Boolean),
+        ),
+      ];
+      if (identities.length)
+        return identities.length === 1 && identities[0] === expected.toLowerCase();
       if (!current || current === current.top) break;
       try {
         if (current.parent.location.origin !== 'https://www.tiktok.com') break;
@@ -33,7 +40,27 @@
         break;
       }
     }
-    return false;
+    // Only the extension worker supplies this short-lived observation from a fresh
+    // public TikTok profile page. Never infer the login from a recipient/profile URL.
+    const proof = delivery?.senderVerification;
+    try {
+      const age = Date.now() - proof?.verifiedAt;
+      return (
+        !!proof &&
+        typeof window !== 'undefined' &&
+        window !== window.top &&
+        location.origin === 'https://www.tiktok.com' &&
+        location.pathname === '/messages' &&
+        window.top.location.origin === 'https://www.tiktok.com' &&
+        window.top.location.pathname.replace(/\/+$/, '') === '/business-suite/messages' &&
+        proof.username === expected.toLowerCase() &&
+        proof.attemptId === delivery.attemptId &&
+        age >= 0 &&
+        age <= 20000
+      );
+    } catch {
+      return false;
+    }
   }
   function frameVisible() {
     if (typeof window === 'undefined') return true;
@@ -140,10 +167,10 @@
     for (let i = 0; i < 25; i++) {
       if (blocked()) throw new Error('Verifikasi TikTok terdeteksi; selesaikan manual.');
       const root = chatRoot(delivery.username);
-      if (root && senderMatches(delivery.senderUsername)) return root;
+      if (root && senderMatches(delivery.senderUsername, delivery)) return root;
       await wait(500);
     }
-    if (!senderMatches(delivery.senderUsername))
+    if (!senderMatches(delivery.senderUsername, delivery))
       throw new Error(
         typeof window !== 'undefined' && window !== window.top
           ? 'Chat Business Suite sudah ditemukan, tetapi akun pengirim belum dapat diverifikasi dari profil di chat atau halaman induk. Tidak mengirim.'
@@ -158,6 +185,17 @@
     );
   }
   globalThis.smgeDmPage = {
+    identifySender() {
+      if (blocked()) return { username: null, blocked: true };
+      const identities = [
+        ...new Set(
+          all(senderSelector)
+            .map((link) => username(link.href))
+            .filter(Boolean),
+        ),
+      ];
+      return { username: identities.length === 1 ? identities[0] : null, blocked: false };
+    },
     locate(delivery) {
       return {
         path: location.pathname,
@@ -229,7 +267,7 @@
     async open(delivery) {
       if (blocked())
         return { status: 'FAILED', detail: 'Verifikasi TikTok terdeteksi; selesaikan manual.' };
-      if (!senderMatches(delivery.senderUsername))
+      if (!senderMatches(delivery.senderUsername, delivery))
         return {
           status: 'FAILED',
           detail:
@@ -292,7 +330,7 @@
         if (
           !frameVisible() ||
           blocked() ||
-          !senderMatches(delivery.senderUsername) ||
+          !senderMatches(delivery.senderUsername, delivery) ||
           chatRoot(delivery.username) !== state.root
         )
           throw new Error('Identitas chat berubah sebelum kirim.');
@@ -346,7 +384,7 @@
             !frameVisible() ||
             blocked() ||
             chatRoot(delivery.username) !== state.root ||
-            !senderMatches(delivery.senderUsername)
+            !senderMatches(delivery.senderUsername, delivery)
           )
             break;
           const current = messageNodes(state.root, delivery.message);

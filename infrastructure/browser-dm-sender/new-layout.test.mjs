@@ -25,6 +25,7 @@ function fixture({
   businessFrame = false,
   parentSender = 'sender_test',
   hiddenFrame = false,
+  senderVerification,
 } = {}) {
   const { document, window } = parseHTML(`<!doctype html><html><body>
     <nav><a data-e2e="nav-profile" href="https://www.tiktok.com/@${sender}">Profil</a></nav>
@@ -96,7 +97,10 @@ function fixture({
       `<html><body><nav><a data-e2e="nav-profile" href="https://www.tiktok.com/@${parentSender}">Profil</a></nav></body></html>`,
     );
     outer.window.Element.prototype.getClientRects = () => [{}];
-    const top = { document: outer.document, location: { origin: 'https://www.tiktok.com' } };
+    const top = {
+      document: outer.document,
+      location: { origin: 'https://www.tiktok.com', pathname: '/business-suite/messages' },
+    };
     top.top = top;
     frameWindow = {
       parent: top,
@@ -114,7 +118,11 @@ function fixture({
     Event: window.Event,
     InputEvent: window.Event,
     KeyboardEvent,
-    location: { href: 'https://www.tiktok.com/messages?lang=en' },
+    location: {
+      origin: 'https://www.tiktok.com',
+      pathname: '/messages',
+      href: 'https://www.tiktok.com/messages?lang=en',
+    },
     setTimeout: (callback) => {
       timers++;
       if (delayed && timers === 3) {
@@ -128,21 +136,23 @@ function fixture({
   vm.runInContext(source, context);
   return {
     send: async () => {
-      const focus = await context.smgeDmPage.focus(delivery);
+      const item = { ...delivery, senderVerification };
+      const focus = await context.smgeDmPage.focus(item);
       if (!focus.focused) return focus;
       // Native input is exercised through CDP in native-browser.test.mjs.
       editor.textContent = delivery.message;
-      const ready = await context.smgeDmPage.inspect(delivery);
+      const ready = await context.smgeDmPage.inspect(item);
       if (!ready.ready) return ready;
       if (ready.action.kind === 'click')
         document.querySelector('button[aria-label="Send"]').click();
       else onSend();
-      return context.smgeDmPage.observe(delivery);
+      return context.smgeDmPage.observe(item);
     },
     prepare: () => context.smgeDmPage.prepare(delivery),
     attempts: () => attempts,
     editor,
     document,
+    identify: () => context.smgeDmPage.identifySender(),
   };
 }
 
@@ -166,6 +176,30 @@ test('Business Suite iframe uses a visible parent profile to verify sender, not 
     assert.equal(rejected.attempts(), 0);
     assert.equal(rejected.editor.textContent, '');
   }
+});
+
+test('a fresh matching profile observation works only in Business Suite and cannot override a different sender', async () => {
+  const proof = { username: 'sender_test', attemptId: delivery.attemptId, verifiedAt: Date.now() };
+  const f = fixture({ businessFrame: true, parentSender: '', senderVerification: proof });
+  assert.equal((await f.send()).status, 'SENT');
+  for (const options of [
+    { senderVerification: { ...proof, username: 'recipient_test' } },
+    { senderVerification: { ...proof, attemptId: 'other-attempt' } },
+    { senderVerification: { ...proof, verifiedAt: Date.now() - 21000 } },
+    { senderVerification: { ...proof, verifiedAt: Date.now() + 60000 } },
+    { parentSender: 'other_sender', senderVerification: proof },
+  ]) {
+    const rejected = fixture({ businessFrame: true, parentSender: '', ...options });
+    assert.equal((await rejected.send()).status, 'FAILED');
+    assert.equal(rejected.attempts(), 0);
+  }
+  const unknown = fixture({ sender: 'other_sender', senderVerification: proof });
+  assert.equal((await unknown.send()).status, 'FAILED');
+});
+
+test('public profile verification reads own navigation, not recipient links or the viewed profile', () => {
+  const f = fixture({ sender: 'other_sender' });
+  assert.equal(f.identify().username, 'other_sender');
 });
 test('readiness waits for the header without typing or attempting a send', async () => {
   const f = fixture({ recipient: 'previous_chat', delayed: true });

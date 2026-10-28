@@ -12,7 +12,7 @@ bukan `execCommand` atau event input JavaScript buatan. Perubahan ini menangani 
 `Isi editor tidak cocok dengan pesan yang disetujui` yang terlihat pada log percobaan versi sebelumnya.
 Template harus terverifikasi utuh di editor sebelum otorisasi dan Enter/klik dilakukan.
 
-Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.2**.
+Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.3**.
 Versi ini menambah izin **debugger** yang wajib dideklarasikan saat pemasangan/update; Chrome tidak
 mengizinkannya sebagai permission opsional. Implementasi hanya melampirkan debugger ke tab TikTok
 pengiriman dan memakai domain Input, lalu melepasnya setelah percobaan. Tutup DevTools pada tab itu
@@ -106,11 +106,31 @@ dokumen baru. Input native tetap satu percobaan; klik memperhitungkan posisi/bor
 menerima frame yang memakai transformasi atau posisi yang tidak dapat dipastikan.
 
 Identitas pengirim masih harus terbukti dari tautan Profil di dokumen chat atau halaman induk TikTok
-yang sama origin. Diagnostik yang diberikan belum memperlihatkan identitas pengirim; pembaruan iframe
-tidak menjamin Business Suite siap mengirim pada akun tersebut. Jika muncul **Chat Business Suite sudah
-ditemukan, tetapi akun pengirim belum dapat diverifikasi**, periksa akun login dan berikan diagnostik
-dengan menu profil pengirim terbuka untuk pemeriksaan struktur lebih lanjut. Jangan menghapus
-validasi pengirim atau menganggap username penerima sebagai identitas pengirim.
+yang sama origin pada v0.2.2. Diagnostik yang diberikan tidak memperlihatkan identitas pengirim di
+halaman tersebut, sehingga pengiriman tetap berhenti. Pemeriksaan ini ditangani oleh tab verifikasi
+profil pada v0.2.3, seperti dijelaskan di bawah.
+
+### Verifikasi pengirim Business Suite tanpa tautan Profil di chat (v0.2.3)
+
+Screenshot dan diagnostik berikutnya memperlihatkan tautan `nav-profile` pada halaman profil TikTok
+biasa, tetapi tautan tersebut tidak tersedia di shell Business Suite maupun iframe chat. Extension
+sekarang membuka satu tab profil publik pengirim di latar belakang. Identitas login dibaca dari
+tautan navigasi **Profil**, bukan username pada URL halaman yang dikunjungi, judul profil, sidebar
+penerima, atau screenshot. Tab dimuat ulang untuk pemeriksaan berikutnya; akun berbeda, CAPTCHA,
+tab berubah domain, dan identitas yang belum terbaca menghentikan proses.
+
+Observasi identitas dikirim hanya lewat eksekusi extension ke iframe yang `documentId`-nya sudah
+dikunci, terikat pada username pengirim dan ID percobaan, serta berlaku paling lama 20 detik. Hanya
+iframe `/messages` di induk `/business-suite/messages` pada origin TikTok yang sama yang menerima
+observasi ini. Bukti tersebut tidak dapat mengalahkan identitas berbeda yang terlihat pada chat/induk.
+Pengirim diperiksa lagi sebelum langkah input/pemeriksaan, termasuk pemeriksaan terakhir sebelum
+klik atau Enter. Tidak ada cookie, token, state internal TikTok, ataupun endpoint privat yang dibaca.
+Tab pemeriksaan ditutup setelah percobaan; operator tidak perlu membuka profil secara manual.
+
+Setelah memperbarui extension ke v0.2.3, pilih pengirim yang sama dengan login TikTok, periksa chat
+untuk memastikan percobaan sebelumnya belum terkirim, lalu antrekan ulang satu penerima uji.
+Pemeriksaan mengasumsikan konteks login web TikTok yang sama; fitur ini bukan integrasi Business
+Center untuk mengirim atas nama akun yang didelegasikan melalui kredensial berbeda.
 
 Uji browser lokal membuktikan input, Enter, dan klik tunggal pada iframe dengan posisi bergeser;
 seluruh request diintersepsi dengan fixture. Belum ada pengiriman akun TikTok sungguhan oleh tes ini.
