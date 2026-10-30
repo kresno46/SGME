@@ -12,7 +12,7 @@ bukan `execCommand` atau event input JavaScript buatan. Perubahan ini menangani 
 `Isi editor tidak cocok dengan pesan yang disetujui` yang terlihat pada log percobaan versi sebelumnya.
 Template harus terverifikasi utuh di editor sebelum otorisasi dan Enter/klik dilakukan.
 
-Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.4**.
+Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.7**.
 Versi ini menambah izin **debugger** yang wajib dideklarasikan saat pemasangan/update; Chrome tidak
 mengizinkannya sebagai permission opsional. Implementasi hanya melampirkan debugger ke tab TikTok
 pengiriman dan memakai domain Input, lalu melepasnya setelah percobaan. Tutup DevTools pada tab itu
@@ -81,6 +81,52 @@ laporan pengiriman lama tidak menggandakan hitungan follow-up. Tampilan Status p
 percobaan terakhir per tugas, sedangkan riwayat pesan tetap tersimpan pada aktivitas prospek.
 
 ## Arti hasil
+
+### Lanjut ke penerima berikutnya setelah Gagal (v0.2.7)
+
+Setelah hasil **SENT** atau **FAILED** berhasil dicatat ke server, extension tetap aktif dan
+mengambil penerima menunggu berikutnya pada putaran alarm berikutnya (sekitar 30 detik). Contoh:
+penerima 1 terkirim, penerima 2 gagal, penerima 3–5 tetap diproses. Penerima 2 tetap berstatus Gagal
+dan tidak otomatis dicoba ulang. Untuk mengulangnya, operator harus memeriksa chat dan memakai
+**Antrekan ulang** secara terpisah.
+
+**UNVERIFIED** tetap menghentikan antrean karena pengiriman mungkin sudah dicoba dan hasilnya belum
+pasti. Kegagalan komunikasi/pencatatan hasil ke server juga menghentikan proses; extension tidak
+mengambil penerima berikutnya sebelum hasil sebelumnya berhasil dicatat. Tombol **Hentikan setelah
+pesan ini** tetap dihormati, termasuk bila percobaan aktif berakhir Gagal. Pemeriksaan akun, penerima,
+CAPTCHA, draft, dan larangan kontak tidak dilewati pada penerima selanjutnya.
+
+### Kolom pesan belum mendapat fokus (v0.2.6)
+
+Diagnostik personal memperlihatkan satu editor DraftJS dan header penerima yang cocok, tetapi
+percobaan gagal sebelum input dengan pesan **Kolom pesan belum mendapat fokus**. Pemanggilan DOM
+`editor.focus()` saja tidak selalu membuat editor/window aktif. v0.2.6 memberi waktu singkat untuk
+fokus, lalu jika belum berhasil menyiapkan satu klik native pada editor kosong yang sudah diverifikasi.
+Editor digulir ke area terlihat dan hit-test memastikan titik tersebut bukan tertutup overlay.
+Browser mengaktifkan tab dan menekan/melepas mouse pada editor, bukan tombol Kirim.
+
+Sebelum `Input.insertText`, fokus dikonfirmasi kembali bersama identitas pengirim, penerima,
+dokumen/editor, dan ketiadaan draft. Jika fokus gagal atau editor berubah, tidak mengetik dan tidak
+mengotorisasi kirim. Setelah teks masuk, fokus dan template tetap diperiksa sebelum kirim tunggal.
+Tidak ada percobaan ulang pengetikan atau klik kirim ketika hasil pengiriman belum jelas.
+Uji Chromium lokal menonaktifkan efek `editor.focus()` dan memverifikasi bahwa satu klik browser
+berhasil mengambil fokus, diikuti satu input template dan satu tindakan kirim tepercaya.
+
+### Akun personal: belum mengetik atau chat belum muncul (v0.2.5)
+
+Sebelumnya worker menunggu tetap 1,5 detik setelah memuat profil, lalu langsung memeriksa akun
+pengirim dan tombol Pesan. Tampilan yang belum siap dianggap gagal terlalu cepat. v0.2.5 mengganti
+jeda tersebut dengan pemeriksaan kesiapan: tunggu paling lama 15 detik untuk identitas pengirim
+dan satu tombol Pesan yang aktif. Profil penerima harus tetap cocok. Salah akun atau CAPTCHA
+menghentikan proses; tombol yang ambigu tidak diklik. Wrapper dan tombol anak dihitung sebagai
+satu kontrol. Klik membuka chat dilakukan satu kali per percobaan.
+
+Setelah itu, extension menunggu header penerima yang cocok dan tepat satu editor aktif, paling
+lama 20 detik per pemeriksaan kesiapan. Header saja tidak lagi cukup untuk menyatakan siap.
+Editor readonly/disabled tidak dipakai. Fokus memeriksa kembali editor terkini dan tidak menimpa
+draft operator. Tidak ada percobaan ulang pengetikan atau klik kirim setelah hasil tidak pasti.
+Waktu tunggu ini menangani pemuatan UI lambat; tidak menjamin seluruh penerima bisa dikirimi DM.
+Uji memakai DOM dan browser lokal, tanpa mengirim pesan TikTok sungguhan.
 
 ### Business Suite menghasilkan diagnostik kosong
 
@@ -207,7 +253,9 @@ terverifikasi tidak bisa langsung diantrekan ulang. Tugas yang sudah kehilangan 
   pencocokan attempt diperlukan. Extension menjalankan fetch pada tab dashboard yang login;
   token sesi tidak diekspor. Jangan tutup tab dashboard selama percobaan.
 - Satu klik kirim tidak menjamin penerima boleh menerima DM. Verifikasi, pembatasan, atau selector
-  yang tidak cocok menghentikan antrean; tidak ada bypass, rotasi akun, atau retry pesan otomatis.
+  yang tidak cocok menggagalkan percobaan penerima tersebut; tidak ada bypass, rotasi akun,
+  atau retry pesan otomatis. FAILED yang sudah dicatat melanjutkan ke penerima berikutnya;
+  hasil UNVERIFIED tetap menghentikan antrean.
 - Selector di `infrastructure/browser-dm-sender/page.js` sengaja mensyaratkan identitas akun di navigasi
   dan tautan username penerima di header chat. Bila layout TikTok berbeda, perlu inspeksi dan
   penyesuaian selector; jangan melepas pengecekan identitas agar script sekadar menekan tombol.
@@ -230,6 +278,7 @@ node --test infrastructure/browser-dm-sender/native-input.test.mjs
 node --test infrastructure/browser-dm-sender/native-browser.test.mjs
 node --test infrastructure/browser-dm-sender/business-diagnostic.test.mjs
 node --test infrastructure/browser-dm-sender/business-native-browser.test.mjs
+node --test infrastructure/browser-dm-sender/personal-readiness.test.mjs
 pnpm --filter @smge/api test:e2e --testPathPattern browser-dm
 powershell -NoProfile -ExecutionPolicy Bypass -File infrastructure/scripts/package-browser-dm-sender.ps1
 ```

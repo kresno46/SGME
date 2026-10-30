@@ -1,6 +1,6 @@
 # Panduan Pengguna Marketing
 
-**Marketing Bias Growth (MBG)** · Diperbarui 26 Oktober 2026
+**Marketing Bias Growth (MBG)** · Diperbarui 30 Oktober 2026
 
 Panduan ini untuk pengguna dengan role **Marketing Operator**. Tujuan pekerjaan Anda adalah mengumpulkan calon penerima dari followers TikTok, menyimpan datanya, mengirim DM, dan melakukan follow-up.
 
@@ -158,6 +158,12 @@ Untuk satu orang, buka **Antrean prospek**, cari nama atau username, lalu klik *
 | Dibatalkan                       | Pesan yang masih menunggu sudah dibatalkan. Tidak akan dikirim dari antrean tersebut.                                                                                    |
 
 Jika hasil **Belum terverifikasi**, selesaikan pemeriksaan terlebih dahulu karena antrean akun dapat tertahan. Jika ditandai tidak terkirim, periksa status hasilnya dan gunakan **Antrekan ulang** bila tersedia. Sistem tidak otomatis mengulang percobaan yang hasilnya belum jelas.
+
+Mulai DM Sender **v0.2.7**, hasil **Gagal** yang sudah berhasil dicatat tidak menghentikan penerima
+berikutnya. Contoh: dari lima penerima, jika penerima kedua gagal, penerima ketiga sampai kelima
+tetap diproses pada putaran berikutnya, sekitar setiap 30 detik. Penerima yang gagal tetap tercatat
+dan tidak otomatis diulang. Hasil belum terverifikasi atau kegagalan koneksi/pencatatan hasil tetap
+menghentikan proses untuk diperiksa. Tombol **Hentikan setelah pesan ini** juga tetap berlaku.
 
 ## 8. Follow-up tanpa jadwal
 

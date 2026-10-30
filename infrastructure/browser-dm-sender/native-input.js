@@ -28,7 +28,28 @@ globalThis.smgeNativeInput = async function ({ tabId, delivery, page, authorize,
       );
     }
     if (!(await isActive())) throw new Error('Dihentikan operator sebelum mengetik.');
-    const focused = await page('focus', delivery);
+    let focused = await page('focus', delivery);
+    if (focused.needsFocus && focused.action?.kind === 'click') {
+      if (!(await isActive()))
+        throw new Error('Dihentikan operator sebelum mengaktifkan kolom pesan.');
+      // This click targets only the verified empty editor. It is not a send attempt.
+      await chrome.debugger.sendCommand(target, 'Page.bringToFront');
+      const coordinates = {
+        x: focused.action.x,
+        y: focused.action.y,
+        button: 'left',
+        clickCount: 1,
+      };
+      await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+        type: 'mousePressed',
+        ...coordinates,
+      });
+      await chrome.debugger.sendCommand(target, 'Input.dispatchMouseEvent', {
+        type: 'mouseReleased',
+        ...coordinates,
+      });
+      focused = await page('confirmFocus', delivery);
+    }
     if (!focused.focused) return focused;
     if (!(await isActive())) throw new Error('Dihentikan operator sebelum mengetik.');
     await chrome.debugger.sendCommand(target, 'Input.insertText', { text: delivery.message });

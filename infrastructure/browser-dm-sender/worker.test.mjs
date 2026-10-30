@@ -28,6 +28,9 @@ function fixture({
   probeBlocked = false,
   probeUrlStates = [],
   probeNeverReady = false,
+  queuedDeliveries = [delivery],
+  prepareFailsAt = [],
+  stopDuringPrepare = false,
 } = {}) {
   let saved = initial;
   let listener;
@@ -41,6 +44,7 @@ function fixture({
   let probeUrl = '';
   let probePoll = 0;
   const closedTabs = [];
+  const reported = [];
   const copy = (value) => (value ? JSON.parse(JSON.stringify(value)) : value);
   const command = (message) => new Promise((resolve) => listener(message, {}, resolve));
   const context = vm.createContext({
@@ -155,27 +159,31 @@ function fixture({
           calls.push(path);
           if (path === 'claim') {
             claims++;
-            return [{ result: { ok: true, data: claims === 1 ? delivery : null } }];
+            return [{ result: { ok: true, data: queuedDeliveries[claims - 1] ?? null } }];
           }
           if (path.endsWith('/authorize'))
             return [{ result: { ok: true, data: { allowed: true } } }];
           if (path.endsWith('/result')) {
             reports++;
             if (reportFailsOnce && reports === 1) throw new Error('Response lost');
+            reported.push({ path, status: options.args[1].status });
             return [{ result: { ok: true, data: { saved: true } } }];
           }
           if (path === 'open') {
             if (businessSuite) tiktokUrl = 'https://www.tiktok.com/business-suite/messages';
             return [{ result: { opened: true } }];
           }
-          if (path === 'prepare')
+          if (path === 'prepare') {
+            if (stopDuringPrepare) await command({ action: 'stop' });
             return [
               {
-                result: prepareFails
-                  ? { status: 'FAILED', detail: 'Wrong active recipient' }
-                  : { ready: true },
+                result:
+                  prepareFails || prepareFailsAt.includes(claims)
+                    ? { status: 'FAILED', detail: 'Wrong active recipient' }
+                    : { ready: true },
               },
             ];
+          }
           if (path === 'focus') return [{ result: { focused: true } }];
           if (path === 'inspect') return [{ result: { ready: true, action: { kind: 'enter' } } }];
           if (path === 'observe') {
@@ -198,6 +206,7 @@ function fixture({
     calls,
     scriptTargets,
     closedTabs,
+    reported,
     start: async () => {
       await command({
         action: 'start',
@@ -237,7 +246,7 @@ test('ambiguous Business Suite frames fail before typing, authorization, or send
   const f = fixture({ businessSuite: true, duplicateFrames: true });
   await f.start();
   assert.equal(f.counts().sends, 0);
-  assert.equal(f.state().active, false);
+  assert.equal(f.state().active, true);
   assert.ok(!f.calls.some((path) => path === 'focus' || path.endsWith('/authorize')));
 });
 
@@ -245,7 +254,7 @@ test('a replaced Business Suite iframe document never falls back to a different 
   const f = fixture({ businessSuite: true, frameReplaced: true });
   await f.start();
   assert.equal(f.counts().sends, 0);
-  assert.equal(f.state().active, false);
+  assert.equal(f.state().active, true);
   assert.ok(!f.calls.some((path) => path.endsWith('/authorize')));
   const focus = f.scriptTargets.filter((item) => item.method === 'focus');
   assert.equal(focus.length, 1);
@@ -261,7 +270,7 @@ test('Business Suite rejects a different logged-in account and closes its verifi
     const f = fixture({ businessSuite: true, ...options });
     await f.start();
     assert.equal(f.counts().sends, 0);
-    assert.equal(f.state().active, false);
+    assert.equal(f.state().active, true);
     assert.ok(!f.calls.some((path) => path.endsWith('/authorize')));
     assert.deepEqual(f.closedTabs, [3]);
   }
@@ -290,7 +299,7 @@ test('an unavailable or foreign sender-tab URL never permits typing or sending',
     const f = fixture({ businessSuite: true, ...options });
     await f.start();
     assert.equal(f.counts().sends, 0);
-    assert.equal(f.state().active, false);
+    assert.equal(f.state().active, true);
     assert.ok(!f.calls.includes('focus'));
     assert.doesNotMatch(f.state().detail, /Failed to construct|Invalid URL/);
     assert.deepEqual(f.closedTabs, [3]);
@@ -307,13 +316,66 @@ test('uncertain result stops automatic progression', async () => {
 test('a chat that is not ready is reported as failed before authorization or sending', async () => {
   const f = fixture({ prepareFails: true });
   await f.start();
-  assert.equal(f.state().active, false);
+  assert.equal(f.state().active, true);
   assert.equal(f.counts().sends, 0);
   assert.equal(
     f.calls.some((path) => path.endsWith('/authorize')),
     false,
   );
   assert.equal(f.counts().reports, 1);
+});
+
+test('five recipients: a failed second recipient is recorded once and does not block recipients 3–5', async () => {
+  const batch = Array.from({ length: 5 }, (_, i) => ({
+    ...delivery,
+    id: `delivery-${i + 1}`,
+    attemptId: `attempt-${i + 1}`,
+    username: `recipient_${i + 1}`,
+  }));
+  const f = fixture({ queuedDeliveries: batch, prepareFailsAt: [2] });
+  await f.start();
+  await f.next();
+  assert.equal(f.state().active, true);
+  assert.match(f.state().detail, /dilewati/);
+  assert.equal(f.counts().sends, 1);
+  for (let i = 0; i < 3; i++) await f.next();
+  assert.deepEqual(f.counts(), { sends: 4, reports: 5, claims: 5 });
+  assert.deepEqual(
+    f.reported.map((item) => item.status),
+    ['SENT', 'FAILED', 'SENT', 'SENT', 'SENT'],
+  );
+  assert.deepEqual(
+    f.reported.map((item) => item.path),
+    batch.map((item) => `${item.id}/result`),
+  );
+  await f.next();
+  assert.equal(f.state().active, false);
+});
+
+test('operator stop during a failed attempt is preserved and prevents claiming another recipient', async () => {
+  const f = fixture({
+    prepareFails: true,
+    stopDuringPrepare: true,
+    queuedDeliveries: [delivery, { ...delivery, id: 'delivery-2' }],
+  });
+  await f.start();
+  await f.next();
+  assert.equal(f.state().active, false);
+  assert.deepEqual(f.counts(), { sends: 0, reports: 1, claims: 1 });
+});
+
+test('a failed recipient cannot be skipped until its result is successfully reported', async () => {
+  const f = fixture({
+    prepareFails: true,
+    reportFailsOnce: true,
+    queuedDeliveries: [delivery, { ...delivery, id: 'delivery-2' }],
+  });
+  await f.start();
+  assert.equal(f.state().pendingReport.status, 'FAILED');
+  assert.equal(f.state().active, false);
+  await f.next();
+  assert.deepEqual(f.counts(), { sends: 0, reports: 2, claims: 1 });
+  assert.equal(f.state().current, null);
 });
 test('a lost report response retries reporting without sending twice', async () => {
   const f = fixture({ reportFailsOnce: true });

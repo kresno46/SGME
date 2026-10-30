@@ -12,6 +12,8 @@ function fixture({
   active = true,
   interrupted = false,
   action = { kind: 'enter' },
+  needsFocus = false,
+  focusConfirmed = true,
 } = {}) {
   const calls = [];
   const context = vm.createContext({
@@ -43,7 +45,14 @@ function fixture({
         delivery: { message: 'Approved template' },
         page: async (method) => {
           calls.push({ method });
-          if (method === 'focus') return { focused: true };
+          if (method === 'focus')
+            return needsFocus
+              ? { needsFocus: true, action: { kind: 'click', x: 200, y: 300 } }
+              : { focused: true };
+          if (method === 'confirmFocus')
+            return focusConfirmed
+              ? { focused: true }
+              : { status: 'FAILED', detail: 'Editor focus not acquired' };
           if (method === 'inspect')
             return mismatch
               ? { status: 'FAILED', detail: 'Wrong editor text' }
@@ -81,6 +90,38 @@ test('native insert precedes validation/authorization and Enter is dispatched ex
   assert.equal(keys[0].parameters.type, 'keyDown');
   assert.equal(keys[1].parameters.type, 'keyUp');
   assert.ok(f.calls.filter((call) => call.target).every((call) => call.target.tabId === 17));
+});
+
+test('native editor click is confirmed before one text insertion and one send action', async () => {
+  const f = fixture({ needsFocus: true });
+  assert.equal((await f.send()).status, 'SENT');
+  const names = f.calls.map((call) => call.method);
+  assert.ok(names.indexOf('Page.bringToFront') < names.indexOf('confirmFocus'));
+  assert.ok(names.indexOf('confirmFocus') < names.indexOf('Input.insertText'));
+  assert.equal(names.filter((name) => name === 'Input.insertText').length, 1);
+  assert.equal(
+    f.calls.filter(
+      (call) => call.method === 'Input.dispatchKeyEvent' && call.parameters.type === 'keyDown',
+    ).length,
+    1,
+  );
+  const clicks = f.calls.filter((call) => call.method === 'Input.dispatchMouseEvent');
+  assert.equal(clicks.length, 2);
+  assert.equal(clicks[0].parameters.x, 200);
+  assert.equal(clicks[0].parameters.y, 300);
+});
+
+test('failed focus confirmation never types, authorizes or clicks send', async () => {
+  const f = fixture({ needsFocus: true, focusConfirmed: false });
+  assert.equal((await f.send()).status, 'FAILED');
+  assert.ok(
+    !f.calls.some(
+      (call) =>
+        call.method === 'Input.insertText' ||
+        call.method === 'authorize' ||
+        call.method === 'Input.dispatchKeyEvent',
+    ),
+  );
 });
 test('no send is attempted when text mismatches, authorization fails, or operator stops', async () => {
   for (const options of [{ mismatch: true }, { authorized: false }, { active: false }]) {

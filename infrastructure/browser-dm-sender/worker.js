@@ -255,11 +255,9 @@ async function step() {
         await save(job);
       }
       await navigate(job.tiktokTabId, `https://www.tiktok.com/@${delivery.username}`);
-      await new Promise((resolve) => setTimeout(resolve, 1500));
       const opened = await page(job.tiktokTabId, 'open', delivery);
       if (!opened.opened) outcome = opened;
       else {
-        await new Promise((resolve) => setTimeout(resolve, 2500));
         const prepared = await page(job.tiktokTabId, 'prepare', delivery);
         if (!prepared.ready) {
           outcome = prepared;
@@ -292,8 +290,12 @@ async function step() {
       ...outcome,
     });
     const latest = (await chrome.storage.local.get('job')).job;
-    job.active = !!latest.active && outcome.status === 'SENT';
-    job.detail = `@${delivery.username}: ${outcome.status}. ${outcome.detail}`;
+    job.active = !!latest.active && ['SENT', 'FAILED'].includes(outcome.status);
+    job.detail = `@${delivery.username}: ${outcome.status}. ${outcome.detail}${
+      job.active && outcome.status === 'FAILED'
+        ? ' Penerima ini dilewati; antrean berikutnya dilanjutkan pada putaran berikutnya.'
+        : ''
+    }`;
     job.current = null;
     job.pendingReport = null;
     await save(job);
