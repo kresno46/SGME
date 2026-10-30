@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "minimum_chrome_version": "120",
   "name": "SMGE Browser DM Sender",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "Kirim tugas DM yang disetujui dari antrean SMGE melalui browser TikTok.",
   "permissions": ["activeTab", "scripting", "storage", "alarms", "debugger"],
   "host_permissions": ["https://www.tiktok.com/*"],

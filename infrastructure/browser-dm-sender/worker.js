@@ -1,12 +1,23 @@
 if (typeof globalThis.importScripts === 'function') globalThis.importScripts('native-input.js');
 let working = false;
 const ALARM = 'smge-dm-next';
+function tabAddress(tab) {
+  // Chrome can expose only pendingUrl while a newly created tab is navigating.
+  // pendingUrl is not evidence of a loaded document and must never be trusted for sending.
+  if (typeof tab?.url !== 'string' || !tab.url.trim() || tab.url === 'about:blank') return null;
+  try {
+    return new URL(tab.url);
+  } catch {
+    throw new Error('Alamat tab tidak dapat dibaca. Muat ulang tab TikTok dan extension.');
+  }
+}
 async function save(job) {
   await chrome.storage.local.set({ job });
 }
 async function api(job, path, body) {
   const tab = await chrome.tabs.get(job.dashboardTabId);
-  if (new URL(tab.url).origin !== job.origin) throw new Error('Tab dashboard berubah alamat.');
+  if (tabAddress(tab)?.origin !== job.origin)
+    throw new Error('Tab dashboard belum siap atau berubah alamat.');
   const [response] = await chrome.scripting.executeScript({
     target: { tabId: job.dashboardTabId },
     func: async (path, body) => {
@@ -88,7 +99,7 @@ async function navigate(tabId, url) {
   for (let i = 0; i < 40; i++) {
     await new Promise((resolve) => setTimeout(resolve, 500));
     const tab = await chrome.tabs.get(tabId);
-    if (tab.status === 'complete' && tab.url.startsWith(url)) return;
+    if (tab.status === 'complete' && typeof tab.url === 'string' && tab.url.startsWith(url)) return;
   }
   throw new Error('Halaman TikTok tidak selesai dimuat.');
 }
@@ -106,10 +117,12 @@ async function verifyBusinessSender(delivery) {
   for (let i = 0; i < 30; i++) {
     await new Promise((resolve) => setTimeout(resolve, 500));
     const tab = await chrome.tabs.get(senderProbeTabId);
-    const parsed = new URL(tab.url);
+    if (tab.status !== 'complete') continue;
+    const parsed = tabAddress(tab);
+    if (!parsed) continue;
     if (parsed.origin !== 'https://www.tiktok.com')
       throw new Error('Tab verifikasi pengirim berubah alamat.');
-    if (tab.status !== 'complete' || parsed.pathname !== `/@${delivery.senderUsername}`) continue;
+    if (parsed.pathname !== `/@${delivery.senderUsername}`) continue;
     await chrome.scripting.executeScript({
       target: { tabId: senderProbeTabId },
       files: ['page.js'],
@@ -130,15 +143,22 @@ async function verifyBusinessSender(delivery) {
     return { username: actual, attemptId: delivery.attemptId, verifiedAt: Date.now() };
   }
   throw new Error(
-    'Identitas pengirim belum terbaca pada navigasi profil TikTok. Pastikan login akun pengirim.',
+    'Tab verifikasi pengirim belum siap atau identitas belum terbaca. Pastikan login TikTok dan izin akses extension ke www.tiktok.com aktif.',
   );
 }
 async function page(tabId, method, delivery) {
   const key = `${tabId}:${delivery.attemptId}`;
   if (method === 'open') chatFrames.clear();
-  const tab = await chrome.tabs.get(tabId);
-  const businessSuite =
-    new URL(tab.url).pathname.replace(/\/+$/, '') === '/business-suite/messages';
+  let address;
+  for (let i = 0; i < 30; i++) {
+    const tab = await chrome.tabs.get(tabId);
+    if (tab.status === 'complete') address = tabAddress(tab);
+    if (address) break;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  if (!address || address.origin !== 'https://www.tiktok.com')
+    throw new Error('Tab chat TikTok belum siap atau berubah alamat. Tidak mengirim.');
+  const businessSuite = address.pathname.replace(/\/+$/, '') === '/business-suite/messages';
   if (method === 'prepare' && businessSuite) {
     chatFrames.delete(key);
     for (let i = 0; i < 25; i++) {

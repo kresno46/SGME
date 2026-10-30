@@ -12,7 +12,7 @@ bukan `execCommand` atau event input JavaScript buatan. Perubahan ini menangani 
 `Isi editor tidak cocok dengan pesan yang disetujui` yang terlihat pada log percobaan versi sebelumnya.
 Template harus terverifikasi utuh di editor sebelum otorisasi dan Enter/klik dilakukan.
 
-Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.3**.
+Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.4**.
 Versi ini menambah izin **debugger** yang wajib dideklarasikan saat pemasangan/update; Chrome tidak
 mengizinkannya sebagai permission opsional. Implementasi hanya melampirkan debugger ke tab TikTok
 pengiriman dan memakai domain Input, lalu melepasnya setelah percobaan. Tutup DevTools pada tab itu
@@ -131,6 +131,16 @@ Setelah memperbarui extension ke v0.2.3, pilih pengirim yang sama dengan login T
 untuk memastikan percobaan sebelumnya belum terkirim, lalu antrekan ulang satu penerima uji.
 Pemeriksaan mengasumsikan konteks login web TikTok yang sama; fitur ini bukan integrasi Business
 Center untuk mengirim atas nama akun yang didelegasikan melalui kredensial berbeda.
+
+### Tab verifikasi belum memiliki URL (v0.2.4)
+
+Pada tab baru atau saat reload, Chrome dapat mengembalikan `url` kosong/tidak ada, `about:blank`,
+atau hanya `pendingUrl`. v0.2.3 langsung menjalankan `new URL(tab.url)` sehingga gagal dengan
+**Failed to construct 'URL': Invalid URL** sebelum identitas pengirim diperiksa. v0.2.4 menunggu
+status tab selesai dan URL dokumen yang sudah dimuat. `pendingUrl` tidak digunakan sebagai bukti
+identitas/origin. Jika tetap belum tersedia, batas waktu menampilkan petunjuk untuk mengecek login
+dan izin extension; halaman asing/malformed tidak diizinkan untuk mengirim. Pembacaan URL di alur
+chat dan input native juga diberi pesan kegagalan yang jelas.
 
 Uji browser lokal membuktikan input, Enter, dan klik tunggal pada iframe dengan posisi bergeser;
 seluruh request diintersepsi dengan fixture. Belum ada pengiriman akun TikTok sungguhan oleh tes ini.

@@ -26,6 +26,8 @@ function fixture({
   frameReplaced = false,
   probeSender = 'sender',
   probeBlocked = false,
+  probeUrlStates = [],
+  probeNeverReady = false,
 } = {}) {
   let saved = initial;
   let listener;
@@ -37,6 +39,7 @@ function fixture({
   const scriptTargets = [];
   let tiktokUrl = 'https://www.tiktok.com/';
   let probeUrl = '';
+  let probePoll = 0;
   const closedTabs = [];
   const copy = (value) => (value ? JSON.parse(JSON.stringify(value)) : value);
   const command = (message) => new Promise((resolve) => listener(message, {}, resolve));
@@ -80,19 +83,28 @@ function fixture({
         },
       },
       tabs: {
-        get: async (id) => ({
-          id,
-          url:
-            id === 1
-              ? 'http://localhost:3000/outbound?account=account-test'
-              : id === 3
-                ? probeUrl
-                : tiktokUrl,
-          status: 'complete',
-        }),
+        get: async (id) =>
+          id === 3 && (probeNeverReady || probePoll < probeUrlStates.length)
+            ? {
+                id,
+                ...(probeNeverReady
+                  ? { status: 'loading', pendingUrl: probeUrl }
+                  : probeUrlStates[probePoll++]),
+              }
+            : {
+                id,
+                url:
+                  id === 1
+                    ? 'http://localhost:3000/outbound?account=account-test'
+                    : id === 3
+                      ? probeUrl
+                      : tiktokUrl,
+                status: 'complete',
+              },
         create: async ({ url, active }) => {
           if (active === false) {
             probeUrl = url;
+            probePoll = 0;
             return { id: 3 };
           }
           return { id: 2 };
@@ -100,7 +112,9 @@ function fixture({
         remove: async (id) => {
           closedTabs.push(id);
         },
-        reload: async () => {},
+        reload: async () => {
+          probePoll = 0;
+        },
         update: async (id, { url }) => {
           if (id === 3) probeUrl = url;
           else tiktokUrl = url;
@@ -249,6 +263,36 @@ test('Business Suite rejects a different logged-in account and closes its verifi
     assert.equal(f.counts().sends, 0);
     assert.equal(f.state().active, false);
     assert.ok(!f.calls.some((path) => path.endsWith('/authorize')));
+    assert.deepEqual(f.closedTabs, [3]);
+  }
+});
+
+test('a new/reloading sender tab can have no committed URL until navigation is complete', async () => {
+  const f = fixture({
+    businessSuite: true,
+    probeUrlStates: [
+      { status: 'loading', pendingUrl: 'https://www.tiktok.com/@sender' },
+      { status: 'loading', url: '', pendingUrl: 'https://www.tiktok.com/@sender' },
+      { status: 'complete', url: 'about:blank', pendingUrl: 'https://www.tiktok.com/@sender' },
+    ],
+  });
+  await f.start();
+  assert.equal(f.counts().sends, 1, f.state().detail);
+  assert.deepEqual(f.closedTabs, [3]);
+});
+
+test('an unavailable or foreign sender-tab URL never permits typing or sending', async () => {
+  for (const options of [
+    { probeNeverReady: true },
+    { probeUrlStates: [{ status: 'complete', url: 'not-a-url' }] },
+    { probeUrlStates: [{ status: 'complete', url: 'https://example.invalid/@sender' }] },
+  ]) {
+    const f = fixture({ businessSuite: true, ...options });
+    await f.start();
+    assert.equal(f.counts().sends, 0);
+    assert.equal(f.state().active, false);
+    assert.ok(!f.calls.includes('focus'));
+    assert.doesNotMatch(f.state().detail, /Failed to construct|Invalid URL/);
     assert.deepEqual(f.closedTabs, [3]);
   }
 });

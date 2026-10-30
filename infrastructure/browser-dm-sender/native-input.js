@@ -6,7 +6,17 @@ globalThis.smgeNativeInput = async function ({ tabId, delivery, page, authorize,
   let attempted = false;
   try {
     const tab = await chrome.tabs.get(tabId);
-    if (new URL(tab.url).origin !== 'https://www.tiktok.com')
+    let address;
+    try {
+      address = new URL(tab.url);
+    } catch {
+      throw new Error(
+        'Alamat tab TikTok belum siap. Tunggu halaman selesai dimuat sebelum mencoba lagi.',
+      );
+    }
+    if (tab.status === 'loading')
+      throw new Error('Tab TikTok sedang memuat ulang. Tidak mengirim.');
+    if (address.origin !== 'https://www.tiktok.com')
       throw new Error('Tab pengiriman bukan TikTok.');
     try {
       await chrome.debugger.attach(target, '1.3');
