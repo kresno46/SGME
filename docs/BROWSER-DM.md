@@ -7,6 +7,20 @@ chat tidak dikenali, pengiriman berhenti sebelum tombol kirim ditekan.
 
 ## Pemakaian
 
+### Tampilan Toolkit dan mesin DM yang dipertahankan
+
+SMGE Toolkit v1.0.1 menambahkan satu popup berisi **Ambil followers**, **Kirim DM**, dan
+**Diagnostik chat**. Mesin pengirim tetap DM Sender v0.2.7: script runtime diambil langsung dari
+`infrastructure/browser-dm-sender`, dan collector dari `infrastructure/follower-collector`.
+`node infrastructure/scripts/package-extension.mjs` memasukkan source tersebut tanpa perubahan
+ke `smge-extension.zip`, termasuk diagnostik v2. Tidak ada salinan mesin lama di folder Toolkit.
+
+Pilih **Kirim DM** di Toolkit untuk menjalankan antrean, atau **Diagnostik chat** untuk mengunduh
+diagnostik dari tab TikTok. Semua batas, pemeriksaan identitas, fokus native, penanganan iframe,
+dan lanjut setelah FAILED mengikuti v0.2.7. Source, pengujian, script kemasan, serta ZIP standalone
+lama tetap tersedia untuk kompatibilitas. Gunakan salah satu extension pengirim pada saat bekerja;
+saat beralih ke Toolkit, nonaktifkan extension standalone agar tidak menjalankan dua antrean browser.
+
 **Versi 0.2.0:** pengetikan dan Enter/klik memakai input native browser lewat `chrome.debugger`,
 bukan `execCommand` atau event input JavaScript buatan. Perubahan ini menangani kegagalan
 `Isi editor tidak cocok dengan pesan yang disetujui` yang terlihat pada log percobaan versi sebelumnya.

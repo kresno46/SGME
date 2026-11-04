@@ -312,6 +312,10 @@ model User {
   ownedTikTokAccounts TikTokAccount[] @relation("AccountOwner")
   ownedLeads Lead[] @relation("LeadOwner")
   ownedOutreachTasks OutreachTask[] @relation("TaskOwner")
+  wahaSessions WahaSession[]
+  whatsappChats WhatsappChat[] @relation("WhatsappChatOwner")
+  initiatedWhatsappChats WhatsappChat[] @relation("WhatsappChatInitiator")
+  whatsappBroadcasts WhatsappBroadcast[]
 
   role                 Role                 @relation(fields: [roleId], references: [id])
   sessions             UserSession[]
@@ -783,6 +787,164 @@ model BrowserDmDelivery {
   task OutreachTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
   @@index([accountId, status, createdAt])
   @@map("browser_dm_deliveries")
+}
+
+// ---------------------------------------------------------------------
+// WHATSAPP (WAHA) — satu sesi (nomor) per user
+// ---------------------------------------------------------------------
+
+enum WhatsappMessageDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum WhatsappMessageStatus {
+  RECEIVED
+  SENDING
+  SENT
+  DELIVERED
+  READ
+  FAILED
+}
+
+/// Sesi WhatsApp (satu nomor) di WAHA. Satu user boleh punya beberapa (batas WAHA_MAX_SESSIONS_PER_USER).
+/// Nama sesi unik dan dipakai sebagai kunci URL webhook. Secret webhook tidak disimpan:
+/// diturunkan dari WAHA_WEBHOOK_MASTER_SECRET dan nama sesi.
+model WahaSession {
+  id String @id @default(uuid()) @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  /// Nama bebas dari user untuk membedakan nomor, mis. "CS 1"
+  label String @default("Nomor 1")
+  sessionName String @unique @map("session_name")
+  lastStatus String? @map("last_status")
+  lastStatusAt DateTime? @map("last_status_at")
+  /// Terisi hanya bila sesi turun dari WORKING bukan karena tindakan user sendiri
+  connectionLostAt DateTime? @map("connection_lost_at")
+  /// Impor riwayat chat dari WAHA: kapan terakhir selesai, berapa kali sejak ditautkan, dan hasilnya
+  historySyncedAt DateTime? @map("history_synced_at")
+  /// Penanda "sedang berjalan" (lease); basi setelah 15 menit supaya proses mati tidak mengunci selamanya
+  historySyncStartedAt DateTime? @map("history_sync_started_at")
+  historySyncRuns Int @default(0) @map("history_sync_runs")
+  historyChats Int @default(0) @map("history_chats")
+  /// Kode kegagalan terakhir, mis. store_disabled
+  historySyncError String? @map("history_sync_error")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chats WhatsappChat[]
+  broadcasts WhatsappBroadcast[]
+  @@index([userId])
+  @@map("waha_sessions")
+}
+
+model WhatsappChat {
+  id String @id @default(uuid()) @db.Uuid
+  sessionId String @map("session_id") @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  /// JID WhatsApp: 62812...@c.us atau 123...@lid
+  chatId String @map("chat_id")
+  contactName String? @map("contact_name")
+  /// Digit nomor telepon bila diketahui (untuk pencocokan daftar larangan kontak)
+  contactPhone String? @map("contact_phone")
+  unreadCount Int @default(0) @map("unread_count")
+  lastMessageAt DateTime? @map("last_message_at")
+  lastMessagePreview String? @map("last_message_preview")
+  /// Terisi bila chat dimulai dari SMGE (bukan dari pesan masuk): dasar batas chat baru per hari
+  initiatedById String? @map("initiated_by_id") @db.Uuid
+  initiatedAt DateTime? @map("initiated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  session WahaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  owner User @relation("WhatsappChatOwner", fields: [ownerId], references: [id], onDelete: Cascade)
+  initiatedBy User? @relation("WhatsappChatInitiator", fields: [initiatedById], references: [id], onDelete: SetNull)
+  messages WhatsappMessage[]
+  @@unique([sessionId, chatId])
+  @@index([ownerId, lastMessageAt])
+  @@index([sessionId, initiatedAt])
+  @@map("whatsapp_chats")
+}
+
+model WhatsappMessage {
+  id String @id @default(uuid()) @db.Uuid
+  chatId String @map("chat_id") @db.Uuid
+  /// ID pesan di WhatsApp (bagian setelah "_" terakhir, agar gema kiriman sama dengan hasil sendText)
+  externalId String? @map("external_id")
+  direction WhatsappMessageDirection
+  status WhatsappMessageStatus
+  body String
+  /// Kunci idempotensi dari dashboard untuk pesan keluar
+  clientMessageId String? @map("client_message_id")
+  failureReason String? @map("failure_reason")
+  sentByUserId String? @map("sent_by_user_id") @db.Uuid
+  sentAt DateTime @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  chat WhatsappChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  @@unique([chatId, externalId])
+  @@unique([chatId, clientMessageId])
+  @@index([chatId, sentAt])
+  @@index([status, createdAt])
+  @@map("whatsapp_messages")
+}
+
+enum WhatsappBroadcastStatus {
+  RUNNING
+  PAUSED
+  DONE
+  CANCELLED
+}
+
+enum WhatsappRecipientStatus {
+  PENDING
+  SENT
+  FAILED
+  SKIPPED
+}
+
+/// Pengiriman terjadwal satu pesan ke daftar kecil penerima yang dipilih pemilik nomor. Bukan blast massal:
+/// bertahap dengan jeda acak, dibatasi per nomor per hari, dan setiap kirim melewati pengaman chat biasa.
+model WhatsappBroadcast {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  sessionId String @map("session_id") @db.Uuid
+  name String
+  /// Mendukung {{nama}}
+  message String
+  status WhatsappBroadcastStatus @default(RUNNING)
+  /// Alasan jeda: session_not_connected, too_many_failures, atau dijeda manual
+  pauseReason String? @map("pause_reason")
+  /// Kapan penerima berikutnya boleh dikirim; juga berfungsi sebagai lease antar proses
+  nextSendAt DateTime? @map("next_send_at")
+  consecutiveFailures Int @default(0) @map("consecutive_failures")
+  /// Pemilik mengonfirmasi bahwa semua penerima mengenalnya dan setuju dihubungi
+  consentConfirmedAt DateTime @map("consent_confirmed_at")
+  finishedAt DateTime? @map("finished_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  session WahaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  recipients WhatsappBroadcastRecipient[]
+  @@index([status, nextSendAt])
+  @@index([ownerId, createdAt])
+  @@map("whatsapp_broadcasts")
+}
+
+model WhatsappBroadcastRecipient {
+  id String @id @default(uuid()) @db.Uuid
+  broadcastId String @map("broadcast_id") @db.Uuid
+  /// Digit ternormalisasi (62812…)
+  phone String
+  name String?
+  status WhatsappRecipientStatus @default(PENDING)
+  /// dnc, opt_out, not_registered, self, cancelled, send_failed:<kode>
+  reason String?
+  chatId String? @map("chat_id") @db.Uuid
+  sentAt DateTime? @map("sent_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  broadcast WhatsappBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  @@unique([broadcastId, phone])
+  @@index([broadcastId, status])
+  @@index([status, sentAt])
+  @@map("whatsapp_broadcast_recipients")
 }
 
 // ---------------------------------------------------------------------

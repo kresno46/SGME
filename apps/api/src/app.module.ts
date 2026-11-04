@@ -24,6 +24,7 @@ import { RetentionModule } from './retention/retention.module';
 import { TemplatesModule } from './templates/templates.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { UsersModule } from './users/users.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { UsersModule } from './users/users.module';
     IntegrationsModule,
     TrackingModule,
     AnalyticsModule,
+    WhatsappModule,
     HealthModule,
   ],
   providers: [

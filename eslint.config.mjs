@@ -11,6 +11,7 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/dist/**',
       '**/.next/**',
+      '**/.next-*/**',
       '**/coverage/**',
       '**/next-env.d.ts',
       'packages/database/prisma/migrations/**',
@@ -31,9 +32,11 @@ export default tseslint.config(
   },
   {
     files: [
-      'infrastructure/follower-collector/{collector,popup}.js',
+      'infrastructure/smge-extension/*.js',
+      'infrastructure/smge-extension/*.test.mjs',
       'infrastructure/browser-dm-sender/*.js',
-      'infrastructure/browser-dm-sender/native-browser.test.mjs',
+      'infrastructure/browser-dm-sender/*browser.test.mjs',
+      'infrastructure/follower-collector/*.js',
     ],
     languageOptions: { globals: { ...globals.browser, chrome: 'readonly' } },
   },

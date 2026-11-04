@@ -344,8 +344,9 @@ export function BulkDmDialog({
                   Pastikan TikTok di browser ini login sebagai <strong>@{account.username}</strong>.
                 </li>
                 <li>
-                  Tutup panel ini, buka extension <strong>SMGE DM Sender</strong>, lalu tekan{' '}
-                  <strong>Mulai dari tab Outbound ini</strong>.
+                  Tutup panel ini, buka extension <strong>SMGE Toolkit</strong>, pilih{' '}
+                  <strong>Kirim DM</strong>, lalu tekan <strong>Mulai dari tab Outbound ini</strong>
+                  .
                 </li>
                 <li>
                   Biarkan tab Outbound tetap terbuka. Hasil pengiriman muncul pada panel Status

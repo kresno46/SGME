@@ -246,3 +246,9 @@ Spesifikasi lengkap untuk tim Solid Mini (landing page & backend): [CONVERSION-A
 `GET /analytics/overview` kini mengembalikan `registrations` & `activeUsers` dari event terverifikasi (sumber
 `ACTUAL`) dan `registrationsOperator` (konfirmasi operator, sumber `MANUAL`). `CampaignDto.stats.registrationsVerified`
 = registrasi terverifikasi dengan atribusi last-touch.
+
+---
+
+# WhatsApp (WAHA)
+
+Daftar endpoint, aturan, dan keterbatasan: [WHATSAPP.md](WHATSAPP.md#endpoint).

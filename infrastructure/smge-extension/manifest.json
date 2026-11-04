@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "minimum_chrome_version": "120",
+  "name": "SMGE Toolkit",
+  "version": "1.0.1",
+  "description": "Ambil followers dan kirim DM dengan mesin DM Sender v0.2.7.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage",
+    "alarms",
+    "debugger"
+  ],
+  "host_permissions": [
+    "https://www.tiktok.com/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SMGE Toolkit"
+  },
+  "version_name": "1.0.1 (DM Sender 0.2.7)"
+}

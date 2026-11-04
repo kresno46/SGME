@@ -1,0 +1,233 @@
+/*
+ * Warna memakai token yang sama dengan dashboard SMGE (emas + abu kebiruan), terang dan gelap mengikuti browser.
+ * Font sistem: popup extension tidak memuat font dari luar.
+ */
+:root {
+  color-scheme: light dark;
+  --bg: oklch(0.985 0.002 247);
+  --card: oklch(1 0 0);
+  --fg: oklch(0.21 0.03 265);
+  --muted: oklch(0.52 0.02 265);
+  --line: oklch(0.91 0.008 265);
+  --input: oklch(0.89 0.01 265);
+  --gold: oklch(0.805 0.165 88);
+  --gold-fg: oklch(0.21 0.03 75);
+  --gold-text: oklch(0.52 0.11 80);
+  --gold-soft: oklch(0.96 0.03 90);
+  --ok: oklch(0.5 0.14 155);
+  --bad: oklch(0.52 0.2 27);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.16 0.015 265);
+    --card: oklch(0.2 0.018 265);
+    --fg: oklch(0.96 0.005 265);
+    --muted: oklch(0.7 0.02 265);
+    --line: oklch(0.3 0.02 265);
+    --input: oklch(0.32 0.02 265);
+    --gold-text: oklch(0.83 0.15 88);
+    --gold-soft: oklch(0.3 0.05 85);
+    --ok: oklch(0.75 0.15 155);
+    --bad: oklch(0.72 0.18 25);
+  }
+}
+
+[hidden] {
+  display: none !important;
+}
+body {
+  width: 380px;
+  margin: 0;
+  font:
+    13px/1.5 system-ui,
+    sans-serif;
+  color: var(--fg);
+  background: var(--bg);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card);
+}
+.brand {
+  margin: 0;
+  font-weight: 600;
+  font-size: 14px;
+}
+.mark {
+  color: var(--gold-text);
+}
+.ver {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+main {
+  padding: 16px;
+}
+h1 {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+}
+/* Judul hanya menerima fokus lewat skrip agar pembaca layar mengumumkan layar baru; bukan kontrol, tanpa cincin. */
+h1:focus {
+  outline: none;
+}
+p {
+  margin: 0 0 12px;
+}
+.note {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.tiles > li {
+  display: flex;
+}
+.tile {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  min-height: 124px;
+  padding: 12px;
+  text-align: left;
+  color: inherit;
+  font: inherit;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 120ms;
+}
+.tile:hover {
+  border-color: var(--gold);
+}
+.glyph {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 4px;
+  color: var(--gold-text);
+  background: var(--gold-soft);
+  border-radius: 10px;
+}
+.glyph svg,
+.icon-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.t {
+  font-weight: 600;
+  line-height: 1.25;
+}
+.s {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.3;
+}
+.s.active {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.check input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 2px 0 0;
+  accent-color: var(--gold-text);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+button {
+  min-height: 40px;
+  padding: 0 14px;
+  color: var(--fg);
+  font: inherit;
+  font-weight: 500;
+  background: var(--card);
+  border: 1px solid var(--input);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.actions button {
+  flex: 1 1 auto;
+}
+.actions .primary {
+  flex-basis: 100%;
+}
+button.primary {
+  color: var(--gold-fg);
+  background: var(--gold);
+  border-color: transparent;
+}
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+button:focus-visible,
+.tile:focus-visible,
+.check input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+.icon-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  margin-left: -8px;
+  background: transparent;
+  border-color: transparent;
+}
+.icon-btn:hover {
+  background: var(--gold-soft);
+}
+
+#status {
+  min-height: 20px;
+  padding: 10px 16px;
+  color: var(--muted);
+  font-size: 12px;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  overflow-wrap: anywhere;
+}
+#status.error {
+  color: var(--bad);
+}

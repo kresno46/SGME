@@ -62,31 +62,29 @@ Tidak perlu memasukkan password TikTok ke form MBG. Login TikTok dilakukan langs
 
 ## 4. Memasang extension: cukup sekali di awal
 
-Gunakan Chrome atau Microsoft Edge di komputer. Ada **dua extension berbeda**:
+Gunakan Chrome atau Microsoft Edge di komputer. Sekarang cukup memasang **SMGE Toolkit v1.0.1**
+yang berisi tiga alat. Mesin pengirimnya tetap **DM Sender v0.2.7** dengan perbaikan yang sudah ada.
 
-| Extension                             | Digunakan saat                                                       |
-| ------------------------------------- | -------------------------------------------------------------------- |
-| **SMGE · Followers / SMGE Followers** | Membaca daftar followers yang terlihat dan mengekspor file hasilnya. |
-| **SMGE DM Sender**                    | Mengirim pesan yang sudah Anda masukkan ke antrean MBG.              |
+| Pilihan dalam Toolkit | Kegunaan |
+| --- | --- |
+| **Ambil followers** | Membaca daftar followers yang terlihat dan mengekspor JSON. |
+| **Kirim DM** | Menjalankan antrean pesan yang disiapkan di MBG. |
+| **Diagnostik chat** | Mengunduh laporan struktur halaman saat ada kendala. |
 
 Nama extension masih memakai **SMGE** meskipun nama aplikasi sudah Marketing Bias Growth.
 
-### Mengunduh kedua extension
+### Mengunduh dan memasang Toolkit
 
-- Untuk pengambil followers: buka **Outbound Workstation → Ambil followers → Unduh extension**.
-- Untuk pengirim DM: buka **Status pengiriman → Pasang extension / bantuan pengiriman → Unduh DM Sender**.
+1. Buka **Outbound Workstation ? Ambil followers ? Unduh extension**, atau **Status pengiriman ? Pasang extension / bantuan pengiriman ? Unduh SMGE Toolkit**. Keduanya mengunduh paket yang sama.
+2. Ekstrak ZIP. Buka `chrome://extensions` atau `edge://extensions`.
+3. Aktifkan **Developer mode / Mode pengembang**, lalu klik **Load unpacked / Muat yang belum dipaketkan**.
+4. Pilih folder hasil ekstrak yang berisi `manifest.json`.
+5. Klik ikon puzzle **Extensions**, lalu pin **SMGE Toolkit**.
+6. Jika sebelumnya memasang SMGE Followers dan DM Sender terpisah, nonaktifkan extension lama saat memakai Toolkit agar tidak menjalankan dua pengirim sekaligus. Paket lama tetap tersedia untuk kompatibilitas.
 
-### Memasang setiap extension
-
-1. Ekstrak file ZIP yang diunduh. Jangan langsung memilih file ZIP saat pemasangan.
-2. Buka `chrome://extensions` untuk Chrome atau `edge://extensions` untuk Edge.
-3. Aktifkan **Developer mode / Mode pengembang**.
-4. Klik **Load unpacked / Muat yang belum dipaketkan**.
-5. Pilih folder hasil ekstrak yang berisi file `manifest.json`.
-6. Ulangi untuk extension satunya. Folder keduanya berbeda.
-7. Klik ikon puzzle **Extensions** pada browser, lalu pin kedua extension agar mudah dibuka.
-
-Jika perusahaan membatasi pemasangan extension, minta bantuan admin. Saat ada pembaruan extension, unduh versi terbaru, ekstrak, lalu perbarui folder pemasangan dan klik **Reload / Muat ulang** pada halaman Extensions. Refresh dashboard saja tidak memperbarui extension.
+Saat ada pembaruan, ekstrak ke folder pemasangan yang sama dan klik **Reload / Muat ulang** pada
+halaman Extensions. Refresh dashboard saja tidak memperbarui extension. Jika perusahaan membatasi
+pemasangan, minta bantuan admin.
 
 ## 5. Memilih akun pengirim
 
@@ -103,7 +101,7 @@ Langkah ini menghasilkan daftar calon penerima; belum mengirim pesan kepada siap
 1. Dari halaman **Kirim DM TikTok**, pilih akun pengirim lalu klik **Ambil followers**.
 2. Klik **Buka profil**, atau buka profil akun sumber lain yang Anda kelola di TikTok.
 3. Pada profil TikTok, buka **Followers / Pengikut**. Pastikan bukan **Following / Mengikuti**.
-4. Saat tab TikTok aktif, buka extension **SMGE Followers**.
+4. Saat tab TikTok aktif, buka extension **SMGE Toolkit ? Ambil followers**.
 5. Centang konfirmasi bahwa Anda membuka daftar followers akun yang Anda kelola, lalu klik **Mulai**.
 6. Tunggu proses membaca daftar yang tampil. Gunakan **Hentikan** jika ingin berhenti.
 7. Klik **Ekspor JSON** dan simpan file hasilnya. Popup extension boleh ditutup, tetapi **jangan refresh atau menutup tab TikTok sebelum ekspor**.
@@ -138,7 +136,7 @@ Untuk satu orang, buka **Antrean prospek**, cari nama atau username, lalu klik *
 ### Mulai pengiriman melalui browser
 
 1. Pastikan TikTok sudah login sebagai akun pengirim yang dipilih.
-2. **Aktifkan tab MBG / Outbound**, lalu buka extension **SMGE DM Sender**.
+2. **Aktifkan tab MBG / Outbound**, lalu buka extension **SMGE Toolkit ? Kirim DM**.
 3. Centang konfirmasi bahwa penerima dan pesan sudah Anda periksa.
 4. Klik **Mulai dari tab Outbound ini**. Jika diminta, izinkan akses ke alamat dashboard MBG.
 5. Biarkan tab MBG tetap terbuka dan login. Extension membuka atau memakai tab TikTok untuk memproses penerima.
@@ -174,7 +172,7 @@ Balasan TikTok belum diambil otomatis oleh MBG. Karena itu, Anda **tidak perlu m
 3. Isi **Pesan follow-up baru**. Tulis pesan sesuai percakapan terakhir yang Anda lihat di TikTok.
 4. Periksa pratinjau nama, pengirim, isi, dan link.
 5. Klik **Masukkan follow-up ke antrean**.
-6. Jalankan **SMGE DM Sender** dari tab Outbound seperti saat mengirim pesan pertama.
+6. Jalankan **SMGE Toolkit ? Kirim DM** dari tab Outbound seperti saat mengirim pesan pertama.
 
 Jika follow-up sudah berstatus **Follow-up** tetapi belum masuk antrean, buka pesannya lalu klik **Masukkan ke antrean**. Jangan membuat pesan baru berkali-kali untuk penerima yang sama. Periksa pesan yang masih menunggu, sedang diproses, atau belum terverifikasi terlebih dahulu.
 
