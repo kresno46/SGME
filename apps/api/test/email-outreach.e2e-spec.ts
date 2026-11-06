@@ -44,6 +44,17 @@ describe('Email outreach (mock SMTP only)', () => {
   afterAll(async () => {
     await app.close();
   });
+  it('accepts 40 recipients and rejects 41 without creating a partial batch', async () => {
+    const recipients = Array.from({ length: 41 }, (_, index) => ({
+      email: `limit${index}@example.invalid`,
+      name: `Nama ${index}`,
+    }));
+    await post(operator, '', { ...input(), recipients }).expect(400);
+    expect(await db.outreachEmail.count()).toBe(0);
+    await post(operator, '', { ...input(), recipients: recipients.slice(0, 40) }).expect(201);
+    expect(await db.outreachEmail.count()).toBe(40);
+    expect(send).not.toHaveBeenCalled();
+  });
   it('isolates templates and messages, allows Super Admin oversight and denies Viewer', async () => {
     const t = await post(operator, '/templates', {
       name: 'Pribadi',

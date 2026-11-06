@@ -58,7 +58,7 @@ const sendSchema = z.object({
       }),
     )
     .min(1)
-    .max(30),
+    .max(40),
 });
 type SendInput = z.infer<typeof sendSchema>;
 
@@ -201,7 +201,7 @@ export class EmailOutreachController {
     return {
       enabled: !!(e.EMAIL_OUTREACH_ENABLED && e.SMTP_HOST?.trim()),
       sender: e.SMTP_FROM,
-      maxRecipients: 30,
+      maxRecipients: 40,
       dailyLimit: 100,
     };
   }

@@ -74,7 +74,7 @@ export function BulkDmDialog({
     refetchOnWindowFocus: false,
   });
   const remaining = summary.data
-    ? Math.min(30, Math.max(0, summary.data.dailyLimit - summary.data.createdToday))
+    ? Math.min(40, Math.max(0, summary.data.dailyLimit - summary.data.createdToday))
     : 0;
   const items = queue.data?.items ?? [];
   const ids = selected ?? new Set(items.slice(0, remaining).map(({ lead }) => lead.id));

@@ -338,6 +338,24 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
     expect(await prisma.outreachTask.count({ where: { sentCount: { gt: 0 } } })).toBe(0);
     await post('prepare', { ...body, message: 'Changed message.' }).expect(409);
   });
+  it('accepts a full batch of 40 and rejects 41 before creating any deliveries', async () => {
+    const ids = Array.from({ length: 41 }, () => randomUUID());
+    await post('prepare', batchBody(ids)).expect(400);
+    await prisma.lead.createMany({
+      data: ids.slice(0, 40).map((id, index) => ({
+        id,
+        ownerId,
+        name: `Nama ${index}`,
+        tiktokUsername: `limit_${index}`,
+        tiktokUsernameNormalized: `limit_${index}`,
+        source: 'IMPORT' as const,
+        tags: [],
+      })),
+    });
+    const result = await post('prepare', batchBody(ids.slice(0, 40))).expect(201);
+    expect(result.body.queued).toBe(40);
+    expect(await prisma.browserDmDelivery.count()).toBe(40);
+  });
   it('rolls the whole batch back if any recipient is blocked or the daily quota changed', async () => {
     const leads = await batchLeads();
     await prisma.doNotContactEntry.create({
@@ -348,7 +366,7 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
     expect(await prisma.browserDmDelivery.count()).toBe(0);
     await prisma.doNotContactEntry.deleteMany();
     await prisma.outreachTask.createMany({
-      data: Array.from({ length: 29 }, () => ({
+      data: Array.from({ length: 39 }, () => ({
         leadId: leads[0].id,
         tiktokAccountId: accountId,
         status: 'COMPLETED' as const,

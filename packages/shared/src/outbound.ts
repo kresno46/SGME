@@ -51,7 +51,7 @@ export const NON_CONTACTABLE_LEAD_STATUSES: LeadStatus[] = [
 export const MAX_UNANSWERED_MESSAGES = 2;
 
 /** Batas default tugas baru per akun per hari — menjaga penjangkauan tetap personal. */
-export const DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT = 30;
+export const DEFAULT_DAILY_TASK_LIMIT_PER_ACCOUNT = 40;
 
 export interface EligibilityInput {
   status: LeadStatus;

@@ -258,7 +258,7 @@ export class BrowserDmService {
           },
         },
         orderBy: { approvedAt: 'asc' },
-        take: 30,
+        take: 40,
       });
       let queued = 0;
       for (const row of tasks) {

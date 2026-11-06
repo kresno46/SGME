@@ -122,7 +122,7 @@ export function EmailPage() {
   const remainingVariables = /\{\{|\}\}/.test(previewSubject + previewBody);
   const ready =
     parsed.recipients.length > 0 &&
-    parsed.recipients.length <= (config.data?.maxRecipients ?? 30) &&
+    parsed.recipients.length <= (config.data?.maxRecipients ?? 40) &&
     !parsed.errors.length &&
     !!subject.trim() &&
     subject.length <= 200 &&
@@ -240,7 +240,7 @@ export function EmailPage() {
               <div>
                 <h2 className="font-semibold">Penerima dan pesan</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Maksimal 30 penerima per pengiriman. Email duplikat dihitung sekali.
+                  Maksimal 40 penerima per pengiriman. Email duplikat dihitung sekali.
                 </p>
               </div>
               <div className="rounded-lg bg-muted p-3 text-sm">
@@ -267,9 +267,9 @@ export function EmailPage() {
                   Periksa format penerima pada baris {parsed.errors.join(', ')}.
                 </p>
               )}
-              {parsed.recipients.length > 30 && (
+              {parsed.recipients.length > 40 && (
                 <p role="alert" className="text-sm text-destructive">
-                  Pilih maksimal 30 penerima.
+                  Pilih maksimal 40 penerima.
                 </p>
               )}
               <FormField label="Pakai template" htmlFor="email-template">

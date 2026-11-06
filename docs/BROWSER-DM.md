@@ -65,7 +65,7 @@ Tidak ada fallback pengiriman kedua ketika hasil percobaan pertama belum jelas.
    di navigasi TikTok; bila tak bisa diverifikasi, extension akan berhenti.
 4. Batch dari **Kirim DM** sudah masuk antrean. Untuk draft atau tugas lama yang masih menunggu
    review, gunakan **Masukkan pesan ke antrean** pada panel Status pengiriman atau buka pesannya
-   dan tekan **Masukkan ke antrean**. Maksimal 30 tugas per batch; data tetap dibatasi pemilik.
+   dan tekan **Masukkan ke antrean**. Maksimal 40 tugas per batch; data tetap dibatasi pemilik.
 5. Dari tab Outbound tersebut, buka extension **SMGE DM Sender**, centang persetujuan pengiriman,
    lalu klik **Mulai**. Berikan izin akses ke origin dashboard bila diminta. Biarkan tab dashboard
    tetap terbuka dan login. Extension membuka tab TikTok untuk memproses satu penerima per putaran.

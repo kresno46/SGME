@@ -37,7 +37,7 @@ async function main() {
         json = {
           enabled,
           sender: 'MBG <marketing@example.invalid>',
-          maxRecipients: 30,
+          maxRecipients: 40,
           dailyLimit: 100,
         };
       else if (path.endsWith('/email-outreach/templates')) {

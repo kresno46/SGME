@@ -35,7 +35,7 @@ const DEFAULT_SETTINGS: Array<{ key: string; value: unknown; description: string
   },
   {
     key: 'outbound.daily_task_limit_per_account',
-    value: 30,
+    value: 40,
     description:
       'Batas tugas outbound baru per akun TikTok per hari agar penjangkauan tetap personal.',
   },

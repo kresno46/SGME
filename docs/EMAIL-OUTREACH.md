@@ -13,7 +13,7 @@ Menu **Kirim Email** tersedia untuk Super Admin, Admin, dan Marketing yang memil
 
 1. Buka **Kirim Email → Tulis email**.
 2. Isi satu alamat per baris. Nama opsional: `Budi <budi@example.com>`.
-   Alamat duplikat dalam pengiriman yang sama dihitung sekali. Maksimal 30 penerima per batch.
+   Alamat duplikat dalam pengiriman yang sama dihitung sekali. Maksimal 40 penerima per batch.
 3. Pilih template pribadi atau tulis subjek dan pesan. Gunakan `{{nama}}` dan `{{email}}`.
    Link ditulis langsung. Variabel yang tidak dikenal ditolak sebelum antrean dibuat.
 4. Klik **Tinjau & kirim**, periksa pesan setiap penerima dan pengirim perusahaan, lalu centang

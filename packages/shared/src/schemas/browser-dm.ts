@@ -3,14 +3,14 @@ import { findUnknownPlaceholders } from '../outbound';
 
 export const browserDmQueueSchema = z.object({ accountId: z.string().uuid() });
 export const browserDmEnqueueSchema = browserDmQueueSchema.extend({
-  taskIds: z.array(z.string().uuid()).min(1).max(30).optional(),
+  taskIds: z.array(z.string().uuid()).min(1).max(40).optional(),
 });
 export const browserDmPrepareSchema = browserDmQueueSchema.extend({
   requestId: z.string().uuid(),
   leadIds: z
     .array(z.string().uuid())
     .min(1)
-    .max(30)
+    .max(40)
     .refine((ids) => new Set(ids).size === ids.length, 'Penerima duplikat'),
   message: z
     .string()
