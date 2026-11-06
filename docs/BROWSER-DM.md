@@ -7,10 +7,23 @@ chat tidak dikenali, pengiriman berhenti sebelum tombol kirim ditekan.
 
 ## Pemakaian
 
+### Popup hasil gagal di dashboard (DM Sender v0.2.8)
+
+Dashboard menampilkan popup untuk hasil Gagal atau Belum terverifikasi. Jika akun login berbeda,
+popup menjelaskan pengirim antrean, akun TikTok yang terdeteksi, dan cara memperbaikinya.
+Catatan lama yang belum merekam akun terdeteksi ditampilkan sebagai belum dapat dipastikan.
+Popup hanya muncul sekali per hasil percobaan dalam sesi tab browser agar polling dan reload
+tidak mengulang peringatan. Tombol **Lihat penjelasan** pada baris hasil dapat membukanya kembali.
+Percobaan ulang dengan hasil baru dapat memunculkan popup lagi.
+
+Notifikasi tidak mengubah pengirim tugas, mengulang kiriman, atau menghentikan antrean.
+Hasil belum terverifikasi tetap harus diperiksa di chat sebelum dikonfirmasi. Perbarui dashboard/API
+dan extension agar detail kedua username tersedia pada kegagalan personal berikutnya.
+
 ### Tampilan Toolkit dan mesin DM yang dipertahankan
 
-SMGE Toolkit v1.0.1 menambahkan satu popup berisi **Ambil followers**, **Kirim DM**, dan
-**Diagnostik chat**. Mesin pengirim tetap DM Sender v0.2.7: script runtime diambil langsung dari
+SMGE Toolkit v1.0.3 menambahkan satu popup berisi **Ambil followers**, **Kirim DM**, dan
+**Diagnostik chat**. Mesin pengirim memakai DM Sender v0.2.8: script runtime diambil langsung dari
 `infrastructure/browser-dm-sender`, dan collector dari `infrastructure/follower-collector`.
 `node infrastructure/scripts/package-extension.mjs` memasukkan source tersebut tanpa perubahan
 ke `smge-extension.zip`, termasuk diagnostik v2. Tidak ada salinan mesin lama di folder Toolkit.
@@ -26,7 +39,7 @@ bukan `execCommand` atau event input JavaScript buatan. Perubahan ini menangani 
 `Isi editor tidak cocok dengan pesan yang disetujui` yang terlihat pada log percobaan versi sebelumnya.
 Template harus terverifikasi utuh di editor sebelum otorisasi dan Enter/klik dilakukan.
 
-Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.7**.
+Unduh ulang ZIP, ekstrak dan Reload/pasang ulang extension, lalu pastikan popup bertuliskan **v0.2.8**.
 Versi ini menambah izin **debugger** yang wajib dideklarasikan saat pemasangan/update; Chrome tidak
 mengizinkannya sebagai permission opsional. Implementasi hanya melampirkan debugger ke tab TikTok
 pengiriman dan memakai domain Input, lalu melepasnya setelah percobaan. Tutup DevTools pada tab itu

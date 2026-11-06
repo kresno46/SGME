@@ -62,8 +62,8 @@ Tidak perlu memasukkan password TikTok ke form MBG. Login TikTok dilakukan langs
 
 ## 4. Memasang extension: cukup sekali di awal
 
-Gunakan Chrome atau Microsoft Edge di komputer. Sekarang cukup memasang **SMGE Toolkit v1.0.1**
-yang berisi tiga alat. Mesin pengirimnya tetap **DM Sender v0.2.7** dengan perbaikan yang sudah ada.
+Gunakan Chrome atau Microsoft Edge di komputer. Sekarang cukup memasang **SMGE Toolkit v1.0.3**
+yang berisi tiga alat. Mesin pengirimnya memakai **DM Sender v0.2.8** dengan perbaikan yang sudah ada.
 
 | Pilihan dalam Toolkit | Kegunaan |
 | --- | --- |
@@ -145,6 +145,12 @@ Untuk satu orang, buka **Antrean prospek**, cari nama atau username, lalu klik *
 **Masuk antrean belum berarti pesan terkirim.** Pengiriman dimulai melalui DM Sender. Hindari mengubah chat atau mengetik pada tab TikTok yang sedang diproses. Tutup DevTools / Inspect pada tab tersebut selama pengiriman.
 
 ### Memahami status pengiriman
+
+Saat ada kegagalan, popup menjelaskan alasannya dan langkah berikutnya. Jika akun salah,
+bandingkan **Pengirim antrean MBG** dengan **Akun TikTok yang terdeteksi**, lalu login TikTok
+dengan pengirim yang benar. Mengganti dropdown tidak mengubah pengirim pesan lama.
+Klik **Mengerti** untuk menutup; gunakan **Lihat penjelasan** pada baris hasil untuk membukanya lagi.
+Jika hasil belum pasti, periksa chat sebelum mengirim ulang.
 
 | Status                           | Artinya dan tindakan Anda                                                                                                                                                |
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |

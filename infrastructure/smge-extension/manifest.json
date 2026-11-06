@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "minimum_chrome_version": "120",
   "name": "SMGE Toolkit",
-  "version": "1.0.1",
-  "description": "Ambil followers dan kirim DM dengan mesin DM Sender v0.2.7.",
+  "version": "1.0.3",
+  "description": "Ambil followers dan kirim DM dengan mesin DM Sender v0.2.8.",
   "permissions": [
     "activeTab",
     "scripting",
@@ -23,7 +23,14 @@
   },
   "action": {
     "default_popup": "popup.html",
-    "default_title": "SMGE Toolkit"
+    "default_title": "SMGE Toolkit",
+    "default_icon": "logo.png"
   },
-  "version_name": "1.0.1 (DM Sender 0.2.7)"
+  "icons": {
+    "16": "logo.png",
+    "32": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  },
+  "version_name": "1.0.3 (DM Sender 0.2.8)"
 }

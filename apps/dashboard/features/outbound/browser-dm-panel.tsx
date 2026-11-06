@@ -10,14 +10,13 @@ import { Card } from '@/components/ui/primitives';
 import { api } from '@/lib/api';
 import { useAuth } from '@/hooks/use-auth';
 import { useInvalidateOutbound, useOutboundSummary } from './api';
+import {
+  DeliveryErrorNotice,
+  useDeliveryErrorNotice,
+  type BrowserDelivery,
+} from './delivery-error-notice';
 
-type Delivery = {
-  id: string;
-  taskId: string;
-  username: string;
-  status: 'QUEUED' | 'PROCESSING' | 'SENT' | 'FAILED' | 'UNVERIFIED' | 'CANCELLED';
-  detail: string | null;
-};
+type Delivery = BrowserDelivery;
 const labels = {
   QUEUED: 'Menunggu extension',
   PROCESSING: 'Sedang diproses',
@@ -45,6 +44,7 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
     refetchInterval: 5000,
   });
   const waiting = q.data?.filter((r) => r.status === 'QUEUED').length ?? 0;
+  const errorNotice = useDeliveryErrorNotice(q.data, `${user.id}:${accountId}`);
   const processing = q.data?.filter((r) => r.status === 'PROCESSING').length ?? 0;
   const uncertain = q.data?.filter((r) => r.status === 'UNVERIFIED').length ?? 0;
   const failed = q.data?.filter((r) => r.status === 'FAILED').length ?? 0;
@@ -96,6 +96,7 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
   }
   return (
     <Card id="dm-delivery-status" className="mt-4 p-4">
+      <DeliveryErrorNotice delivery={errorNotice.delivery} onClose={errorNotice.dismiss} />
       <h2 className="font-semibold">Status pengiriman</h2>
       <p role="status" className="mt-1 text-sm text-muted-foreground">
         {uncertain
@@ -143,7 +144,7 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
         </summary>
         <div className="my-3 flex flex-wrap gap-2">
           <Button size="sm" variant="outline" asChild>
-            <a href="/downloads/smge-extension.zip?v=1.0.1" download>
+            <a href="/downloads/smge-extension.zip?v=1.0.3" download>
               <Download /> Unduh SMGE Toolkit
             </a>
           </Button>
@@ -187,6 +188,16 @@ export function BrowserDmPanel({ accountId }: { accountId: string }) {
                 <strong>@{row.username}</strong> · {labels[row.status]}
               </p>
               {row.detail && <p className="text-xs text-muted-foreground">{row.detail}</p>}
+              {(row.status === 'FAILED' || row.status === 'UNVERIFIED') && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="mr-2 mt-2"
+                  onClick={() => errorNotice.show(row)}
+                >
+                  Lihat penjelasan
+                </Button>
+              )}
               {row.status === 'SENT' && (
                 <Button className="mt-2" size="sm" variant="outline" asChild>
                   <Link href={`/outbound?account=${accountId}&tab=tasks&task=${row.taskId}`}>

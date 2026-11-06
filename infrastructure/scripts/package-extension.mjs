@@ -12,10 +12,10 @@ const root = resolve(fileURLToPath(import.meta.url), '../../..');
 const source = resolve(root, 'infrastructure/smge-extension');
 const outDir = resolve(root, 'apps/dashboard/public/downloads');
 const target = resolve(outDir, 'smge-extension.zip');
-const FILES = ['manifest.json', 'popup.html', 'popup.css', 'popup.js'].map((f) =>
+const FILES = ['manifest.json', 'popup.html', 'popup.css', 'popup.js', 'logo.png'].map((f) =>
   resolve(source, f),
 );
-// Keep the maintained v0.2.7 sender and collector as the only runtime sources.
+// Keep the maintained v0.2.8 sender and collector as the only runtime sources.
 // Toolkit adds the popup UI; packaging includes these originals without editing them.
 FILES.push(
   ...['worker.js', 'page.js', 'native-input.js', 'diagnostics.js'].map((f) =>

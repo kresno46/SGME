@@ -54,9 +54,18 @@ body {
   background: var(--card);
 }
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   margin: 0;
   font-weight: 600;
   font-size: 14px;
+}
+.brand-logo {
+  width: 28px;
+  height: 32px;
+  object-fit: contain;
+  flex-shrink: 0;
 }
 .mark {
   color: var(--gold-text);

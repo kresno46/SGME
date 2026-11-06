@@ -1,5 +1,6 @@
 import { PERMISSIONS, type Permission } from '@smge/shared';
 import { isHiddenMarketingPage } from './marketing-scope';
+import { HIDE_EMAIL_OUTREACH } from './feature-flags';
 import {
   BarChart3,
   Bot,
@@ -7,6 +8,7 @@ import {
   LayoutDashboard,
   Megaphone,
   MessageCircle,
+  Mail,
   MessagesSquare,
   Send,
   Settings,
@@ -70,6 +72,13 @@ const ALL_NAV_ITEMS: NavItem[] = [
     phase: 6,
   },
   {
+    title: 'Kirim Email',
+    href: '/email',
+    icon: Mail,
+    permission: PERMISSIONS.OUTREACH_WORK,
+    phase: 6,
+  },
+  {
     title: 'AI Sales Agent',
     superAdminOnly: true,
     href: '/ai-sales',
@@ -107,5 +116,7 @@ const ALL_NAV_ITEMS: NavItem[] = [
   },
 ];
 
-export const NAV_ITEMS = ALL_NAV_ITEMS.filter((item) => !isHiddenMarketingPage(item.href));
+export const NAV_ITEMS = ALL_NAV_ITEMS.filter(
+  (item) => !isHiddenMarketingPage(item.href) && !(HIDE_EMAIL_OUTREACH && item.href === '/email'),
+);
 export const CURRENT_PHASE = 6;

@@ -144,6 +144,7 @@ const envSchema = z.object({
   /** Pesan keluar yang macet di "mengirim" lebih lama dari ini ditandai gagal oleh worker. */
   WAHA_SEND_STUCK_SECONDS: z.coerce.number().int().min(30).max(86_400).default(300),
   SMTP_HOST: z.string().optional(),
+  EMAIL_OUTREACH_ENABLED: bool,
   SMTP_PORT: z.coerce.number().int().default(587),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),

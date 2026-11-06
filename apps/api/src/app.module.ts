@@ -25,6 +25,7 @@ import { TemplatesModule } from './templates/templates.module';
 import { TrackingModule } from './tracking/tracking.module';
 import { UsersModule } from './users/users.module';
 import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { EmailOutreachModule } from './email-outreach/email-outreach.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module';
     TrackingModule,
     AnalyticsModule,
     WhatsappModule,
+    EmailOutreachModule,
     HealthModule,
   ],
   providers: [

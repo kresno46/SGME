@@ -498,6 +498,9 @@ describe('Browser DM durable queue (no live TikTok messages)', () => {
       .get(`/api/outbound/browser-dm?accountId=${accountId}`)
       .expect(200);
     expect(listing.body[0].status).toBe('UNVERIFIED');
+    expect(listing.body[0].senderUsername).toBe('sender_test');
+    expect(listing.body[0].attemptId).toBe(item.attemptId);
+    expect(Number.isNaN(Date.parse(listing.body[0].updatedAt))).toBe(false);
     await post('claim', { accountId, clientId }).expect(409);
     await post(`${item.id}/resolve`, { confirmed: true, sent: true }).expect(201);
     expect((await prisma.outreachTask.findUniqueOrThrow({ where: { id: row.id } })).status).toBe(

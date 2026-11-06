@@ -110,7 +110,7 @@ export function FollowersDialog({
         </ol>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" asChild>
-            <a href="/downloads/smge-extension.zip?v=1.0.1" download>
+            <a href="/downloads/smge-extension.zip?v=1.0.3" download>
               <Download /> Unduh extension
             </a>
           </Button>

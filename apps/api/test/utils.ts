@@ -9,6 +9,7 @@ import { TIKTOK_ADAPTERS, type TikTokAdapters } from '../src/integrations/integr
 import { configureApp } from '../src/bootstrap';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { WAHA_GATEWAY, type WahaGateway } from '../src/whatsapp/waha-gateway';
+import { EMAIL_GATEWAY, type EmailGateway } from '../src/email-outreach/email-outreach.module';
 
 export const TEST_PASSWORD = 'PasswordUji123';
 
@@ -21,7 +22,12 @@ export const TEST_USERS: Record<RoleCode, string> = {
 
 /** `llm` / `tiktok` / `waha` mengganti provider AI, adapter TikTok & gateway WAHA (default: nonaktif). */
 export async function createTestApp(
-  opts: { llm?: LlmProvider | null; tiktok?: TikTokAdapters; waha?: WahaGateway | null } = {},
+  opts: {
+    llm?: LlmProvider | null;
+    tiktok?: TikTokAdapters;
+    waha?: WahaGateway | null;
+    email?: EmailGateway | null;
+  } = {},
 ) {
   Logger.overrideLogger(['error']);
   const moduleRef = await Test.createTestingModule({ imports: [AppModule] })
@@ -31,6 +37,8 @@ export async function createTestApp(
     .useValue(opts.tiktok ?? { loginKit: null, mock: null })
     .overrideProvider(WAHA_GATEWAY)
     .useValue(opts.waha ?? null)
+    .overrideProvider(EMAIL_GATEWAY)
+    .useValue(opts.email ?? null)
     .compile();
   const app = moduleRef.createNestApplication({ rawBody: true });
   configureApp(app);

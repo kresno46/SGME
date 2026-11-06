@@ -114,7 +114,12 @@ test('missing editor, wrong sender, CAPTCHA and a human draft never produce a se
   const wrong = fixture(() => {}, 'other_sender');
   wrong.profile();
   wrong.button();
-  assert.equal((await wrong.api.open(delivery)).status, 'FAILED');
+  const mismatch = await wrong.api.open(delivery);
+  assert.equal(mismatch.status, 'FAILED');
+  assert.equal(
+    mismatch.detail,
+    `Akun TikTok login @other_sender berbeda dengan pengirim @${delivery.senderUsername}. Tidak membuka chat.`,
+  );
   assert.equal(wrong.clicks(), 0);
   const captcha = fixture();
   captcha.profile();

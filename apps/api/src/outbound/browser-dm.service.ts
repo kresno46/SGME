@@ -363,6 +363,9 @@ export class BrowserDmService {
           status: true,
           detail: true,
           createdAt: true,
+          updatedAt: true,
+          attemptId: true,
+          senderUsername: true,
         },
       });
     });

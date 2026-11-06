@@ -316,6 +316,8 @@ model User {
   whatsappChats WhatsappChat[] @relation("WhatsappChatOwner")
   initiatedWhatsappChats WhatsappChat[] @relation("WhatsappChatInitiator")
   whatsappBroadcasts WhatsappBroadcast[]
+  outreachEmails OutreachEmail[]
+  emailTemplates EmailOutreachTemplate[]
 
   role                 Role                 @relation(fields: [roleId], references: [id])
   sessions             UserSession[]
@@ -338,6 +340,47 @@ model User {
   @@index([roleId])
   @@index([status])
   @@map("users")
+}
+
+enum OutreachEmailStatus {
+  QUEUED
+  PROCESSING
+  ACCEPTED
+  FAILED
+  UNVERIFIED
+  CANCELLED
+}
+
+model OutreachEmail {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  batchId String @map("batch_id") @db.Uuid
+  recipient String
+  recipientName String @map("recipient_name")
+  sender String
+  subject String
+  body String
+  status OutreachEmailStatus @default(QUEUED)
+  detail String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([ownerId, createdAt])
+  @@index([status, createdAt])
+  @@map("outreach_emails")
+}
+
+model EmailOutreachTemplate {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  name String
+  subject String
+  body String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@index([ownerId])
+  @@map("email_outreach_templates")
 }
 
 model UserSession {

@@ -320,7 +320,9 @@
           return {
             status: 'FAILED',
             detail:
-              'Akun login TikTok berbeda atau tidak dapat ditentukan dengan pasti. Tidak membuka chat.',
+              identities.length === 1
+                ? `Akun TikTok login @${identities[0]} berbeda dengan pengirim @${delivery.senderUsername}. Tidak membuka chat.`
+                : `Akun login TikTok tidak dapat ditentukan dengan pasti. Pengirim antrean @${delivery.senderUsername}. Tidak membuka chat.`,
           };
         if (senderMatches(delivery.senderUsername, delivery)) {
           const candidates = all('[data-e2e="message-button"], button, a[role="button"]').filter(
