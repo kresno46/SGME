@@ -1,14 +1,37 @@
 'use client';
 
 import {
+  BROADCAST_ATTACHMENT_MAX_BYTES,
   WHATSAPP_BROADCAST_MAX_MESSAGE,
+  WHATSAPP_CAPTION_MAX_LENGTH,
+  WHATSAPP_CHECK_BATCH,
+  broadcastReasonText,
+  broadcastTemplateProblems,
+  broadcastUsedVars,
   normalizePhone,
   renderBroadcastMessage,
-  unknownBroadcastPlaceholders,
+  type BroadcastVars,
+  type ExtractedRecipient,
 } from '@smge/shared';
-import type { WhatsappBroadcastDto } from '@smge/types';
-import { Loader2, Pause, Play, Plus, Send, Users, X } from 'lucide-react';
-import { useState } from 'react';
+import type {
+  WhatsappAttachmentDto,
+  WhatsappBroadcastDto,
+  WhatsappNumberCheckDto,
+} from '@smge/types';
+import {
+  Download,
+  FileUp,
+  ListChecks,
+  Loader2,
+  Paperclip,
+  Pause,
+  Play,
+  Plus,
+  Send,
+  Users,
+  X,
+} from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { ConfirmDialog, EmptyState } from '@/components/common';
 import { Button } from '@/components/ui/button';
 import {
@@ -40,6 +63,7 @@ import {
   Textarea,
 } from '@/components/ui/primitives';
 import { useDebounce } from '@/hooks/use-debounce';
+import { api, downloadUrl } from '@/lib/api';
 import { formatDateTime, formatRelative } from '@/lib/utils';
 import {
   useBroadcastAction,
@@ -68,22 +92,14 @@ const PAUSE_TEXT: Record<string, string> = {
     'Dijeda otomatis setelah 3 kegagalan berturut-turut. Periksa nomor dan daftar penerima.',
   waha_unavailable: 'Dijeda karena WAHA tidak dapat dijangkau.',
   owner_unavailable: 'Dijeda karena akun pemilik tidak aktif.',
+  attachment_missing:
+    'Dijeda karena berkas lampiran tidak ditemukan. Batalkan pengiriman ini, lalu buat ulang dengan lampiran.',
 };
 
-const REASON_TEXT: Record<string, string> = {
-  dnc: 'Ada di daftar larangan kontak',
-  opt_out: 'Pernah minta berhenti',
-  not_registered: 'Tidak terdaftar di WhatsApp',
-  self: 'Nomor Anda sendiri',
-  cancelled: 'Dibatalkan',
-};
-const reasonText = (r: string | null) =>
-  !r
-    ? ''
-    : (REASON_TEXT[r] ??
-      (r === 'send_failed:timeout'
-        ? 'Waktu habis, status tidak pasti: periksa ponsel sebelum mengirim ulang'
-        : `Gagal kirim (${r.replace('send_failed:', '')})`));
+const formatSize = (bytes: number) =>
+  bytes >= 1024 * 1024
+    ? `${(bytes / 1024 / 1024).toFixed(1).replace('.', ',')} MB`
+    : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 
 const RECIPIENT_BADGE = {
   PENDING: { label: 'Menunggu', variant: 'secondary' },
@@ -142,11 +158,21 @@ function ContactPicker({
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor="bc-contact">Pilih dari kontak tersimpan</Label>
-        {chosen.length > 0 && (
-          <button type="button" className="text-xs underline" onClick={onClear}>
-            Hapus {chosen.length} pilihan
-          </button>
-        )}
+        <span className="flex items-center gap-3">
+          {chosen.length > 0 && (
+            <button type="button" className="text-xs underline" onClick={onClear}>
+              Hapus {chosen.length} pilihan
+            </button>
+          )}
+          <a
+            className="text-xs underline"
+            href={downloadUrl(`/whatsapp/sessions/${sessionId}/contacts/export`, {})}
+            download
+            title="Seluruh kontak tersimpan di ponsel nomor ini. File berisi data pribadi, simpan dengan hati-hati."
+          >
+            Unduh semua kontak (CSV)
+          </a>
+        </span>
       </div>
       <Input
         id="bc-contact"
@@ -197,6 +223,292 @@ function ContactPicker({
   );
 }
 
+/** Satu baris "nama, nomor" per penerima; koma di dalam nama diganti spasi agar tidak memecah kolom. */
+const toLines = (rs: Array<{ phone: string; name?: string }>) =>
+  rs.map((r) =>
+    r.name ? `${r.name.replace(/\s*[,;\t\r\n]+\s*/g, ' ').trim()}, ${r.phone}` : r.phone,
+  );
+
+/** Membaca file CSV/Excel di server lalu menambahkan penerimanya ke kolom daftar; tidak menyimpan apa pun. */
+interface ImportResult {
+  recipients: ExtractedRecipient[];
+  invalid: number;
+  variables: string[];
+}
+
+function RecipientFileImport({ onImport }: { onImport: (r: ImportResult) => void }) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setBusy(true);
+    setNote(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const r = await api.upload<ImportResult>('/whatsapp/broadcasts/import-recipients', form);
+      if (r.recipients.length === 0) {
+        setNote({ text: 'Tidak ada nomor yang valid di file ini.', error: true });
+      } else {
+        onImport(r);
+        setNote({
+          text: `${r.recipients.length} penerima ditambahkan dari ${file.name}${
+            r.invalid > 0 ? `, ${r.invalid} baris tanpa nomor valid dilewati` : ''
+          }.${
+            r.variables.length > 0
+              ? ` Variabel dari kolom: ${r.variables.map((v) => `{{${v}}}`).join(', ')}.`
+              : ''
+          } Periksa daftarnya sebelum mengirim.`,
+          error: false,
+        });
+      }
+    } catch (e) {
+      setNote({ text: e instanceof Error ? e.message : 'File gagal dibaca.', error: true });
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = '';
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <input
+        ref={input}
+        id="bc-file"
+        type="file"
+        accept=".csv,.txt,.xlsx"
+        className="sr-only"
+        onChange={(e) => void onFile(e.target.files?.[0])}
+      />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        disabled={busy}
+        onClick={() => input.current?.click()}
+      >
+        {busy ? <Loader2 className="animate-spin" /> : <FileUp />}
+        Impor dari CSV / Excel
+      </Button>
+      <p className="text-xs text-muted-foreground">
+        Kolom <span className="text-foreground">nama</span> dan{' '}
+        <span className="text-foreground">nomor</span> (header boleh ada atau tidak). Dengan header,
+        kolom lain bisa dipakai di pesan, mis. kolom Kota menjadi{' '}
+        <span className="text-foreground">{'{{kota}}'}</span>. Maks. 1000 baris, 1 MB.
+      </p>
+      {note && (
+        <p
+          role={note.error ? 'alert' : 'status'}
+          className={note.error ? 'text-xs text-destructive' : 'text-xs text-muted-foreground'}
+        >
+          {note.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
+type CheckStatus = WhatsappNumberCheckDto['results'][number]['status'];
+
+/**
+ * Mengecek nomor terdaftar di WhatsApp atau tidak sebelum dikirim, per kelompok kecil supaya progres terlihat
+ * dan tiap permintaan singkat. Hasil tidak mengubah daftar; nomor tidak terdaftar baru dihapus bila Anda memilihnya.
+ */
+function NumberCheck({
+  sessionId,
+  phones,
+  onRemove,
+}: {
+  sessionId: string | null;
+  phones: string[];
+  onRemove: (phones: Set<string>) => void;
+}) {
+  const [results, setResults] = useState<Record<string, CheckStatus>>({});
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  const known = (p: string) => results[p] === 'registered' || results[p] === 'not_registered';
+  const todo = phones.filter((p) => !known(p));
+  const registered = phones.filter((p) => results[p] === 'registered').length;
+  const missing = phones.filter((p) => results[p] === 'not_registered');
+
+  const run = async () => {
+    if (!sessionId) return;
+    setError(null);
+    try {
+      for (let i = 0; i < todo.length; i += WHATSAPP_CHECK_BATCH) {
+        if (!alive.current) return;
+        setProgress({ done: i, total: todo.length });
+        const r = await api.post<WhatsappNumberCheckDto>(
+          `/whatsapp/sessions/${sessionId}/check-numbers`,
+          { phones: todo.slice(i, i + WHATSAPP_CHECK_BATCH) },
+        );
+        if (!alive.current) return;
+        setResults((cur) => {
+          const next = { ...cur };
+          for (const x of r.results) if (x.status !== 'unchecked') next[x.phone] = x.status;
+          return next;
+        });
+        if (r.results.some((x) => x.status === 'unchecked')) {
+          setError('Pengecekan berhenti karena WAHA bermasalah. Coba lagi nanti.');
+          return;
+        }
+      }
+    } catch (e) {
+      if (alive.current) setError(e instanceof Error ? e.message : 'Pengecekan gagal.');
+    } finally {
+      if (alive.current) setProgress(null);
+    }
+  };
+
+  const checked = phones.length - todo.length;
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => void run()}
+          disabled={!sessionId || phones.length === 0 || todo.length === 0 || !!progress}
+        >
+          {progress ? <Loader2 className="animate-spin" /> : <ListChecks />}
+          {progress
+            ? `Mengecek ${Math.min(progress.done + WHATSAPP_CHECK_BATCH, progress.total)} dari ${progress.total}…`
+            : checked > 0 && todo.length > 0
+              ? `Cek ${todo.length} nomor yang belum dicek`
+              : 'Cek nomor di WhatsApp'}
+        </Button>
+        {missing.length > 0 && !progress && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => onRemove(new Set(missing))}
+          >
+            <X /> Hapus {missing.length} yang tidak terdaftar
+          </Button>
+        )}
+      </div>
+      {checked > 0 ? (
+        <p
+          role="status"
+          className={missing.length ? 'text-xs text-foreground' : 'text-xs text-muted-foreground'}
+        >
+          {registered} terdaftar
+          {missing.length > 0 ? ` · ${missing.length} tidak terdaftar` : ''}
+          {todo.length > 0 ? ` · ${todo.length} belum dicek` : ''}
+        </p>
+      ) : (
+        <p className="text-xs text-muted-foreground">
+          Opsional. Nomor dicek satu per satu ke WhatsApp (sekitar setengah detik per nomor) tanpa
+          mengirim pesan. Saat giliran kirim, setiap nomor tetap dicek lagi.
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Satu lampiran JPEG atau PDF yang dikirim bersama pesan (pesan menjadi caption). Berkas diunggah ke server begitu
+ * dipilih; "Hapus" hanya melepasnya dari form, dan sisa unggahan dibersihkan server.
+ */
+function AttachmentPicker({
+  attachment,
+  onChange,
+}: {
+  attachment: WhatsappAttachmentDto | null;
+  onChange: (a: WhatsappAttachmentDto | null) => void;
+}) {
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const onFile = async (file: File | undefined) => {
+    if (!file) return;
+    setError(null);
+    if (file.size > BROADCAST_ATTACHMENT_MAX_BYTES) {
+      setError('Berkas terlalu besar. Gambar maks. 5 MB, PDF maks. 10 MB.');
+      if (input.current) input.current.value = '';
+      return;
+    }
+    setBusy(true);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      onChange(await api.upload<WhatsappAttachmentDto>('/whatsapp/broadcasts/attachments', form));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Berkas gagal diunggah.');
+    } finally {
+      setBusy(false);
+      if (input.current) input.current.value = '';
+    }
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <input
+        ref={input}
+        id="bc-attachment"
+        type="file"
+        accept=".jpg,.jpeg,.pdf,image/jpeg,application/pdf"
+        className="sr-only"
+        onChange={(e) => void onFile(e.target.files?.[0])}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={busy}
+          onClick={() => input.current?.click()}
+        >
+          {busy ? <Loader2 className="animate-spin" /> : <Paperclip />}
+          {attachment ? 'Ganti lampiran' : 'Lampirkan gambar atau PDF'}
+        </Button>
+        {attachment && (
+          <span className="flex min-w-0 items-center gap-1 rounded-md border bg-card px-2 py-1 text-xs">
+            <span className="truncate">{attachment.filename}</span>
+            <span className="shrink-0 text-muted-foreground">({formatSize(attachment.size)})</span>
+            <button
+              type="button"
+              className="shrink-0 rounded hover:bg-accent"
+              aria-label={`Hapus lampiran ${attachment.filename}`}
+              onClick={() => onChange(null)}
+            >
+              <X className="size-3" />
+            </button>
+          </span>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        Opsional. JPEG (maks. 5 MB) atau PDF (maks. 10 MB); gambar PNG/WebP ubah ke JPEG dulu. Pesan
+        menjadi keterangan di bawah lampiran (maks. {WHATSAPP_CAPTION_MAX_LENGTH} karakter), dan
+        berkas dihapus dari server setelah pengiriman selesai.
+      </p>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function NewBroadcastDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const working = (useSessions().data ?? []).filter((s) => s.status === 'WORKING');
   const cfg = useWhatsappConfig().data?.broadcast;
@@ -207,13 +519,40 @@ function NewBroadcastDialog({ open, onClose }: { open: boolean; onClose: () => v
   const [list, setList] = useState('');
   const [picked, setPicked] = useState<Picked>({});
   const [consent, setConsent] = useState(false);
+  const [attachment, setAttachment] = useState<WhatsappAttachmentDto | null>(null);
+  /** Variabel dari kolom file per nomor (ternormalisasi), dan nama-nama variabel yang pernah diimpor. */
+  const [fileVars, setFileVars] = useState<Record<string, BroadcastVars>>({});
+  const [varNames, setVarNames] = useState<string[]>([]);
 
   const active =
     sessionId && working.some((s) => s.id === sessionId) ? sessionId : (working[0]?.id ?? null);
   const { ok, invalid } = parseRecipients(list);
-  const recipients = [...Object.values(picked), ...ok];
-  const unique = new Set(recipients.map((r) => normalizePhone(r.phone))).size;
-  const unknown = unknownBroadcastPlaceholders(message);
+  // Satu penerima per nomor (yang pertama menang): yang dikirim sama dengan yang dihitung, dan file besar dengan
+  // banyak baris ganda tidak melewati batas 200 baris di schema.
+  const recipients = (() => {
+    const seen = new Set<string>();
+    return [...Object.values(picked), ...ok].filter((r) => {
+      const p = normalizePhone(r.phone);
+      if (!p || seen.has(p)) return false;
+      seen.add(p);
+      return true;
+    });
+  })();
+  const phones = recipients.map((r) => normalizePhone(r.phone) as string);
+  const unique = phones.length;
+  // Hanya variabel yang dipakai pesan yang dikirim ke server (kolom lain seperti email tidak ikut).
+  const used = broadcastUsedVars(message);
+  const withVars = recipients.map((r, i): ExtractedRecipient => {
+    const src = fileVars[phones[i]];
+    const vars: BroadcastVars = {};
+    for (const k of used) if (src?.[k]) vars[k] = src[k];
+    return Object.keys(vars).length > 0 ? { ...r, vars } : r;
+  });
+  const problems = broadcastTemplateProblems(
+    message.trim(),
+    withVars,
+    attachment ? WHATSAPP_CAPTION_MAX_LENGTH : undefined,
+  );
   const max = cfg?.maxRecipients ?? 50;
   const avgDelay = ((cfg?.minDelaySeconds ?? 20) + (cfg?.maxDelaySeconds ?? 60)) / 2;
   const minutes = Math.max(1, Math.round((unique * avgDelay) / 60));
@@ -222,11 +561,28 @@ function NewBroadcastDialog({ open, onClose }: { open: boolean; onClose: () => v
     !!active &&
     name.trim().length > 0 &&
     message.trim().length >= 5 &&
-    unknown.length === 0 &&
+    problems.length === 0 &&
     unique > 0 &&
     unique <= max &&
     invalid === 0 &&
     consent;
+
+  /** Menghapus penerima yang nomornya ada di himpunan ini, dari kolom ketik maupun kontak terpilih. */
+  const removeNumbers = (drop: Set<string>) => {
+    const dropped = (phone: string) => drop.has(normalizePhone(phone) ?? '');
+    setList((cur) =>
+      cur
+        .split('\n')
+        .filter((line) => {
+          const r = parseRecipients(line).ok[0];
+          return !(r && dropped(r.phone));
+        })
+        .join('\n'),
+    );
+    setPicked((cur) =>
+      Object.fromEntries(Object.entries(cur).filter(([, c]) => !dropped(c.phone))),
+    );
+  };
 
   const submit = () => {
     if (!valid || !active) return;
@@ -235,7 +591,8 @@ function NewBroadcastDialog({ open, onClose }: { open: boolean; onClose: () => v
         sessionId: active,
         name: name.trim(),
         message: message.trim(),
-        recipients,
+        recipients: withVars,
+        ...(attachment ? { attachmentId: attachment.id } : {}),
         consent: true,
       },
       { onSuccess: onClose },
@@ -292,20 +649,26 @@ function NewBroadcastDialog({ open, onClose }: { open: boolean; onClose: () => v
                 maxLength={WHATSAPP_BROADCAST_MAX_MESSAGE}
                 placeholder="Halo {{nama}}, ..."
               />
-              {unknown.length > 0 ? (
-                <p className="text-xs text-destructive">
-                  Variabel tidak dikenal: {unknown.map((u) => `{{${u}}}`).join(', ')}. Hanya{' '}
-                  {'{{nama}}'} yang tersedia.
-                </p>
+              {problems.length > 0 ? (
+                <ul className="space-y-0.5 text-xs text-destructive" role="alert">
+                  {problems.map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  {'{{nama}}'} diganti nama penerima (atau &quot;kak&quot; bila tidak ada). Contoh:{' '}
+                  {'{{nama}}'} diganti nama penerima (atau &quot;kak&quot; bila tidak ada).
+                  {varNames.length > 0 && (
+                    <> Dari file: {varNames.map((v) => `{{${v}}}`).join(', ')}.</>
+                  )}{' '}
+                  Contoh:{' '}
                   <span className="text-foreground">
-                    {renderBroadcastMessage(message || '…', recipients[0]?.name)}
+                    {renderBroadcastMessage(message || '…', withVars[0]?.name, withVars[0]?.vars)}
                   </span>
                 </p>
               )}
             </div>
+            <AttachmentPicker attachment={attachment} onChange={setAttachment} />
             <ContactPicker
               sessionId={active}
               picked={picked}
@@ -319,6 +682,20 @@ function NewBroadcastDialog({ open, onClose }: { open: boolean; onClose: () => v
                 })
               }
               onClear={() => setPicked({})}
+            />
+            <RecipientFileImport
+              onImport={(r) => {
+                setList((cur) => [cur.trim(), ...toLines(r.recipients)].filter(Boolean).join('\n'));
+                setFileVars((cur) => ({
+                  ...cur,
+                  ...Object.fromEntries(
+                    r.recipients
+                      .filter((x) => x.vars)
+                      .map((x) => [normalizePhone(x.phone) ?? x.phone, x.vars as BroadcastVars]),
+                  ),
+                }));
+                setVarNames((cur) => [...new Set([...cur, ...r.variables])]);
+              }}
             />
             <div className="space-y-1.5">
               <Label htmlFor="bc-list">
@@ -342,6 +719,9 @@ function NewBroadcastDialog({ open, onClose }: { open: boolean; onClose: () => v
                 {invalid > 0 ? ` · ${invalid} baris tidak valid` : ''}
               </p>
             </div>
+            {unique > 0 && (
+              <NumberCheck sessionId={active} phones={phones} onRemove={removeNumbers} />
+            )}
             {unique > 0 && cfg && (
               <p className="rounded-md bg-muted/50 p-2.5 text-xs text-muted-foreground">
                 Perkiraan selesai ±{minutes} menit (jeda {cfg.minDelaySeconds} sampai{' '}
@@ -401,7 +781,7 @@ function Recipients({ id }: { id: string }) {
               </Badge>
             </TableCell>
             <TableCell className="text-sm text-muted-foreground">
-              {r.status === 'SENT' ? formatDateTime(r.sentAt) : reasonText(r.reason)}
+              {r.status === 'SENT' ? formatDateTime(r.sentAt) : broadcastReasonText(r.reason)}
             </TableCell>
           </TableRow>
         ))}
@@ -482,10 +862,24 @@ function BroadcastCard({ b }: { b: WhatsappBroadcastDto }) {
         </p>
       )}
       <p className="line-clamp-2 rounded-md bg-muted/50 p-2.5 text-sm">{b.message}</p>
+      {b.attachment && (
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Paperclip className="size-3.5 shrink-0" />
+          <span className="truncate">{b.attachment.filename}</span>
+          <span className="shrink-0">({formatSize(b.attachment.size)})</span>
+        </p>
+      )}
 
-      <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <Users /> {open ? 'Sembunyikan penerima' : 'Lihat penerima'}
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" size="sm" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
+          <Users /> {open ? 'Sembunyikan penerima' : 'Lihat penerima'}
+        </Button>
+        <Button variant="ghost" size="sm" asChild>
+          <a href={downloadUrl(`/whatsapp/broadcasts/${b.id}/export`, {})} download>
+            <Download /> Unduh laporan (CSV)
+          </a>
+        </Button>
+      </div>
       {open && <Recipients id={b.id} />}
 
       <ConfirmDialog
