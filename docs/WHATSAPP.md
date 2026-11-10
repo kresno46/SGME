@@ -144,6 +144,65 @@ tidak ada) → pilih penerima dari **kontak tersimpan** di ponsel (daftar dengan
 hanya punya nama profil tidak ditampilkan) dan/atau ketik nomor (satu per baris: `nomor` atau `nama, nomor`) → centang konfirmasi bahwa semua penerima mengenal Anda dan setuju dihubungi → **Mulai kirim**.
 Kemajuan, jeda, lanjutkan, dan batalkan ada di kartu pengirimannya.
 
+**Impor dari file:** tombol _Impor dari CSV / Excel_ di dialog membaca file `.csv`, `.txt`, atau `.xlsx` (sheet
+pertama, maks. 1000 baris dan 1 MB) lalu menambahkan penerimanya ke kolom daftar, jadi bisa diperiksa dan diedit
+sebelum dikirim. Header dikenali lewat nama kolom (`nama`/`name`, `nomor`/`telepon`/`phone`/`hp`/`wa`); tanpa header,
+nomor = sel pertama yang berbentuk nomor dan nama = sel terisi lainnya. File hanya dibaca, tidak disimpan, dan semua
+aturan di bawah (batas penerima, persetujuan, DNC, dll.) tetap berlaku.
+
+**Variabel dari kolom file:** dengan header, kolom selain nomor dan nama (maks. 10) menjadi variabel yang bisa dipakai
+di pesan, bernama sesuai headernya: kolom `Kota` menjadi `{{kota}}`, `Produk Favorit` menjadi `{{produk_favorit}}`
+(huruf kecil, angka, garis bawah; diawali huruf). `{{nama}}` tetap nama penerima. Aturan yang ditegakkan server dan
+dashboard bersama-sama:
+
+- Variabel yang tidak ada di data penerima mana pun dianggap salah ketik dan ditolak.
+- **Setiap penerima wajib punya nilai** untuk setiap variabel yang dipakai pesan. Bila ada yang kosong, seluruh
+  pengiriman ditolak dengan jumlahnya ("1 penerima tidak punya nilai untuk {{kota}}"), supaya tidak ada pesan yang
+  terkirim dengan `{{kota}}` mentah atau celah. Hapus barisnya atau lengkapi datanya.
+- Hasil render per penerima tidak boleh melewati 4096 karakter; nilai dipotong 200 karakter.
+- **Hanya variabel yang dipakai pesan yang disimpan** (kolom `vars` pada penerima). Kolom lain di file, mis. email
+  atau alamat, tidak dikirim ke server dan tidak disimpan. Nilai variabel tidak masuk audit.
+- Variabel hanya datang dari file. Nomor yang diketik atau dipilih dari kontak tidak punya variabel selain `{{nama}}`.
+
+**Lampiran:** tombol _Lampirkan gambar atau PDF_ di dialog menambahkan satu berkas ke seluruh pengiriman; pesan menjadi
+keterangan (caption) di bawahnya.
+
+- **Tipe:** JPEG (maks. 5 MB) dan PDF (maks. 10 MB). Tipe dikenali dari **isi** berkas, bukan nama atau tipe kiriman
+  klien: PNG yang dinamai `.jpg` ditolak, dan ekstensi nama dipaksa sesuai isi. PNG, WebP, dan GIF tidak didukung
+  karena WAHA mewajibkan JPEG untuk gambar dan tidak mengonversinya; ubah ke JPEG dulu.
+- **Caption maksimal 1024 karakter** (setelah variabel dirender) bila ada lampiran; tanpa lampiran tetap 4096.
+- **Alur:** berkas diunggah dulu (`POST /whatsapp/broadcasts/attachments`) dan disimpan sementara di database, lalu
+  dikaitkan lewat `attachmentId` saat pengiriman dibuat. Satu lampiran tertunda per pengguna: unggahan baru membuang
+  yang lama, dan lampiran yatim lebih dari 24 jam milik siapa pun ikut dibuang saat ada unggahan.
+- **Gambar dikirim lewat `sendImage`, PDF lewat `sendFile`** (base64). Pesan tersimpan di percakapan dengan penanda
+  `[Lampiran: nama]` di awal.
+- **Isi berkas dihapus dari database begitu pengiriman selesai atau dibatalkan**; nama, tipe, dan ukuran tetap untuk
+  riwayat. Bila berkas hilang saat giliran kirim, pengiriman dijeda (`attachment_missing`) tanpa memakai jatah chat baru.
+- Nama dan isi berkas tidak masuk audit atau log; hanya tipe dan ukuran.
+- **Belum terverifikasi dengan nomor WhatsApp sungguhan.** Bentuk request mengikuti dokumentasi WAHA
+  (`session`, `chatId`, `caption`, `file{mimetype, filename, data}`), dan endpoint `sendImage`/`sendFile` terbukti ada
+  di WAHA Core 2026.9.2. Tetapi WAHA memeriksa status sesi (`WORKING`) sebelum memvalidasi body, jadi tanpa nomor
+  tertaut bentuk payload dan respons (apakah memuat ID pesan) tidak bisa dibuktikan. Respons tanpa ID dicatat sebagai
+  "status tidak pasti, periksa ponsel" (`response_without_message_id`), bukan kegagalan biasa. Coba dulu ke satu
+  nomor sendiri sebelum dipakai ke daftar penerima.
+
+**Unduh kontak:** tautan _Unduh semua kontak (CSV)_ di dialog (muncul bila kontak ponsel tersinkron) mengunduh semua
+kontak tersimpan di ponsel nomor itu (`Nama,Nomor`, urut nama), hanya milik sendiri. Berisi buku kontak pribadi, jadi
+simpan dengan hati-hati; audit hanya mencatat jumlahnya. File ini bisa langsung diimpor kembali sebagai penerima.
+Bila kontak belum tersinkron, jawabannya 409.
+
+**Cek nomor:** tombol _Cek nomor di WhatsApp_ di dialog (opsional) mengecek tiap nomor ke WhatsApp tanpa mengirim
+pesan dan tanpa memakai jatah chat baru. Dikirim per 20 nomor, berurutan dengan jeda 0,1 sampai 0,25 detik, dan
+progresnya tampil. Hasilnya: terdaftar, tidak terdaftar, atau belum dicek (bila WAHA gagal di tengah jalan, sisanya
+tidak dicoba). Daftar tidak berubah sendiri: nomor tidak terdaftar baru dihapus saat Anda menekan _Hapus … yang tidak
+terdaftar_. Ini bukan jaminan: saat giliran kirim, setiap nomor tetap dicek lagi. Nomor tidak masuk audit, hanya
+jumlahnya. Pengecekan beruntun ke banyak nomor yang tidak Anda kenal sendiri bisa terlihat mencurigakan bagi WhatsApp,
+jadi pakai untuk daftar yang memang sudah Anda kenal.
+
+**Laporan:** tombol _Unduh laporan (CSV)_ di kartu pengiriman mengunduh nomor, nama, status (Terkirim, Gagal,
+Dilewati, Menunggu), keterangan, dan waktu kirim (WIB). Nama yang diawali rumus (`=`, `+`, `-`, `@`) diberi tanda
+kutip agar Excel tidak menjalankannya. Hanya pemilik yang bisa mengunduh; audit mencatat jumlah penerima tanpa nomor.
+
 **Aturan:**
 
 - **Maksimal `WAHA_BROADCAST_MAX_RECIPIENTS` penerima** (default 50) per pengiriman. Nomor dinormalisasi dan didedupe.
@@ -165,7 +224,7 @@ Penerima yang tidak mengenal Anda dan melaporkan pesan adalah penyebab blokir pa
 puluhan kontak yang sudah kenal, **bukan** untuk nomor asing atau ratusan penerima: untuk itu pakai WhatsApp Business
 Platform resmi (template disetujui Meta, wajib opt-in), yang belum diintegrasikan di SMGE.
 
-**Belum ada:** variasi isi pesan otomatis, penjadwalan jam mulai, pemilihan penerima dari prospek CRM, dan lampiran. Daftar kontak tersimpan butuh sinkron kontak aktif (nomor dipindai setelah `WAHA_CONTACTS_SYNC` atau `WAHA_HISTORY_SYNC` menyala).
+**Belum ada:** variasi isi pesan otomatis, penjadwalan jam mulai, pemilihan penerima dari prospek CRM, lampiran lebih dari satu atau bertipe lain (PNG, video), dan konversi gambar ke JPEG. Daftar kontak tersimpan butuh sinkron kontak aktif (nomor dipindai setelah `WAHA_CONTACTS_SYNC` atau `WAHA_HISTORY_SYNC` menyala).
 
 ## Aturan yang ditegakkan
 
@@ -185,6 +244,18 @@ Platform resmi (template disetujui Meta, wajib opt-in), yang belum diintegrasika
   pesan mungkin sudah terkirim, periksa ponsel sebelum mengirim ulang.
 - **Kirim ditolak** bila nomor belum `WORKING`, pelanggan baru saja menulis "stop/berhenti/…" (dibuka lagi setelah
   ia menulis hal lain), atau nomornya ada di **daftar larangan kontak** (DNC, kanal telepon).
+- **"Stop" otomatis masuk daftar larangan.** Pesan masuk yang seluruh isinya "stop", "berhenti", "unsubscribe",
+  "jangan kirim (pesan) lagi", atau "jangan hubungi lagi" (tanpa memedulikan tanda baca dan huruf besar) menambahkan
+  nomornya ke DNC, dan semua prospek dengan nomor itu ikut ditandai "jangan dihubungi" (izin dicabut, tugas terbuka
+  dibatalkan). Hanya pesan yang masuk lewat webhook dan berusia kurang dari 24 jam; riwayat yang diimpor dan pesan dari
+  ponsel Anda sendiri tidak memicunya. "cukup" dan "hentikan" tetap memblokir balasan sampai pelanggan menulis lagi,
+  tetapi **tidak** masuk DNC karena bisa bermakna lain. Konsekuensinya:
+  - **Larangan berlaku untuk semua pengguna**, sama seperti entri manual, dan tetap berlaku walau pelanggan menulis
+    lagi. Hanya pengguna ber-izin `dnc:manage` yang bisa mencabutnya (menu larangan kontak), mis. bila pelanggan
+    ternyata ingin lanjut atau "stop" itu salah paham.
+  - Entri tercatat atas nama pemilik nomor yang menerima pesan, dengan alasan "Meminta berhenti lewat WhatsApp".
+    Audit `dnc.added_by_opt_out` mencatat jumlah prospek terdampak, tanpa nomor.
+  - Dicatat sebelum pesan disimpan: bila gagal, webhook gagal dan WAHA mengulang, sehingga permintaan tidak hilang.
 - **Pembatas kirim** di memori proses: jeda minimum + acak antar pesan per nomor, dan batas per menit per chat dan
   per nomor (429). Dengan beberapa replika API, batas berlaku per replika.
 - **Status koneksi.** Dari webhook `session.status` dan worker (tiap menit). Nomor yang turun dari `WORKING` bukan
@@ -193,39 +264,44 @@ Platform resmi (template disetujui Meta, wajib opt-in), yang belum diintegrasika
 
 ## Endpoint
 
-| Method | Path                                                | Akses               | Keterangan                                                                       |
-| ------ | --------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------- |
-| GET    | `/whatsapp/config`                                  | `whatsapp:use`      | `{ enabled, maxSessionsPerUser, singleSession }`                                 |
-| GET    | `/whatsapp/sessions`                                | `whatsapp:use`      | Nomor milik sendiri + status langsung dari WAHA (satu panggilan)                 |
-| GET    | `/whatsapp/sessions/health`                         | `whatsapp:use`      | `{ linked, connectionLost, lostLabels }` dari data tersimpan, tanpa WAHA         |
-| POST   | `/whatsapp/sessions`                                | `whatsapp:use`      | `{ label (1–40) }` tambah nomor dan jalankan; 409 bila batas tercapai            |
-| PATCH  | `/whatsapp/sessions/:id`                            | `whatsapp:use`      | `{ label }` ganti nama                                                           |
-| DELETE | `/whatsapp/sessions/:id`                            | `whatsapp:use`      | Hanya bila belum tersambung dan tanpa chat                                       |
-| GET    | `/whatsapp/sessions/:id/contacts`                   | `whatsapp:use`      | `?search=` kontak ponsel (maks. 50); `available=false` bila sinkronisasi mati    |
-| POST   | `/whatsapp/sessions/:id/chats`                      | `whatsapp:use`      | `{ phone, name? }` buka chat dengan nomor; 422 tidak terdaftar, 429 batas harian |
-| POST   | `/whatsapp/sessions/:id/sync-history`               | `whatsapp:use`      | Jalankan impor riwayat sekarang (latar belakang); `{ started }`                  |
-| GET    | `/whatsapp/broadcasts`                              | `whatsapp:use`      | Pengiriman terjadwal milik sendiri + kemajuan                                    |
-| POST   | `/whatsapp/broadcasts`                              | `whatsapp:use`      | `{ sessionId, name, message, recipients[{phone,name?}], consent:true }`          |
-| GET    | `/whatsapp/broadcasts/:id`                          | `whatsapp:use`      | Detail + status tiap penerima                                                    |
-| POST   | `/whatsapp/broadcasts/:id/{pause,resume,cancel}`    | `whatsapp:use`      | Jeda, lanjutkan, batalkan                                                        |
-| POST   | `/whatsapp/sessions/:id/{start,stop,logout,reset}`  | `whatsapp:use`      | Kelola satu nomor sendiri                                                        |
-| GET    | `/whatsapp/sessions/:id/qr`                         | `whatsapp:use`      | Gambar QR (`no-store`); 404 bila belum siap                                      |
-| GET    | `/whatsapp/chats`                                   | `whatsapp:use`      | `page`, `pageSize`, `search`, `unreadOnly`, `sessionId`; + `unreadTotal`         |
-| GET    | `/whatsapp/chats/:id`                               | `whatsapp:use`      | Pesan terakhir (maks. 200), `canReply`, `replyBlockedReason`                     |
-| POST   | `/whatsapp/chats/:id/read`                          | `whatsapp:use`      | Tandai terbaca di SMGE                                                           |
-| POST   | `/whatsapp/chats/:id/send`                          | `whatsapp:use`      | `{ text (1–4096), clientMessageId (8–64, [A-Za-z0-9_-]) }`                       |
-| GET    | `/whatsapp/admin/sessions`                          | Super Admin         | Semua nomor + status                                                             |
-| POST   | `/whatsapp/admin/sessions/:sessionId/{stop,logout}` | Super Admin         | Hentikan/putuskan satu nomor; tidak ada hapus                                    |
-| POST   | `/webhooks/waha/:kunci`                             | publik, HMAC-SHA512 | Event `message`, `message.any`, `message.ack`, `session.status`                  |
+| Method | Path                                                | Akses               | Keterangan                                                                                                                   |
+| ------ | --------------------------------------------------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| GET    | `/whatsapp/config`                                  | `whatsapp:use`      | `{ enabled, maxSessionsPerUser, singleSession }`                                                                             |
+| GET    | `/whatsapp/sessions`                                | `whatsapp:use`      | Nomor milik sendiri + status langsung dari WAHA (satu panggilan)                                                             |
+| GET    | `/whatsapp/sessions/health`                         | `whatsapp:use`      | `{ linked, connectionLost, lostLabels }` dari data tersimpan, tanpa WAHA                                                     |
+| POST   | `/whatsapp/sessions`                                | `whatsapp:use`      | `{ label (1–40) }` tambah nomor dan jalankan; 409 bila batas tercapai                                                        |
+| PATCH  | `/whatsapp/sessions/:id`                            | `whatsapp:use`      | `{ label }` ganti nama                                                                                                       |
+| DELETE | `/whatsapp/sessions/:id`                            | `whatsapp:use`      | Hanya bila belum tersambung dan tanpa chat                                                                                   |
+| GET    | `/whatsapp/sessions/:id/contacts`                   | `whatsapp:use`      | `?search=` kontak ponsel (maks. 50); `available=false` bila sinkronisasi mati                                                |
+| POST   | `/whatsapp/sessions/:id/chats`                      | `whatsapp:use`      | `{ phone, name? }` buka chat dengan nomor; 422 tidak terdaftar, 429 batas harian                                             |
+| POST   | `/whatsapp/sessions/:id/sync-history`               | `whatsapp:use`      | Jalankan impor riwayat sekarang (latar belakang); `{ started }`                                                              |
+| GET    | `/whatsapp/sessions/:id/contacts/export`            | `whatsapp:use`      | Semua kontak tersimpan sebagai CSV (milik sendiri); 409 bila belum tersinkron                                                |
+| POST   | `/whatsapp/sessions/:id/check-numbers`              | `whatsapp:use`      | `{ phones[1–20] }`: `{ results[{phone, status: registered/not_registered/unchecked}] }`                                      |
+| GET    | `/whatsapp/broadcasts`                              | `whatsapp:use`      | Pengiriman terjadwal milik sendiri + kemajuan                                                                                |
+| POST   | `/whatsapp/broadcasts`                              | `whatsapp:use`      | `{ sessionId, name, message, recipients[{phone,name?}], consent:true }`                                                      |
+| POST   | `/whatsapp/broadcasts/import-recipients`            | `whatsapp:use`      | Multipart `file` (.csv/.txt/.xlsx, maks. 1 MB): `{ recipients[{phone,name?,vars?}], invalid, variables[] }`, tanpa menyimpan |
+| POST   | `/whatsapp/broadcasts/attachments`                  | `whatsapp:use`      | Multipart `file` (JPEG ≤ 5 MB / PDF ≤ 10 MB): `{ id, filename, mimetype, size }`                                             |
+| GET    | `/whatsapp/broadcasts/:id`                          | `whatsapp:use`      | Detail + status tiap penerima                                                                                                |
+| GET    | `/whatsapp/broadcasts/:id/export`                   | `whatsapp:use`      | Laporan CSV milik sendiri                                                                                                    |
+| POST   | `/whatsapp/broadcasts/:id/{pause,resume,cancel}`    | `whatsapp:use`      | Jeda, lanjutkan, batalkan                                                                                                    |
+| POST   | `/whatsapp/sessions/:id/{start,stop,logout,reset}`  | `whatsapp:use`      | Kelola satu nomor sendiri                                                                                                    |
+| GET    | `/whatsapp/sessions/:id/qr`                         | `whatsapp:use`      | Gambar QR (`no-store`); 404 bila belum siap                                                                                  |
+| GET    | `/whatsapp/chats`                                   | `whatsapp:use`      | `page`, `pageSize`, `search`, `unreadOnly`, `sessionId`; + `unreadTotal`                                                     |
+| GET    | `/whatsapp/chats/:id`                               | `whatsapp:use`      | Pesan terakhir (maks. 200), `canReply`, `replyBlockedReason`                                                                 |
+| POST   | `/whatsapp/chats/:id/read`                          | `whatsapp:use`      | Tandai terbaca di SMGE                                                                                                       |
+| POST   | `/whatsapp/chats/:id/send`                          | `whatsapp:use`      | `{ text (1–4096), clientMessageId (8–64, [A-Za-z0-9_-]) }`                                                                   |
+| GET    | `/whatsapp/admin/sessions`                          | Super Admin         | Semua nomor + status                                                                                                         |
+| POST   | `/whatsapp/admin/sessions/:sessionId/{stop,logout}` | Super Admin         | Hentikan/putuskan satu nomor; tidak ada hapus                                                                                |
+| POST   | `/webhooks/waha/:kunci`                             | publik, HMAC-SHA512 | Event `message`, `message.any`, `message.ack`, `session.status`                                                              |
 
 ## Keterbatasan
 
-- Teks saja. Lampiran masuk/keluar, balasan-kutipan, dan indikator mengetik belum ada.
+- Chat biasa teks saja. Lampiran hanya untuk kirim terjadwal; lampiran masuk, lampiran saat membalas, balasan-kutipan, dan indikator mengetik belum ada.
 - Memulai chat satu per satu dari kontak ponsel atau nomor yang diketik; belum ada pemilihan dari prospek CRM.
 - Bentuk respons kontak WAHA (`/api/contacts/all`) mengikuti dokumentasi dan diuji dengan server tiruan; endpoint
   asli baru terverifikasi menolak (400) saat store mati. Cek `/api/contacts/check-exists` terverifikasi pada WAHA asli.
 - Chat belum otomatis ditautkan ke prospek CRM (nomor tersimpan di chat; pencocokan ke prospek menyusul).
-- Permintaan berhenti dari pelanggan memblokir balasan tetapi belum otomatis masuk DNC.
+- "Stop" eksplisit otomatis masuk DNC (lihat _Aturan yang ditegakkan_), tetapi hanya dari webhook langsung, bukan dari riwayat yang diimpor, dan tidak ada notifikasi ke pemilik nomor atau antarmuka khusus untuk meninjau entri otomatis.
 - Diuji dengan WAHA Core 2026.9.2 sungguhan: membuat beberapa sesi sekaligus, webhook bertanda tangan, status, dan QR
   per nomor. Pengiriman dan penerimaan pesan nyata butuh nomor yang dipindai dan belum diuji.
 - Satu nomor WhatsApp hanya boleh tertaut ke satu sesi; menautkan nomor yang sama di dua slot membuat WhatsApp
@@ -238,4 +314,6 @@ Platform resmi (template disetujui Meta, wajib opt-in), yang belum diintegrasika
 pnpm --filter @smge/shared test
 pnpm --filter @smge/api test                                   # termasuk waha-signature & send-limiter
 pnpm --filter @smge/api test:e2e --testPathPattern whatsapp    # gateway WAHA palsu, tanpa jaringan
+# UI kirim terjadwal (impor, cek nomor, unduh laporan), API di-mock, dashboard harus berjalan di :3000:
+BROWSER_EXECUTABLE="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" node apps/dashboard/test/whatsapp-broadcast-tools.browser.cjs
 ```
