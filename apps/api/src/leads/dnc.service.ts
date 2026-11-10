@@ -147,6 +147,39 @@ export class DncService {
   }
 
   /**
+   * Orang itu sendiri meminta berhenti (mis. "stop" lewat WhatsApp): nomornya masuk daftar larangan untuk semua
+   * kanal dan semua prospek yang cocok ikut ditandai. Tidak ada aktor manusia, jadi berjalan di luar cakupan
+   * pemilik: larangan berlaku global, sama seperti entri manual. Idempoten; mengembalikan true bila entri baru dibuat.
+   * `ownerId` hanya dicatat sebagai pemilik nomor yang menerima pesannya.
+   */
+  async addFromOptOut(ownerId: string, phone: string, source: string): Promise<boolean> {
+    const value = normalizePhone(phone);
+    if (!value) return false;
+    const reason = `Meminta berhenti lewat ${source}`;
+    const result = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.doNotContactEntry.createMany({
+        data: [{ channel: 'PHONE', valueNormalized: value, reason, addedById: ownerId }],
+        skipDuplicates: true,
+      });
+      if (created.count === 0) return null;
+      const leads = await tx.lead.findMany({
+        where: { phoneNormalized: value, doNotContact: false },
+        select: { id: true },
+      });
+      for (const l of leads) await this.applyToLead(tx, l.id, null, reason);
+      return leads.length;
+    });
+    if (result === null) return false;
+    // Nomor tidak dicatat di audit; cukup jumlah prospek yang terdampak.
+    await this.audit.log({
+      action: 'dnc.added_by_opt_out',
+      entityType: 'dnc_entry',
+      metadata: { channel: 'PHONE', source, affectedLeads: result, ownerId },
+    });
+    return true;
+  }
+
+  /**
    * Menandai prospek "jangan dihubungi": status DNC, izin dicabut, tugas terbuka dibatalkan.
    * Dipanggil dari DNC manual, permintaan prospek, atau saat prospek baru cocok dengan daftar.
    */

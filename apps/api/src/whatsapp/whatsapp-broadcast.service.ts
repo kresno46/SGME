@@ -11,14 +11,21 @@ import {
 } from '@nestjs/common';
 import type { Prisma, WhatsappBroadcast } from '@smge/database';
 import {
+  BROADCAST_ATTACHMENT_TYPES,
   PERMISSIONS,
+  broadcastReasonText,
+  broadcastUsedVars,
+  detectAttachmentMime,
   normalizePhone,
   renderBroadcastMessage,
+  type BroadcastAttachmentMime,
+  type BroadcastVars,
   type WhatsappBroadcastInput,
 } from '@smge/shared';
 import type {
   WhatsappBroadcastDetailDto,
   WhatsappBroadcastDto,
+  WhatsappAttachmentDto,
   WhatsappBroadcastRecipientDto,
 } from '@smge/types';
 import { AuditService } from '../audit/audit.service';
@@ -28,6 +35,9 @@ import { startOfToday } from '../common/utils/refs';
 import type { RequestMeta } from '../common/utils/request';
 import { env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
+import { cleanFilename } from './attachment';
+import { csvSafe, toCsv } from './csv';
+import type { WahaMedia } from './waha-gateway';
 import { WhatsappChatService } from './whatsapp-chat.service';
 
 const TICK_MS = 5_000;
@@ -44,6 +54,16 @@ type Outcome =
   | { kind: 'defer' }
   | { kind: 'defer_tomorrow' }
   | { kind: 'pause'; reason: string };
+
+/** Metadata lampiran untuk tampilan; isi file (`data`) tidak pernah dimuat untuk daftar atau detail. */
+const ATTACHMENT_META = { select: { filename: true, mimetype: true, size: true } } as const;
+
+const EXPORT_STATUS = {
+  PENDING: 'Menunggu',
+  SENT: 'Terkirim',
+  FAILED: 'Gagal',
+  SKIPPED: 'Dilewati',
+} as const;
 
 const messageOf = (e: HttpException) => {
   const r = e.getResponse();
@@ -95,6 +115,55 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
 
   // ── Pemilik ──
 
+  /**
+   * Menyimpan lampiran sementara (belum terkait pengiriman). Tipe dikenali dari isi file, bukan nama atau tipe kiriman
+   * klien. Satu lampiran tertunda per pengguna: unggahan baru membuang yang lama, dan lampiran yatim lebih dari
+   * 24 jam milik siapa pun ikut dibuang, jadi tidak ada penumpukan file tanpa pengiriman.
+   */
+  async uploadAttachment(
+    user: RequestUser,
+    file: { buffer: Buffer; originalname: string },
+    meta: RequestMeta,
+  ): Promise<WhatsappAttachmentDto> {
+    this.assertEnabled();
+    const mime = detectAttachmentMime(file.buffer);
+    if (!mime)
+      throw new BadRequestException(
+        'Hanya gambar JPEG atau PDF yang didukung. Gambar PNG, WebP, atau GIF: ubah ke JPEG dulu.',
+      );
+    const rule = BROADCAST_ATTACHMENT_TYPES[mime];
+    if (file.buffer.length > rule.maxBytes)
+      throw new BadRequestException(
+        `${rule.label} maksimal ${Math.round(rule.maxBytes / 1024 / 1024)} MB.`,
+      );
+    await this.prisma.whatsappBroadcastAttachment.deleteMany({
+      where: {
+        broadcastId: null,
+        OR: [{ ownerId: user.id }, { createdAt: { lt: new Date(Date.now() - 24 * 3600_000) } }],
+      },
+    });
+    const row = await this.prisma.whatsappBroadcastAttachment.create({
+      data: {
+        ownerId: user.id,
+        filename: cleanFilename(file.originalname, mime),
+        mimetype: mime,
+        size: file.buffer.length,
+        data: file.buffer,
+      },
+      select: { id: true, filename: true, mimetype: true, size: true },
+    });
+    // Nama berkas dan isinya tidak masuk audit.
+    await this.audit.log({
+      action: 'whatsapp.broadcast.attachment_upload',
+      actor: user,
+      entityType: 'whatsapp_broadcast_attachment',
+      entityId: row.id,
+      metadata: { mimetype: mime, size: row.size },
+      meta,
+    });
+    return row;
+  }
+
   async create(
     user: RequestUser,
     input: WhatsappBroadcastInput,
@@ -109,12 +178,20 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
     if (session.lastStatus !== 'WORKING')
       throw new ConflictException('Nomor belum tersambung. Tautkan nomor terlebih dahulu.');
 
-    const byPhone = new Map<string, string | null>();
+    // Hanya variabel yang dipakai pesan yang disimpan; kolom lain dari file (email, alamat, dll.) dibuang.
+    const used = broadcastUsedVars(input.message);
+    const pick = (vars?: BroadcastVars) => {
+      const out: BroadcastVars = {};
+      for (const k of used) if (vars?.[k]?.trim()) out[k] = vars[k].trim();
+      return Object.keys(out).length > 0 ? out : undefined;
+    };
+    const byPhone = new Map<string, { name: string | null; vars?: BroadcastVars }>();
     let invalid = 0;
     for (const r of input.recipients) {
       const phone = normalizePhone(r.phone);
       if (!phone) invalid++;
-      else if (!byPhone.has(phone)) byPhone.set(phone, r.name || null);
+      else if (!byPhone.has(phone))
+        byPhone.set(phone, { name: r.name || null, vars: pick(r.vars) });
     }
     if (invalid > 0)
       throw new BadRequestException(`${invalid} nomor tidak valid. Periksa daftar penerima.`);
@@ -124,23 +201,52 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
       );
 
     const now = new Date();
-    const broadcast = await this.prisma.whatsappBroadcast.create({
-      data: {
-        ownerId: user.id,
-        sessionId: session.id,
-        name: input.name,
-        message: input.message,
-        consentConfirmedAt: now,
-        nextSendAt: new Date(now.getTime() + SKIP_GAP_MS),
-        recipients: { create: [...byPhone].map(([phone, name]) => ({ phone, name })) },
-      },
+    const broadcast = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.whatsappBroadcast.create({
+        data: {
+          ownerId: user.id,
+          sessionId: session.id,
+          name: input.name,
+          message: input.message,
+          consentConfirmedAt: now,
+          nextSendAt: new Date(now.getTime() + SKIP_GAP_MS),
+          recipients: {
+            create: [...byPhone].map(([phone, r]) => ({
+              phone,
+              name: r.name,
+              ...(r.vars ? { vars: r.vars } : {}),
+            })),
+          },
+        },
+      });
+      if (input.attachmentId) {
+        // Milik pemilik, belum dipakai, dan isinya masih ada; kalau tidak, seluruh pembuatan dibatalkan.
+        const linked = await tx.whatsappBroadcastAttachment.updateMany({
+          where: {
+            id: input.attachmentId,
+            ownerId: user.id,
+            broadcastId: null,
+            data: { not: null },
+          },
+          data: { broadcastId: created.id },
+        });
+        if (linked.count !== 1)
+          throw new BadRequestException(
+            'Lampiran tidak ditemukan atau sudah dipakai. Unggah ulang.',
+          );
+      }
+      return created;
     });
     await this.audit.log({
       action: 'whatsapp.broadcast.create',
       actor: user,
       entityType: 'whatsapp_broadcast',
       entityId: broadcast.id,
-      metadata: { recipients: byPhone.size, consentConfirmed: true },
+      metadata: {
+        recipients: byPhone.size,
+        consentConfirmed: true,
+        ...(input.attachmentId ? { attachment: true } : {}),
+      },
       meta,
     });
     return this.detail(user, broadcast.id);
@@ -151,7 +257,7 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
       where: { ownerId: user.id },
       orderBy: { createdAt: 'desc' },
       take: 50,
-      include: { session: { select: { label: true } } },
+      include: { session: { select: { label: true } }, attachment: ATTACHMENT_META },
     });
     const counts = await this.counts(rows.map((r) => r.id));
     return rows.map((r) => this.toDto(r, r.session.label, counts.get(r.id)));
@@ -162,6 +268,7 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
       where: { id, ownerId: user.id },
       include: {
         session: { select: { label: true } },
+        attachment: ATTACHMENT_META,
         recipients: { orderBy: { createdAt: 'asc' } },
       },
     });
@@ -179,6 +286,33 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
         sentAt: r.sentAt?.toISOString() ?? null,
       })),
     };
+  }
+
+  /**
+   * Laporan CSV satu pengiriman, hanya untuk pemilik (detail() memberi 404 bagi yang lain). Nama berasal dari file
+   * yang diunggah pengguna, jadi sel yang diawali rumus diberi tanda kutip agar Excel tidak menjalankannya.
+   * Audit hanya mencatat jumlah penerima, tanpa nomor.
+   */
+  async exportCsv(user: RequestUser, id: string, meta: RequestMeta): Promise<string> {
+    const b = await this.detail(user, id);
+    const when = (iso: string | null) =>
+      iso ? new Date(iso).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' }) : '';
+    const rows = b.recipients.map((r) => [
+      r.phone,
+      csvSafe(r.name ?? ''),
+      EXPORT_STATUS[r.status],
+      r.status === 'SENT' ? '' : broadcastReasonText(r.reason),
+      when(r.sentAt),
+    ]);
+    await this.audit.log({
+      action: 'whatsapp.broadcast.export',
+      actor: user,
+      entityType: 'whatsapp_broadcast',
+      entityId: id,
+      metadata: { recipients: rows.length },
+      meta,
+    });
+    return toCsv(['Nomor', 'Nama', 'Status', 'Keterangan', 'Waktu kirim (WIB)'], rows);
   }
 
   private async own(user: RequestUser, id: string) {
@@ -231,6 +365,10 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
         where: { id },
         data: { status: 'CANCELLED', nextSendAt: null, finishedAt: new Date() },
       }),
+      this.prisma.whatsappBroadcastAttachment.updateMany({
+        where: { broadcastId: id },
+        data: { data: null },
+      }),
     ]);
     await this.log('cancel', user, id, meta);
     return this.detail(user, id);
@@ -263,7 +401,9 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
   }
 
   private toDto(
-    b: WhatsappBroadcast,
+    b: WhatsappBroadcast & {
+      attachment?: { filename: string; mimetype: string; size: number } | null;
+    },
     sessionLabel: string,
     c: Record<string, number> = {},
   ): WhatsappBroadcastDto {
@@ -287,7 +427,22 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
       nextSendAt: b.nextSendAt?.toISOString() ?? null,
       createdAt: b.createdAt.toISOString(),
       finishedAt: b.finishedAt?.toISOString() ?? null,
+      attachment: b.attachment
+        ? {
+            filename: b.attachment.filename,
+            mimetype: b.attachment.mimetype,
+            size: b.attachment.size,
+          }
+        : null,
     };
+  }
+
+  /** Isi file tidak diperlukan lagi setelah pengiriman selesai atau dibatalkan; metadata tetap untuk riwayat. */
+  private dropAttachment(broadcastId: string) {
+    return this.prisma.whatsappBroadcastAttachment.updateMany({
+      where: { broadcastId },
+      data: { data: null },
+    });
   }
 
   // ── Penjadwal ──
@@ -332,7 +487,10 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
     if (claimed.count === 0) return false;
     const b = await this.prisma.whatsappBroadcast.findUniqueOrThrow({
       where: { id },
-      include: { owner: { include: { role: true } } },
+      include: {
+        owner: { include: { role: true } },
+        attachment: { select: { id: true, filename: true, mimetype: true } },
+      },
     });
 
     const owner = b.owner;
@@ -384,11 +542,29 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
   }
 
   private async deliver(
-    b: WhatsappBroadcast,
-    r: { id: string; phone: string; name: string | null },
+    b: WhatsappBroadcast & {
+      attachment: { id: string; filename: string; mimetype: string } | null;
+    },
+    r: { id: string; phone: string; name: string | null; vars: Prisma.JsonValue },
     actor: RequestUser,
   ): Promise<Outcome> {
     const meta: RequestMeta = { ipAddress: null, userAgent: 'broadcast' };
+    // Dimuat sebelum chat dibuat: bila berkasnya hilang, jeda tanpa memakai jatah chat baru.
+    let media: WahaMedia | undefined;
+    if (b.attachment) {
+      const rule = BROADCAST_ATTACHMENT_TYPES[b.attachment.mimetype as BroadcastAttachmentMime];
+      const blob = await this.prisma.whatsappBroadcastAttachment.findUnique({
+        where: { id: b.attachment.id },
+        select: { data: true },
+      });
+      if (!rule || !blob?.data) return { kind: 'pause', reason: 'attachment_missing' };
+      media = {
+        kind: rule.kind,
+        mimetype: b.attachment.mimetype,
+        filename: b.attachment.filename,
+        data: Buffer.from(blob.data),
+      };
+    }
     let chatId: string;
     try {
       chatId = (
@@ -407,10 +583,11 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
         actor,
         chatId,
         {
-          text: renderBroadcastMessage(b.message, r.name),
+          text: renderBroadcastMessage(b.message, r.name, r.vars as BroadcastVars | null),
           clientMessageId: `bc${r.id.replaceAll('-', '')}`,
         },
         meta,
+        media,
       );
     } catch (e) {
       const o = this.classify(e);
@@ -456,6 +633,7 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
       where: { id, status: 'RUNNING' },
       data: { status: 'DONE', nextSendAt: null, finishedAt: new Date() },
     });
+    await this.dropAttachment(id);
   }
 
   private async apply(b: WhatsappBroadcast, recipientId: string, o: Outcome, now: Date) {
@@ -520,6 +698,7 @@ export class WhatsappBroadcastService implements OnApplicationBootstrap, OnModul
         where: { id, status: 'RUNNING' },
         data: { status: 'DONE', nextSendAt: null, finishedAt: new Date(), ...extra },
       });
+      await this.dropAttachment(id);
       return;
     }
     await this.setNext(id, next, extra);

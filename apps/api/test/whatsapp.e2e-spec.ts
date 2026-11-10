@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
+import ExcelJS from 'exceljs';
 import { resetEnvCache } from '../src/config/env';
 import type { PrismaService } from '../src/prisma/prisma.service';
 import {
@@ -24,7 +25,12 @@ const ghostName = (n: number) => `u-${'0'.repeat(31)}${n}-00000000`;
 class FakeWaha implements WahaGateway {
   sessions = new Map<string, WahaSessionInfo>();
   created: Array<{ name: string; config: Record<string, unknown> }> = [];
-  sent: Array<{ session: string; chatId: string; text: string }> = [];
+  sent: Array<{
+    session: string;
+    chatId: string;
+    text: string;
+    media?: { kind: string; mimetype: string; filename: string; bytes: number };
+  }> = [];
   deleted: string[] = [];
   contacts: Array<Omit<WahaContact, 'saved'> & { saved?: boolean }> = [];
   contactsAvailable = true;
@@ -90,6 +96,31 @@ class FakeWaha implements WahaGateway {
       throw new WahaError(code);
     }
     this.sent.push({ session, chatId, text });
+    return `3EB0FAKE${++this.seq}`;
+  }
+  async sendMedia(
+    session: string,
+    chatId: string,
+    media: { kind: string; mimetype: string; filename: string; data: Buffer },
+    caption: string,
+  ) {
+    this.guard();
+    if (this.failNextSend) {
+      const code = this.failNextSend;
+      this.failNextSend = null;
+      throw new WahaError(code);
+    }
+    this.sent.push({
+      session,
+      chatId,
+      text: caption,
+      media: {
+        kind: media.kind,
+        mimetype: media.mimetype,
+        filename: media.filename,
+        bytes: media.data.length,
+      },
+    });
     return `3EB0FAKE${++this.seq}`;
   }
   async sendSeen(_session: string, chatId: string) {
@@ -706,7 +737,7 @@ describe('WhatsApp (WAHA)', () => {
       expect(await prisma.whatsappMessage.count({ where: { direction: 'OUTBOUND' } })).toBe(1);
     });
 
-    it('menolak membalas pelanggan yang meminta berhenti sampai ia menulis hal lain', async () => {
+    it('"stop" memblokir balasan dan otomatis masuk daftar larangan, tetap berlaku walau pelanggan menulis lagi', async () => {
       const chat = await firstChat();
       await hook(
         'message',
@@ -716,14 +747,47 @@ describe('WhatsApp (WAHA)', () => {
       expect(blocked.body.message).toMatch(/berhenti/);
       const thread = await operator.agent.get(`/api/whatsapp/chats/${chat.id}`).expect(200);
       expect(thread.body.canReply).toBe(false);
+
+      const entry = await prisma.doNotContactEntry.findFirstOrThrow({
+        where: { channel: 'PHONE', valueNormalized: CUSTOMER.split('@')[0] },
+      });
+      expect(entry).toMatchObject({
+        addedById: operatorId,
+        reason: expect.stringMatching(/WhatsApp/),
+      });
+      const audit = await prisma.auditLog.findFirstOrThrow({
+        where: { action: 'dnc.added_by_opt_out' },
+      });
+      expect(JSON.stringify(audit)).not.toContain(CUSTOMER.split('@')[0]);
+
+      // Pelanggan menulis lagi: balasan tidak lagi diblokir sebagai "berhenti", tetapi larangan kontak tetap berlaku
+      // sampai pengguna ber-izin dnc:manage mencabutnya.
       await hook(
         'message',
         inbound('A3', 'eh jangan dulu, saya mau lanjut', {
           timestamp: Math.floor(Date.now() / 1000) + 2,
         }),
       );
-      await send(chat.id, 'Baik, siap').expect(200);
-      expect(waha.sent).toHaveLength(1);
+      const still = await send(chat.id, 'Baik, siap').expect(409);
+      expect(still.body.message).toMatch(/larangan kontak/);
+      expect(waha.sent).toHaveLength(0);
+    });
+
+    it('"cukup" memblokir balasan sampai pelanggan menulis lagi, tanpa masuk daftar larangan', async () => {
+      const chat = await firstChat();
+      await hook(
+        'message',
+        inbound('B2', 'cukup', { timestamp: Math.floor(Date.now() / 1000) + 1 }),
+      );
+      await send(chat.id, 'Baik').expect(409);
+      expect(await prisma.doNotContactEntry.count()).toBe(0);
+      await hook(
+        'message',
+        inbound('B3', 'maksud saya cukup untuk paket kemarin, tolong kirim yang baru', {
+          timestamp: Math.floor(Date.now() / 1000) + 2,
+        }),
+      );
+      await send(chat.id, 'Siap').expect(200);
     });
 
     it('menghormati daftar larangan kontak untuk nomor yang sama', async () => {
@@ -1557,6 +1621,365 @@ describe('WhatsApp (WAHA)', () => {
       expect((await create(body(pending.id)).expect(409)).body.message).toMatch(/belum tersambung/);
       const viewer = await loginAs(app, 'VIEWER');
       await create(body(n.id), viewer).expect(403);
+    });
+
+    describe('impor penerima, laporan, dan cek nomor', () => {
+      const upload = (who: Session, file: Buffer | null, name = 'penerima.csv') => {
+        const req = who.agent
+          .post('/api/whatsapp/broadcasts/import-recipients')
+          .set('x-csrf-token', who.csrf);
+        return file ? req.attach('file', file, name) : req;
+      };
+
+      it('membaca CSV dan Excel menjadi penerima tanpa menyimpan apa pun', async () => {
+        const csv = Buffer.from('Nama,Nomor\nBudi,0811 1111 1111\nSiti,081222222222\nabc,xyz\n');
+        const res = await upload(operator, csv).expect(200);
+        expect(res.body).toEqual({
+          recipients: [
+            { phone: '0811 1111 1111', name: 'Budi' },
+            { phone: '081222222222', name: 'Siti' },
+          ],
+          invalid: 1,
+          variables: [],
+        });
+
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('S1');
+        ws.addRow(['Nama', 'Telepon']);
+        ws.addRow(['Ani', 6281333333333]);
+        const xlsx = Buffer.from(await wb.xlsx.writeBuffer());
+        const x = await upload(operator, xlsx, 'penerima.xlsx').expect(200);
+        expect(x.body.recipients).toEqual([{ phone: '6281333333333', name: 'Ani' }]);
+
+        expect(await prisma.whatsappBroadcast.count()).toBe(0);
+      });
+
+      it('menolak tanpa file, jenis file salah, file bukan Excel sah, dan role tanpa izin', async () => {
+        await upload(operator, null).expect(400);
+        await upload(operator, Buffer.from('x'), 'virus.exe').expect(400);
+        await upload(operator, Buffer.from('bukan zip'), 'rusak.xlsx').expect(400);
+        const viewer = await loginAs(app, 'VIEWER');
+        await upload(viewer, Buffer.from('081111111111'), 'a.csv').expect(403);
+      });
+
+      it('mengunduh laporan CSV milik sendiri; orang lain 404; audit tanpa nomor', async () => {
+        const n = await working();
+        const { body: b } = await create(body(n.id)).expect(200);
+        await run();
+        const res = await operator.agent.get(`/api/whatsapp/broadcasts/${b.id}/export`).expect(200);
+        expect(res.headers['content-type']).toMatch(/text\/csv/);
+        expect(res.headers['content-disposition']).toMatch(/attachment; filename="laporan-/);
+        const lines = res.text.replace('\uFEFF', '').trim().split('\n');
+        expect(lines[0]).toBe('Nomor,Nama,Status,Keterangan,Waktu kirim (WIB)');
+        expect(lines).toHaveLength(3);
+        expect(lines.filter((l) => l.includes('Terkirim'))).toHaveLength(2);
+
+        const audit = await prisma.auditLog.findFirstOrThrow({
+          where: { action: 'whatsapp.broadcast.export' },
+        });
+        expect(audit.metadata).toMatchObject({ recipients: 2 });
+        expect(JSON.stringify(audit)).not.toMatch(/628111|628122/);
+
+        for (const who of [await loginAs(app, 'ADMIN'), await loginAs(app, 'SUPER_ADMIN')])
+          await who.agent.get(`/api/whatsapp/broadcasts/${b.id}/export`).expect(404);
+        await (
+          await loginAs(app, 'VIEWER')
+        ).agent
+          .get(`/api/whatsapp/broadcasts/${b.id}/export`)
+          .expect(403);
+      });
+
+      it('variabel dari kolom file: hanya yang dipakai pesan disimpan, dirender per penerima, nilai kosong ditolak', async () => {
+        const csv = Buffer.from(
+          'Nama,Nomor,Kota,Email\nBudi,081111111111,Bandung,budi@example.invalid\nSiti,081222222222,Medan,siti@example.invalid\n',
+        );
+        const imported = await upload(operator, csv).expect(200);
+        expect(imported.body.variables).toEqual(['kota', 'email']);
+
+        const n = await working();
+        const message = 'Halo {{nama}} dari {{kota}}';
+        const { body: b } = await create(
+          body(n.id, { message, recipients: imported.body.recipients }),
+        ).expect(200);
+        // Email ikut terkirim dari klien tetapi tidak dipakai pesan, jadi tidak disimpan.
+        expect((await recipients(b.id)).map((r) => r.vars)).toEqual([
+          { kota: 'Bandung' },
+          { kota: 'Medan' },
+        ]);
+        await run();
+        expect(waha.sent.map((m) => m.text).sort()).toEqual([
+          'Halo Budi dari Bandung',
+          'Halo Siti dari Medan',
+        ]);
+
+        // Satu penerima tanpa nilai {{kota}}: seluruh pengiriman ditolak, bukan terkirim dengan celah.
+        const missing = await create(
+          body(n.id, {
+            message,
+            recipients: [
+              { phone: '081333333333', name: 'Ani', vars: { kota: 'Solo' } },
+              { phone: '081444444444', name: 'Tanpa kota' },
+            ],
+          }),
+        ).expect(400);
+        expect(JSON.stringify(missing.body)).toMatch(
+          /1 penerima tidak punya nilai untuk \{\{kota\}\}/,
+        );
+        // Variabel yang tidak ada di data mana pun tetap dianggap salah ketik.
+        await create(body(n.id, { message: 'Halo {{kotta}}' })).expect(400);
+        expect(await prisma.whatsappBroadcast.count()).toBe(1);
+      });
+
+      it('ekspor kontak ponsel: hanya milik sendiri, hanya yang tersimpan, 409 bila belum tersinkron', async () => {
+        const n = await working();
+        waha.contacts = [
+          { phone: '6281000000009', name: 'Zaki' },
+          { phone: '6281000000008', name: '=SUM(1+1)' },
+          { phone: '6281000000007', name: 'Nama profil saja', saved: false },
+        ];
+        const res = await operator.agent
+          .get(`/api/whatsapp/sessions/${n.id}/contacts/export`)
+          .expect(200);
+        expect(res.headers['content-type']).toMatch(/text\/csv/);
+        expect(res.headers['content-disposition']).toMatch(
+          /attachment; filename="kontak-whatsapp-/,
+        );
+        expect(res.text.replace('\uFEFF', '').trim().split('\n')).toEqual([
+          'Nama,Nomor',
+          "'=SUM(1+1),6281000000008",
+          'Zaki,6281000000009',
+        ]);
+        const audit = await prisma.auditLog.findFirstOrThrow({
+          where: { action: 'whatsapp.contacts.export' },
+        });
+        expect(audit.metadata).toMatchObject({ contacts: 2 });
+        expect(JSON.stringify(audit)).not.toMatch(/Zaki|628100/);
+
+        // CSV ini bisa langsung diimpor kembali sebagai penerima.
+        const back = await upload(operator, Buffer.from(res.text, 'utf8')).expect(200);
+        expect(back.body.recipients).toHaveLength(2);
+
+        for (const who of [await loginAs(app, 'ADMIN'), await loginAs(app, 'SUPER_ADMIN')])
+          await who.agent.get(`/api/whatsapp/sessions/${n.id}/contacts/export`).expect(404);
+        await (
+          await loginAs(app, 'VIEWER')
+        ).agent
+          .get(`/api/whatsapp/sessions/${n.id}/contacts/export`)
+          .expect(403);
+        waha.contactsAvailable = false;
+        await operator.agent.get(`/api/whatsapp/sessions/${n.id}/contacts/export`).expect(409);
+      });
+
+      describe('lampiran', () => {
+        const JPEG = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.alloc(200, 7)]);
+        const PDF = Buffer.concat([Buffer.from('%PDF-1.7\n'), Buffer.alloc(300, 9)]);
+        const PNG = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47]), Buffer.alloc(50)]);
+        const attach = (who: Session, file: Buffer | null, name = 'foto-promo.jpg') => {
+          const req = who.agent
+            .post('/api/whatsapp/broadcasts/attachments')
+            .set('x-csrf-token', who.csrf);
+          return file ? req.attach('file', file, name) : req;
+        };
+        const blob = (id: string) =>
+          prisma.whatsappBroadcastAttachment.findUniqueOrThrow({ where: { id } });
+
+        it('menyimpan JPEG/PDF dari isinya, menolak yang lain, dan hanya satu lampiran tertunda per pengguna', async () => {
+          const ok = await attach(operator, JPEG).expect(200);
+          expect(ok.body).toMatchObject({
+            filename: 'foto-promo.jpg',
+            mimetype: 'image/jpeg',
+            size: JPEG.length,
+          });
+          expect(Object.keys(ok.body).sort()).toEqual(['filename', 'id', 'mimetype', 'size']);
+
+          // Tipe ditentukan isi file: PNG yang dinamai .jpg ditolak, JPEG yang dinamai .pdf diterima sebagai JPEG.
+          const png = await attach(operator, PNG, 'palsu.jpg').expect(400);
+          expect(png.body.message).toMatch(/JPEG atau PDF/);
+          const renamed = await attach(operator, JPEG, 'brosur.pdf').expect(200);
+          expect(renamed.body).toMatchObject({ filename: 'brosur.jpg', mimetype: 'image/jpeg' });
+          await attach(operator, Buffer.from('<script>alert(1)</script>'), 'x.pdf').expect(400);
+          await attach(operator, null).expect(400);
+          await attach(operator, Buffer.concat([JPEG, Buffer.alloc(5 * 1024 * 1024)])).expect(400);
+          await attach(
+            operator,
+            Buffer.concat([PDF, Buffer.alloc(11 * 1024 * 1024)]),
+            'a.pdf',
+          ).expect(413);
+          await attach(await loginAs(app, 'VIEWER'), JPEG).expect(403);
+
+          // Unggahan baru membuang yang lama milik pengguna yang sama.
+          expect(await prisma.whatsappBroadcastAttachment.count()).toBe(1);
+          await prisma.whatsappBroadcastAttachment.findUniqueOrThrow({
+            where: { id: renamed.body.id },
+          });
+        });
+
+        it('terkirim sebagai caption lewat sendImage/sendFile, lalu isi file dihapus setelah selesai', async () => {
+          const n = await working();
+          const up = await attach(operator, JPEG).expect(200);
+          const { body: b } = await create(
+            body(n.id, { attachmentId: up.body.id, message: 'Halo {{nama}}, ini brosur terbaru' }),
+          ).expect(200);
+          expect(b.attachment).toEqual({
+            filename: 'foto-promo.jpg',
+            mimetype: 'image/jpeg',
+            size: JPEG.length,
+          });
+          expect((await blob(up.body.id)).data).not.toBeNull();
+
+          await run();
+          expect(waha.sent.map((m) => [m.text, m.media])).toEqual([
+            [
+              'Halo Budi, ini brosur terbaru',
+              {
+                kind: 'image',
+                mimetype: 'image/jpeg',
+                filename: 'foto-promo.jpg',
+                bytes: JPEG.length,
+              },
+            ],
+            [
+              'Halo kak, ini brosur terbaru',
+              {
+                kind: 'image',
+                mimetype: 'image/jpeg',
+                filename: 'foto-promo.jpg',
+                bytes: JPEG.length,
+              },
+            ],
+          ]);
+          expect(await row(b.id)).toMatchObject({ status: 'DONE' });
+          // Metadata tetap untuk riwayat, isi file hilang.
+          expect(await blob(up.body.id)).toMatchObject({
+            data: null,
+            size: JPEG.length,
+            broadcastId: b.id,
+          });
+          // Percakapan menunjukkan ada lampiran.
+          const msgs = await prisma.whatsappMessage.findMany({ where: { direction: 'OUTBOUND' } });
+          expect(msgs.every((m) => m.body.startsWith('[Lampiran: foto-promo.jpg]\n'))).toBe(true);
+          const list = (await operator.agent.get('/api/whatsapp/broadcasts').expect(200)).body;
+          expect(list[0].attachment).toMatchObject({ filename: 'foto-promo.jpg' });
+          const audit = await prisma.auditLog.findMany({
+            where: { action: { startsWith: 'whatsapp.broadcast' } },
+          });
+          expect(JSON.stringify(audit)).not.toMatch(/foto-promo/);
+        });
+
+        it('PDF dikirim sebagai dokumen', async () => {
+          const n = await working();
+          const up = await attach(operator, PDF, 'katalog.pdf').expect(200);
+          await create(body(n.id, { attachmentId: up.body.id })).expect(200);
+          await run();
+          expect(waha.sent[0].media).toMatchObject({
+            kind: 'document',
+            mimetype: 'application/pdf',
+            filename: 'katalog.pdf',
+          });
+        });
+
+        it('lampiran milik orang lain, sudah dipakai, atau tidak ada ditolak tanpa membuat pengiriman; caption maks. 1024', async () => {
+          const n = await working();
+          const up = await attach(operator, JPEG).expect(200);
+          const admin = await loginAs(app, 'ADMIN');
+          const stolen = await attach(admin, JPEG).expect(200);
+          await create(body(n.id, { attachmentId: stolen.body.id })).expect(400);
+          await create(body(n.id, { attachmentId: '4a0c5d2e-6a1b-4c8e-9d7f-1a2b3c4d5e6f' })).expect(
+            400,
+          );
+          expect(await prisma.whatsappBroadcast.count()).toBe(0);
+
+          // Template pendek yang membengkak jadi 1200 karakter lewat variabel: ditolak bila ada lampiran karena
+          // melewati batas caption 1024 (tanpa lampiran batasnya 4096; dicek di tes unit shared).
+          const expanding = {
+            message: '{{a}}'.repeat(6),
+            recipients: [{ phone: '081234567890', name: 'Ani', vars: { a: 'z'.repeat(200) } }],
+          };
+          const tooLong = await create(
+            body(n.id, { ...expanding, attachmentId: up.body.id }),
+          ).expect(400);
+          expect(JSON.stringify(tooLong.body)).toMatch(/melebihi 1024 karakter/);
+          expect(await prisma.whatsappBroadcast.count()).toBe(0);
+          await create(body(n.id, { attachmentId: up.body.id })).expect(200);
+          // Satu lampiran hanya untuk satu pengiriman.
+          await create(body(n.id, { attachmentId: up.body.id })).expect(400);
+          expect(await prisma.whatsappBroadcast.count()).toBe(1);
+        });
+
+        it('dibatalkan: isi file langsung dihapus', async () => {
+          const n = await working();
+          const up = await attach(operator, JPEG).expect(200);
+          const { body: b } = await create(body(n.id, { attachmentId: up.body.id })).expect(200);
+          await post(operator, `/broadcasts/${b.id}/cancel`).expect(200);
+          expect((await blob(up.body.id)).data).toBeNull();
+        });
+
+        it('berkas hilang saat giliran kirim: dijeda tanpa chat baru dan tanpa kirim', async () => {
+          const n = await working();
+          const up = await attach(operator, JPEG).expect(200);
+          const { body: b } = await create(body(n.id, { attachmentId: up.body.id })).expect(200);
+          await prisma.whatsappBroadcastAttachment.update({
+            where: { id: up.body.id },
+            data: { data: null },
+          });
+          await run();
+          expect(await row(b.id)).toMatchObject({
+            status: 'PAUSED',
+            pauseReason: 'attachment_missing',
+          });
+          expect(waha.sent).toHaveLength(0);
+          expect(await prisma.whatsappChat.count()).toBe(0);
+        });
+
+        it('lampiran yatim lebih dari 24 jam milik siapa pun dibersihkan saat ada unggahan', async () => {
+          const admin = await loginAs(app, 'ADMIN');
+          const old = await attach(admin, JPEG).expect(200);
+          await prisma.whatsappBroadcastAttachment.update({
+            where: { id: old.body.id },
+            data: { createdAt: new Date(Date.now() - 25 * 3600_000) },
+          });
+          await attach(operator, JPEG).expect(200);
+          expect(
+            await prisma.whatsappBroadcastAttachment.count({ where: { id: old.body.id } }),
+          ).toBe(0);
+        });
+      });
+
+      it('cek nomor: terdaftar atau tidak, batas 20 per permintaan, hanya nomor sendiri yang tersambung', async () => {
+        const n = await working();
+        waha.unregistered.add('6281000000003');
+        const res = await post(operator, `/sessions/${n.id}/check-numbers`, {
+          phones: ['0811-1111-1111', '+62 811 1111 1111', '6281000000003'],
+        }).expect(200);
+        expect(res.body.results).toEqual([
+          { phone: '6281111111111', status: 'registered' },
+          { phone: '6281000000003', status: 'not_registered' },
+        ]);
+        // Tidak membuat chat dan tidak memakai jatah chat baru.
+        expect(await prisma.whatsappChat.count()).toBe(0);
+        const audit = await prisma.auditLog.findFirstOrThrow({
+          where: { action: 'whatsapp.numbers.check' },
+        });
+        expect(audit.metadata).toMatchObject({ checked: 2, notRegistered: 1, unchecked: 0 });
+        expect(JSON.stringify(audit)).not.toMatch(/628111|628100/);
+
+        const many = Array.from({ length: 21 }, (_, i) => `08123456${String(i).padStart(4, '0')}`);
+        await post(operator, `/sessions/${n.id}/check-numbers`, { phones: many }).expect(400);
+        await post(operator, `/sessions/${n.id}/check-numbers`, { phones: [] }).expect(400);
+
+        const admin = await loginAs(app, 'ADMIN');
+        await post(admin, `/sessions/${n.id}/check-numbers`, { phones: ['081111111111'] }).expect(
+          404,
+        );
+        const pending = await addNumber('Belum tersambung');
+        await post(operator, `/sessions/${pending.id}/check-numbers`, {
+          phones: ['081111111111'],
+        }).expect(409);
+        const viewer = await loginAs(app, 'VIEWER');
+        await post(viewer, `/sessions/${n.id}/check-numbers`, { phones: ['081111111111'] }).expect(
+          403,
+        );
+      });
     });
 
     it('batas jumlah penerima dan dimatikan lewat env', async () => {

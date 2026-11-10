@@ -8,6 +8,14 @@ export class WahaError extends Error {
   }
 }
 
+/** Lampiran untuk dikirim: gambar lewat sendImage, dokumen lewat sendFile. */
+export interface WahaMedia {
+  kind: 'image' | 'document';
+  mimetype: string;
+  filename: string;
+  data: Buffer;
+}
+
 export interface WahaSessionInfo {
   name: string;
   status: string;
@@ -47,6 +55,8 @@ export interface WahaGateway {
   getQr(name: string): Promise<{ image: Buffer; contentType: string }>;
   /** Mengembalikan ID pesan dari WAHA. */
   sendText(session: string, chatId: string, text: string): Promise<string>;
+  /** Kirim gambar/dokumen dengan `caption`. Mengembalikan ID pesan dari WAHA. */
+  sendMedia(session: string, chatId: string, media: WahaMedia, caption: string): Promise<string>;
   sendSeen(session: string, chatId: string): Promise<void>;
   /** Digit nomor untuk sebuah LID, atau null bila WAHA tidak mengetahuinya. */
   resolveLid(session: string, lid: string): Promise<string | null>;
@@ -223,6 +233,32 @@ export class HttpWahaGateway implements WahaGateway {
     const { status, raw } = await this.call('POST', '/api/sendText', {
       body: { session, chatId, text },
     });
+    if (status < 200 || status >= 300) throw new WahaError(`http_${status}`);
+    const id = parseMessageId(this.json(raw));
+    if (!id) throw new WahaError('response_without_message_id');
+    return id;
+  }
+
+  async sendMedia(session: string, chatId: string, media: WahaMedia, caption: string) {
+    this.path(session);
+    const { status, raw } = await this.call(
+      'POST',
+      media.kind === 'image' ? '/api/sendImage' : '/api/sendFile',
+      {
+        body: {
+          session,
+          chatId,
+          caption,
+          file: {
+            mimetype: media.mimetype,
+            filename: media.filename,
+            data: media.data.toString('base64'),
+          },
+        },
+        // Mengunggah berkas lebih lama dari teks; waktu habis tetap berarti status tidak pasti.
+        timeoutMs: Math.max(this.timeoutMs, 60_000),
+      },
+    );
     if (status < 200 || status >= 300) throw new WahaError(`http_${status}`);
     const id = parseMessageId(this.json(raw));
     if (!id) throw new WahaError('response_without_message_id');

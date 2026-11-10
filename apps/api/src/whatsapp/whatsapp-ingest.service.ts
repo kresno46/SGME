@@ -8,9 +8,10 @@ import {
   UnprocessableEntityException,
 } from '@nestjs/common';
 import { Prisma } from '@smge/database';
-import { phoneFromJid, shortWhatsappMessageId } from '@smge/shared';
+import { isExplicitOptOut, phoneFromJid, shortWhatsappMessageId } from '@smge/shared';
 import { z } from 'zod';
 import { env } from '../config/env';
+import { DncService } from '../leads/dnc.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { WAHA_GATEWAY, type WahaGateway } from './waha-gateway';
 import { deriveWebhookSecret, isSessionKey, verifyWahaSignature } from './waha-signature';
@@ -21,6 +22,8 @@ const DIRECT_CHAT = /@(c\.us|lid)$/;
 const MAX_BODY = 5000;
 /** Di atas ini dianggap milidetik (1e11 detik = tahun 5138). */
 const MS_THRESHOLD = 100_000_000_000;
+/** Pesan "stop" yang lebih tua dari ini (mis. diputar ulang) tidak otomatis memasukkan nomor ke daftar larangan. */
+const OPT_OUT_MAX_AGE_MS = 24 * 3600_000;
 
 const envelope = z.object({
   event: z.string().min(1).max(100),
@@ -139,6 +142,7 @@ export class WhatsappIngestService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly sessions: WhatsappSessionService,
+    private readonly dnc: DncService,
     @Inject(WAHA_GATEWAY) private readonly gateway: WahaGateway | null,
   ) {}
 
@@ -208,6 +212,15 @@ export class WhatsappIngestService {
     }
     const { jid, altJid, externalId, fromMe, body, sentAt, status, pushName } = r.msg;
     const chat = await this.ensureChat(session, jid, altJid);
+    // Sebelum pesan disimpan: bila gagal, webhook 500 dan WAHA mengulang; setelah disimpan, ulangan dianggap
+    // duplikat dan permintaan berhenti ini hilang. addFromOptOut idempoten, jadi event ganda tidak masalah.
+    if (
+      !fromMe &&
+      chat.contactPhone &&
+      isExplicitOptOut(body) &&
+      Date.now() - sentAt.getTime() < OPT_OUT_MAX_AGE_MS
+    )
+      await this.dnc.addFromOptOut(session.userId, chat.contactPhone, 'WhatsApp');
     try {
       await this.prisma.whatsappMessage.create({
         data: {

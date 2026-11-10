@@ -26,6 +26,7 @@ import type {
   WhatsappChatListDto,
   WhatsappContactsDto,
   WhatsappMessageDto,
+  WhatsappNumberCheckDto,
   WhatsappSendResultDto,
   WhatsappThreadDto,
 } from '@smge/types';
@@ -36,8 +37,9 @@ import { USER_REF_SELECT, iso, startOfToday, toRef } from '../common/utils/refs'
 import { RequestMeta, paginate } from '../common/utils/request';
 import { env } from '../config/env';
 import { PrismaService } from '../prisma/prisma.service';
+import { csvSafe, toCsv } from './csv';
 import { SendLimiter } from './send-limiter';
-import { WAHA_GATEWAY, WahaError, type WahaGateway } from './waha-gateway';
+import { WAHA_GATEWAY, WahaError, type WahaGateway, type WahaMedia } from './waha-gateway';
 import { previewOf } from './whatsapp-ingest.service';
 
 const THREAD_LIMIT = 200;
@@ -249,6 +251,93 @@ export class WhatsappChatService {
   }
 
   /**
+   * Semua kontak tersimpan di ponsel nomor ini sebagai CSV (Nama, Nomor), yang bisa langsung diimpor kembali sebagai
+   * penerima. Hanya pemilik nomor. Berisi buku kontak pribadi, jadi hanya jumlahnya yang dicatat di audit.
+   */
+  async exportContacts(user: RequestUser, sessionId: string, meta: RequestMeta): Promise<string> {
+    const { session, gw } = await this.ownWorkingSession(user, sessionId);
+    let all;
+    try {
+      all = await gw.listContacts(session.sessionName);
+    } catch (e) {
+      if (e instanceof WahaError && (e.code === 'http_400' || e.code === 'http_501'))
+        throw new ConflictException(
+          'Kontak ponsel belum tersinkron di nomor ini. Aktifkan sinkronisasi kontak lalu pindai ulang nomornya.',
+        );
+      throw new BadGatewayException(
+        `WAHA bermasalah (${e instanceof WahaError ? e.code : 'error'}).`,
+      );
+    }
+    const rows = all
+      .filter((c) => c.saved)
+      .sort((a, b) => a.name.localeCompare(b.name, 'id'))
+      .map((c) => [csvSafe(c.name), c.phone]);
+    await this.audit.log({
+      action: 'whatsapp.contacts.export',
+      actor: user,
+      entityType: 'whatsapp_session',
+      entityId: session.id,
+      metadata: { contacts: rows.length },
+      meta,
+    });
+    return toCsv(['Nama', 'Nomor'], rows);
+  }
+
+  /** Jeda antar pengecekan; terpisah supaya tes tidak menunggu. */
+  protected pauseBetweenChecks() {
+    return new Promise<void>((r) => setTimeout(r, 100 + Math.random() * 150));
+  }
+
+  /**
+   * Mengecek sekelompok nomor terdaftar di WhatsApp atau tidak, tanpa membuat chat dan tanpa memakai jatah chat baru.
+   * Berurutan dengan jeda kecil (pengecekan beruntun cepat sendiri bisa terlihat mencurigakan). Bila WAHA gagal,
+   * pengecekan berhenti dan sisanya `unchecked`. Nomor tidak dicatat di audit.
+   */
+  async checkNumbers(
+    user: RequestUser,
+    sessionId: string,
+    phones: string[],
+    meta: RequestMeta,
+  ): Promise<WhatsappNumberCheckDto> {
+    const unique = new Set<string>();
+    for (const raw of phones) {
+      const p = normalizePhone(raw);
+      if (!p) throw new BadRequestException('Ada nomor yang tidak valid. Periksa daftar penerima.');
+      unique.add(p);
+    }
+    const { session, gw } = await this.ownWorkingSession(user, sessionId);
+    const results: WhatsappNumberCheckDto['results'] = [];
+    let stopped = false;
+    for (const phone of unique) {
+      if (stopped) {
+        results.push({ phone, status: 'unchecked' });
+        continue;
+      }
+      if (results.length > 0) await this.pauseBetweenChecks();
+      try {
+        const r = await gw.checkNumber(session.sessionName, phone);
+        results.push({ phone, status: r.exists ? 'registered' : 'not_registered' });
+      } catch {
+        stopped = true;
+        results.push({ phone, status: 'unchecked' });
+      }
+    }
+    await this.audit.log({
+      action: 'whatsapp.numbers.check',
+      actor: user,
+      entityType: 'whatsapp_session',
+      entityId: session.id,
+      metadata: {
+        checked: results.filter((r) => r.status !== 'unchecked').length,
+        notRegistered: results.filter((r) => r.status === 'not_registered').length,
+        unchecked: results.filter((r) => r.status === 'unchecked').length,
+      },
+      meta,
+    });
+    return { results };
+  }
+
+  /**
    * Memulai chat dengan satu nomor (dari kontak atau diketik). Hanya membuat ruang chat; pesan pertama tetap
    * ditulis dan dikirim manusia lewat alur kirim biasa, dengan semua pengaman yang sama. Satu per satu: tidak ada
    * kirim massal, dan jumlah chat baru per nomor per hari dibatasi.
@@ -342,11 +431,16 @@ export class WhatsappChatService {
     return this.toChat(chat, user);
   }
 
+  /**
+   * `media` hanya untuk pemanggil di dalam server (kirim terjadwal); jalur HTTP chat biasa tetap teks saja. Teks
+   * menjadi caption, dan pesan tersimpan dengan penanda "[Lampiran: nama]" agar terlihat di percakapan.
+   */
   async send(
     user: RequestUser,
     id: string,
     input: WhatsappSendInput,
     meta: RequestMeta,
+    media?: WahaMedia,
   ): Promise<WhatsappSendResultDto> {
     if (!this.gateway)
       throw new ServiceUnavailableException('WhatsApp belum diaktifkan di server ini.');
@@ -354,12 +448,13 @@ export class WhatsappChatService {
     if (chat.session.userId !== user.id)
       throw new ForbiddenException('Hanya pemilik nomor WhatsApp ini yang dapat membalas.');
 
+    const stored = media ? `[Lampiran: ${media.filename}]\n${input.text}` : input.text;
     // Idempotensi: ID yang sama tidak mengirim dua kali. Yang gagal boleh dicoba lagi di baris yang sama.
     let row = await this.prisma.whatsappMessage.findUnique({
       where: { chatId_clientMessageId: { chatId: id, clientMessageId: input.clientMessageId } },
     });
     if (row) {
-      if (row.body !== input.text)
+      if (row.body !== stored)
         throw new ConflictException('ID pengiriman ini sudah dipakai untuk pesan lain.');
       if (row.status === 'SENDING') throw new ConflictException('Pesan sedang dikirim.');
       if (row.status !== 'FAILED') return { message: toMessage(row), status: 'duplicate' };
@@ -391,7 +486,7 @@ export class WhatsappChatService {
               chatId: id,
               direction: 'OUTBOUND',
               status: 'SENDING',
-              body: input.text,
+              body: stored,
               clientMessageId: input.clientMessageId,
               sentByUserId: user.id,
               sentAt: new Date(),
@@ -406,7 +501,9 @@ export class WhatsappChatService {
     let waId: string;
     try {
       waId = shortWhatsappMessageId(
-        await this.gateway.sendText(chat.session.sessionName, chat.chatId, input.text),
+        media
+          ? await this.gateway.sendMedia(chat.session.sessionName, chat.chatId, media, input.text)
+          : await this.gateway.sendText(chat.session.sessionName, chat.chatId, input.text),
       );
     } catch (e) {
       const code = e instanceof WahaError ? e.code : 'error';
@@ -427,7 +524,7 @@ export class WhatsappChatService {
       where: { id },
       data: {
         lastMessageAt: sent.sentAt,
-        lastMessagePreview: previewOf(input.text),
+        lastMessagePreview: previewOf(stored),
         unreadCount: 0,
       },
     });
@@ -438,7 +535,11 @@ export class WhatsappChatService {
       actor: user,
       entityType: 'whatsapp_chat',
       entityId: id,
-      metadata: { messageId: sent.id, length: input.text.length },
+      metadata: {
+        messageId: sent.id,
+        length: input.text.length,
+        ...(media ? { attachment: true } : {}),
+      },
       meta,
     });
     return { message: toMessage(sent), status: 'sent' };

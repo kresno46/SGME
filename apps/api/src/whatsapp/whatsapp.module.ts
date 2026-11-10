@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Delete,
@@ -13,18 +14,24 @@ import {
   Query,
   Req,
   Res,
+  UploadedFile,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { SkipThrottle } from '@nestjs/throttler';
 import {
+  BROADCAST_ATTACHMENT_MAX_BYTES,
   PERMISSIONS,
   whatsappBroadcastSchema,
   whatsappChatsQuerySchema,
+  whatsappCheckNumbersSchema,
   whatsappContactsQuerySchema,
   whatsappNumberSchema,
   whatsappSendSchema,
   whatsappStartChatSchema,
   type WhatsappBroadcastInput,
   type WhatsappChatsQuery,
+  type WhatsappCheckNumbersInput,
   type WhatsappNumberInput,
   type WhatsappSendInput,
   type WhatsappStartChatInput,
@@ -38,7 +45,13 @@ import {
   SkipCsrf,
 } from '../common/decorators/auth.decorators';
 import { ZodValidationPipe } from '../common/pipes/zod-validation.pipe';
+import { LeadsModule } from '../leads/leads.module';
 import { requestMeta } from '../common/utils/request';
+import {
+  RECIPIENT_FILE_MAX_BYTES,
+  RECIPIENT_FILE_PATTERN,
+  readRecipientFile,
+} from './recipient-file';
 import { WAHA_GATEWAY, createWahaGateway } from './waha-gateway';
 import { WhatsappBroadcastService } from './whatsapp-broadcast.service';
 import { WhatsappChatService } from './whatsapp-chat.service';
@@ -197,6 +210,62 @@ export class WhatsappController {
     return this.broadcasts.create(user, body, requestMeta(req));
   }
 
+  /**
+   * Lampiran (JPEG/PDF) disimpan sementara lalu dikaitkan lewat `attachmentId` saat pengiriman dibuat. Tipe dan ukuran
+   * diperiksa dari isi file di service, jadi tidak ada filter berdasarkan nama atau tipe kiriman klien di sini.
+   */
+  @Post('broadcasts/attachments')
+  @HttpCode(200)
+  @RequirePermissions(USE)
+  @UseInterceptors(
+    FileInterceptor('file', { limits: { fileSize: BROADCAST_ATTACHMENT_MAX_BYTES, files: 1 } }),
+  )
+  uploadAttachment(
+    @CurrentUser() user: RequestUser,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Req() req: Request,
+  ) {
+    if (!file) throw new BadRequestException('Pilih file JPEG atau PDF');
+    return this.broadcasts.uploadAttachment(user, file, requestMeta(req));
+  }
+
+  /** Hanya membaca file dan mengembalikan penerima; penyimpanan tetap lewat POST /broadcasts. */
+  @Post('broadcasts/import-recipients')
+  @HttpCode(200)
+  @RequirePermissions(USE)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: RECIPIENT_FILE_MAX_BYTES, files: 1 },
+      fileFilter: (_req, file, cb) => {
+        const ok = RECIPIENT_FILE_PATTERN.test(file.originalname);
+        cb(ok ? null : new BadRequestException('Hanya file CSV atau Excel (.xlsx)'), ok);
+      },
+    }),
+  )
+  importRecipients(@UploadedFile() file: Express.Multer.File | undefined) {
+    if (!file) throw new BadRequestException('Pilih file CSV atau Excel');
+    return readRecipientFile(file);
+  }
+
+  @Get('broadcasts/:id/export')
+  @RequirePermissions(USE)
+  async exportBroadcast(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const csv = await this.broadcasts.exportCsv(user, id, requestMeta(req));
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="laporan-kirim-terjadwal-${stamp}.csv"`,
+    );
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(csv);
+  }
+
   @Get('broadcasts/:id')
   @RequirePermissions(USE)
   getBroadcast(@CurrentUser() user: RequestUser, @Param('id', ParseUUIDPipe) id: string) {
@@ -247,6 +316,34 @@ export class WhatsappController {
     q: { search?: string; savedOnly: boolean },
   ) {
     return this.chats.contacts(user, id, q.search, q.savedOnly);
+  }
+
+  @Get('sessions/:id/contacts/export')
+  @RequirePermissions(USE)
+  async exportContacts(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() req: Request,
+    @Res() res: Response,
+  ) {
+    const csv = await this.chats.exportContacts(user, id, requestMeta(req));
+    const stamp = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="kontak-whatsapp-${stamp}.csv"`);
+    res.setHeader('Cache-Control', 'no-store');
+    return res.send(csv);
+  }
+
+  @Post('sessions/:id/check-numbers')
+  @HttpCode(200)
+  @RequirePermissions(USE)
+  checkNumbers(
+    @CurrentUser() user: RequestUser,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(new ZodValidationPipe(whatsappCheckNumbersSchema)) body: WhatsappCheckNumbersInput,
+    @Req() req: Request,
+  ) {
+    return this.chats.checkNumbers(user, id, body.phones, requestMeta(req));
   }
 
   @Post('sessions/:id/chats')
@@ -350,6 +447,7 @@ export class WahaWebhookController {
 }
 
 @Module({
+  imports: [LeadsModule],
   controllers: [WhatsappController, WahaWebhookController],
   providers: [
     { provide: WAHA_GATEWAY, useFactory: createWahaGateway },
