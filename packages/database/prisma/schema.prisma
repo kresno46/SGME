@@ -316,6 +316,7 @@ model User {
   whatsappChats WhatsappChat[] @relation("WhatsappChatOwner")
   initiatedWhatsappChats WhatsappChat[] @relation("WhatsappChatInitiator")
   whatsappBroadcasts WhatsappBroadcast[]
+  whatsappBroadcastAttachments WhatsappBroadcastAttachment[]
   outreachEmails OutreachEmail[]
   emailTemplates EmailOutreachTemplate[]
 
@@ -966,9 +967,28 @@ model WhatsappBroadcast {
   owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   session WahaSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   recipients WhatsappBroadcastRecipient[]
+  attachment WhatsappBroadcastAttachment?
   @@index([status, nextSendAt])
   @@index([ownerId, createdAt])
   @@map("whatsapp_broadcasts")
+}
+
+/// Lampiran (JPEG/PDF) satu pengiriman terjadwal. Diunggah dulu (broadcastId kosong), lalu dikaitkan saat pengiriman dibuat.
+/// Isi file (`data`) dihapus begitu pengiriman selesai atau dibatalkan; metadata tetap untuk riwayat.
+model WhatsappBroadcastAttachment {
+  id String @id @default(uuid()) @db.Uuid
+  ownerId String @map("owner_id") @db.Uuid
+  broadcastId String? @unique @map("broadcast_id") @db.Uuid
+  filename String
+  mimetype String
+  size Int
+  data Bytes?
+  createdAt DateTime @default(now()) @map("created_at")
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  broadcast WhatsappBroadcast? @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  @@index([ownerId, broadcastId])
+  @@index([broadcastId, createdAt])
+  @@map("whatsapp_broadcast_attachments")
 }
 
 model WhatsappBroadcastRecipient {
@@ -977,6 +997,8 @@ model WhatsappBroadcastRecipient {
   /// Digit ternormalisasi (62812…)
   phone String
   name String?
+  /// Nilai variabel pesan (mis. {"kota":"Bandung"}); hanya kunci yang dipakai di pesan yang disimpan
+  vars Json?
   status WhatsappRecipientStatus @default(PENDING)
   /// dnc, opt_out, not_registered, self, cancelled, send_failed:<kode>
   reason String?
