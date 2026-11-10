@@ -820,6 +820,11 @@ export interface WhatsappContactsDto {
   items: Array<{ phone: string; name: string; saved: boolean }>;
 }
 
+/** Hasil cek apakah nomor terdaftar di WhatsApp; `unchecked` = pengecekan berhenti sebelum sampai nomor ini. */
+export interface WhatsappNumberCheckDto {
+  results: Array<{ phone: string; status: 'registered' | 'not_registered' | 'unchecked' }>;
+}
+
 /** Satu nomor WhatsApp milik user yang sedang login. */
 export interface WhatsappSessionDto {
   id: string;
@@ -903,6 +908,14 @@ export interface WhatsappSendResultDto {
   status: 'sent' | 'duplicate';
 }
 
+/** Lampiran pengiriman terjadwal (isi file tidak pernah dikirim ke dashboard). */
+export interface WhatsappAttachmentDto {
+  id: string;
+  filename: string;
+  mimetype: string;
+  size: number;
+}
+
 export interface WhatsappBroadcastDto {
   id: string;
   name: string;
@@ -920,6 +933,7 @@ export interface WhatsappBroadcastDto {
   nextSendAt: string | null;
   createdAt: string;
   finishedAt: string | null;
+  attachment: Omit<WhatsappAttachmentDto, 'id'> | null;
 }
 
 export interface WhatsappBroadcastRecipientDto {
